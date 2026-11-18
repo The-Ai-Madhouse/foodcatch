@@ -128,10 +128,12 @@ spar `88ddE`. They are seeded by the first migration.
   `category_ids` is always empty, so classification relies on the text.
 * An offer's period can differ from its catalog's (e.g. a monthly offer inside a weekly leaflet).
   Listings use the offer's own `run_from`/`run_till`.
-* **Unit prices** (PoC rule): the SI factor converts the size to kg, l or pieces (`pcs` → `stk`);
-  `lo = size.from × factor × pieces.from`, `hi = size.to × factor × pieces.from`;
-  `unit_price_min = price / hi`, `unit_price_max = price / lo`. Without a positive size range the
-  unit price is unknown. Ranges like "18-20 x 33 cl" use `pieces.from` for both ends.
+* **Unit prices**: the SI factor converts the size to kg, l or pieces (`pcs` → `stk`); `lo` and
+  `hi` are the smallest and largest of `size.{from,to} × factor × pieces.{from,to}`, so
+  "18-20 x 33 cl" is 5.94-6.60 l (the PoC used `pieces.from` for both ends, which overstated a
+  reference's best price); `unit_price_min = price / hi`, `unit_price_max = price / lo`. Without
+  a positive size range the unit price is unknown. Tjek uses `pcs` with size 1 for offers that
+  mix units; such per-piece prices are only compared for eggs (architecture §6).
 * **`pre_price` is almost always null.** The reference price is then parsed from
   "Normalpris 19,95" in the description, when present.
 * Descriptions carry other information that is parsed conservatively:

@@ -14,10 +14,11 @@ Dispatch on ``payload.endpoint``:
 
 Offer normalization (ported from ``poc/foodcatch_poc.py::parse_tjek_offer``):
 
-* **Unit prices** - the SI factor converts the size to kg/l/stk (``pcs`` -> ``stk``);
-  ``lo = size.from * factor * pieces.from``, ``hi = size.to * factor * pieces.from``;
-  ``unit_price_min = price / hi``, ``unit_price_max = price / lo``. Without a positive size
-  range the unit prices stay unknown.
+* **Unit prices** - the SI factor converts the size to kg/l/stk (``pcs`` -> ``stk``); the pack
+  count range multiplies it: ``lo``/``hi`` are the smallest/largest of ``size.{from,to} *
+  factor * pieces.{from,to}`` (the PoC used ``pieces.from`` only, which understated ``hi`` for
+  "2-3 x 500 g"); ``unit_price_min = price / hi``, ``unit_price_max = price / lo``. Without a
+  positive size range the unit prices stay unknown.
 * **Reference price** - ``pricing.pre_price``, else "Normalpris 19,95" in the description.
 * **Membership** (:func:`is_member_price`) and **purchase limits**
   (:func:`parse_max_per_customer`) are read from the offer text; see those functions.
@@ -187,8 +188,11 @@ class UnitQuantity:
 def unit_quantity(quantity: TjekQuantity | None) -> UnitQuantity:
     """Base unit and size range of an offer (PoC rule).
 
-    The SI factor converts the size to the base unit; the pack count (``pieces.from``)
-    multiplies it. The size is unknown unless both ends of the range are positive.
+    The SI factor converts the size to the base unit; the pack count range (``pieces.from`` to
+    ``pieces.to``) multiplies it. Pairing both ranges independently gives every possible
+    combination and more, which is conservative on both sides: Netto's worst unit price uses
+    the smallest quantity, a reference's best price the largest. The size is unknown unless
+    both ends of the range are positive.
     """
     if quantity is None:
         return UnitQuantity(unit=None)
@@ -200,12 +204,12 @@ def unit_quantity(quantity: TjekQuantity | None) -> UnitQuantity:
     if size is None or not size.from_ or not size.to:
         return UnitQuantity(unit=unit)
     factor = (si.factor if si else None) or Decimal(1)
-    pieces = (quantity.pieces.from_ if quantity.pieces else None) or Decimal(1)
-    lo = size.from_ * factor * pieces
-    hi = size.to * factor * pieces
-    if lo <= 0 or hi <= 0:
+    pieces_lo = (quantity.pieces.from_ if quantity.pieces else None) or Decimal(1)
+    pieces_hi = (quantity.pieces.to if quantity.pieces else None) or pieces_lo
+    amounts = [s * factor * n for s in (size.from_, size.to) for n in (pieces_lo, pieces_hi)]
+    lo, hi = min(amounts), max(amounts)
+    if lo <= 0:
         return UnitQuantity(unit=unit)
-    lo, hi = min(lo, hi), max(lo, hi)
     return UnitQuantity(unit=unit, size_min=lo, size_max=hi)
 
 

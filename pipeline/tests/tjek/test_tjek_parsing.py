@@ -28,12 +28,13 @@ def quantity(
     si: str | None = "kg",
     factor: float | None = 0.001,
     size: tuple[float | None, float | None] | None = (400, 400),
-    pieces: float | None = 1,
+    pieces: float | tuple[float, float] | None = 1,
 ) -> TjekQuantity:
+    lo, hi = pieces if isinstance(pieces, tuple) else (pieces, pieces)
     raw: dict[str, Any] = {
         "unit": {"symbol": "x", "si": {"symbol": si, "factor": factor}} if si else None,
         "size": {"from": size[0], "to": size[1]} if size else None,
-        "pieces": {"from": pieces, "to": pieces, "min": None, "max": None},
+        "pieces": {"from": lo, "to": hi, "min": None, "max": None},
     }
     return TjekQuantity.model_validate(raw)
 
@@ -83,11 +84,15 @@ def offer(**overrides: Any) -> TjekOffer:
             quantity(si="kg", factor=None, size=(0.5, 0.5), pieces=None),
             UnitQuantity("kg", D("0.5"), D("0.5")),
         ),
-        # PoC rule: pieces.from multiplies both ends, even for "18-20 x 33 cl"
+        # a pack count range widens the size range: "18-20 x 33 cl"
         (
-            quantity(si="l", factor=0.01, size=(33, 33), pieces=18),
-            UnitQuantity("l", D("5.94"), D("5.94")),
+            quantity(si="l", factor=0.01, size=(33, 33), pieces=(18, 20)),
+            UnitQuantity("l", D("5.94"), D("6.60")),
         ),
+        # regression (finding C5): 2-3 x 500 g is 1.0-1.5 kg, not 1.0 kg
+        (quantity(size=(500, 500), pieces=(2, 3)), UnitQuantity("kg", D("1.0"), D("1.5"))),
+        # both ranges at once, reversed pack range: every combination is covered
+        (quantity(size=(250, 500), pieces=(3, 2)), UnitQuantity("kg", D("0.5"), D("1.5"))),
         # reversed range is normalized
         (quantity(size=(530, 250)), UnitQuantity("kg", D("0.25"), D("0.53"))),
     ],
@@ -349,8 +354,8 @@ SUPERBRUGSEN_EXPECTED: dict[str, Expected] = {
     "JCZlye8-gQ_GOCK4fh8ex": ("32", None, "stk", "10", "10", "3.2", "3.2", False, None),
     # Blossa with pre_price ("Før-pris")
     "rHNNiy_P1gCF8011a81Qf": ("99", "109.95", "l", "2", "2", "49.5", "49.5", False, None),
-    # Heineken 18-20 x 33 cl: PoC rule uses pieces.from for both ends
-    "RcXEvHZcW_2dhzSNObgDh": ("89", None, "l", "5.94", "5.94", "14.9832", "14.9832", False, None),
+    # Heineken 18-20 x 33 cl: the pack count range gives 5.94-6.60 l
+    "RcXEvHZcW_2dhzSNObgDh": ("89", None, "l", "5.94", "6.60", "13.4848", "14.9832", False, None),
     # olive oil: price equals "Pris ikke-medlem 149,95"
     "eTqWIdeNJh0dzGhhY65wb": ("149.95", None, "l", "0.5", "0.5", "299.9", "299.9", False, None),
     "HFVWpYTME8EMA3uhLcUJN": ("15", None, "stk", "1", "1", "15", "15", False, None),
