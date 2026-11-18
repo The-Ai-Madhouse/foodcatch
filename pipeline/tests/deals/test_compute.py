@@ -385,13 +385,51 @@ def test_rema_regular_price_is_the_current_latest_one(sc: Scenario) -> None:
         valid_from=NOW - 60 * DAY,
         valid_to=NOW - 30 * DAY,
     )
-    sc.offer(  # a Rema campaign price is not a regular reference
-        PORK_8_12, chain="rema1000", source="rema", kind="offer", unit_price=25.0
+    sc.offer(  # an expired Rema campaign price
+        PORK_8_12,
+        chain="rema1000",
+        source="rema",
+        kind="offer",
+        unit_price=19.0,
+        valid_from=NOW - 20 * DAY,
+        valid_to=NOW - 13 * DAY,
     )
 
     recompute_deals(sc.conn)
 
     assert sc.ref_listings(netto) == {("regular", latest)}
+
+
+def test_rema_catalogue_campaign_prices_are_offer_references(sc: Scenario) -> None:
+    netto = sc.offer(PORK_8_12, unit_price=33.33)
+    rema = {"chain": "rema1000", "source": "rema", "source_item_id": "rema-42"}
+    regular = sc.offer(PORK_8_12, kind="regular", unit_price=49.9, valid_to=None, **rema)
+    # an in-store campaign (not in the Tjek leaflet) and the next announced campaign period
+    now = sc.offer(PORK_8_12, kind="offer", unit_price=30.0, **rema)
+    later = sc.offer(
+        PORK_8_12,
+        kind="offer",
+        unit_price=31.0,
+        valid_from=NOW + 6 * DAY,
+        valid_to=NOW + 13 * DAY,
+        **rema,
+    )
+
+    recompute_deals(sc.conn)
+
+    assert sc.ref_listings(netto) == {("regular", regular), ("offer", now), ("offer", later)}
+    row = sc.deal(netto)
+    result = verdict(
+        DealInput(
+            netto_unit_price_worst=float(row["netto_unit_price_worst"]),
+            netto_unit_price_best=float(row["netto_unit_price_best"]),
+            price_applies=row["price_applies"],
+            is_exact=True,
+            references=parse_references(row["references"]),
+        ),
+        {"rema1000"},
+    )
+    assert (result.verdict, result.cheapest_unit_price) == ("cheaper_elsewhere", 30.0)
 
 
 def test_history_contains_earlier_netto_offers_only(sc: Scenario) -> None:
@@ -507,6 +545,20 @@ def test_scoped_recompute_touches_only_affected_classes(sc: Scenario) -> None:
     assert recompute_deals(sc.conn, listing_ids={mørbrad}) == 1
     assert set(sc.deals()) == {(pork, 0), (mørbrad, 0)}
     assert recompute_deals(sc.conn, listing_ids=set()) == 0
+
+
+def test_reference_moved_to_another_class_is_removed_by_scoped_recompute(sc: Scenario) -> None:
+    netto = sc.offer(PORK_8_12, unit_price=33.33)
+    lidl = sc.offer(PORK_8_12, chain="lidl", unit_price=39.0)
+    recompute_deals(sc.conn)
+    assert sc.ref_listings(netto) == {("offer", lidl)}
+
+    # the matcher now reads the competitor offer as another fat percentage
+    sc.conn.execute(classification.delete().where(classification.c.listing_id == lidl))
+    sc.classify(lidl, PORK_4_7)
+
+    assert recompute_deals(sc.conn, listing_ids={lidl}) == 1
+    assert sc.refs(netto) == []
 
 
 def test_expired_references_trigger_a_recompute(sc: Scenario) -> None:

@@ -27,9 +27,15 @@ Price applies
 
 Reference kinds (references are always quoted at their *best*, i.e. lowest, unit price)
     ``offer``
-        Current or upcoming competitor offers: ``source='tjek'``, ``kind='offer'``, chain other
-        than Netto, ``valid_to`` null or in the future, price applies. One per source offer
-        (latest version when Tjek re-published it with a new price).
+        Current or upcoming competitor offers, ``valid_to`` null or in the future, price applies:
+        Tjek offers (``source='tjek'``, ``kind='offer'``, chain other than Netto; one per Tjek
+        offer id, the latest version when Tjek re-published it with a new price) **and** REMA
+        1000 campaign prices from the Rema catalogue (``source='rema'``, ``kind='offer'``; one
+        per price period - superseded periods are closed by the Rema ingest). The catalogue also
+        lists in-store campaigns that are missing from the Tjek leaflet; leaving them out would
+        let a Netto offer beat Rema's *regular* price while Rema actually sells it cheaper. A
+        Rema campaign that is also in the Tjek leaflet appears twice (same price, two sources),
+        which does not change the cheapest reference.
     ``regular``
         Rema 1000 shelf prices: ``source='rema'``, ``kind='regular'``, valid now. Only the
         latest price per Rema product.
@@ -49,8 +55,10 @@ Reference kinds (references are always quoted at their *best*, i.e. lowest, unit
 Incremental scope
     With ``listing_ids``, the recomputed variants are: Netto variants of those listings, Netto
     variants sharing a ``class_key`` with any of those listings (a changed competitor, Rema,
-    history or EAN listing), and Netto variants whose stored ``offer``/``regular`` references
-    have expired since (so expired competitor prices disappear on the next run of any job).
+    history or EAN listing), Netto variants whose stored references point at one of those
+    listings (a reference that was re-classified into another class must disappear), and Netto
+    variants whose stored ``offer``/``regular`` references have expired since (so expired
+    competitor prices disappear on the next run of any job).
     ``listing_ids=None`` recomputes every Netto variant. A ``product_reference_price`` change
     without a changed listing is picked up by the next full recompute.
 
@@ -125,8 +133,9 @@ _SCOPE_LISTINGS = """(
             WHERE d.listing_id = c.listing_id
               AND d.variant_index = c.variant_index
               AND d.matcher_version = :version
-              AND r ->> 'kind' IN ('offer', 'regular')
-              AND (r ->> 'valid_to')::timestamptz < now())
+              AND ((r ->> 'listing_id')::uuid = ANY(:ids)
+                   OR (r ->> 'kind' IN ('offer', 'regular')
+                       AND (r ->> 'valid_to')::timestamptz < now())))
     )"""
 
 # Same-class candidates of a target variant ``t``: classification ``rc`` + listing ``rl``.
@@ -159,8 +168,12 @@ def _listing_refs(kind: str, where: str, distinct_on: str, order_by: str) -> str
 
 _OFFER_REFS = _listing_refs(
     "offer",
-    f"rl.source = 'tjek' AND rl.kind = 'offer' AND rl.chain_id <> :netto AND {_current('rl')}",
-    distinct_on="rl.source_item_id",
+    "rl.kind = 'offer'"
+    " AND ((rl.source = 'tjek' AND rl.chain_id <> :netto) OR rl.source = 'rema')"
+    f" AND {_current('rl')}",
+    # Tjek: one per offer id (latest re-publication); Rema: every open price period.
+    distinct_on="CASE WHEN rl.source = 'rema' THEN rl.id::text"
+    " ELSE rl.source || ':' || rl.source_item_id END",
     order_by="rl.last_seen_at DESC, rl.valid_from DESC",
 )
 _REGULAR_REFS = _listing_refs(
