@@ -42,6 +42,8 @@
   --map-user: #2a78d6;
   --map-ring: rgba(42, 120, 214, 0.12);
   --overlay: rgba(11, 11, 11, 0.32);
+  /* Thin ring around chain dots, so dark fills (MENY) and light ones (Netto) stand out. */
+  --dot-ring: rgba(0, 0, 0, 0.14);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -81,6 +83,7 @@
     --map-user: #5598e7;
     --map-ring: rgba(85, 152, 231, 0.16);
     --overlay: rgba(0, 0, 0, 0.5);
+    --dot-ring: rgba(255, 255, 255, 0.5);
   }
 }
 
@@ -227,7 +230,9 @@
   border: 2px solid var(--surface);
   font: 700 10px/1 var(--font-sans);
   letter-spacing: -0.02em;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 0 0 1px var(--dot-ring),
+    0 1px 2px rgba(0, 0, 0, 0.25);
   transition:
     width 120ms ease,
     height 120ms ease,
@@ -263,8 +268,37 @@
   font: 600 11px/18px var(--font-sans);
   text-align: center;
 }
+/* The user's position, drawn above the store markers (below a selected one, 3000); never
+   intercepts taps. */
+.user-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--map-user);
+  border: 3px solid #ffffff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.25),
+    0 0 0 6px var(--map-ring);
+  pointer-events: none;
+  z-index: 2500;
+}
+/* Map controls (attribution, zoom) stay above the store markers (z-index up to 3000). */
+.maplibregl-map .maplibregl-ctrl-top-left,
+.maplibregl-map .maplibregl-ctrl-top-right,
+.maplibregl-map .maplibregl-ctrl-bottom-left,
+.maplibregl-map .maplibregl-ctrl-bottom-right {
+  z-index: 5000;
+}
+/* Legible on the dark style too (MapLibre's default is a translucent white). */
 .maplibregl-ctrl-attrib {
   font-size: 11px;
+}
+.maplibregl-map .maplibregl-ctrl.maplibregl-ctrl-attrib {
+  background-color: rgba(255, 255, 255, 0.88);
+  color: #333333;
+}
+.maplibregl-map .maplibregl-ctrl-attrib a {
+  color: #333333;
 }
 .maplibregl-map .maplibregl-ctrl-top-left {
   top: var(--map-inset-top, 0px);

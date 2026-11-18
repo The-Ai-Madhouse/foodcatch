@@ -23,6 +23,8 @@ export interface LocationActionState {
   message: string;
   /** The submitted address text (kept in the input after an error). */
   address: string;
+  /** The submitted radius (kept selected after an error). */
+  radiusKm?: number;
   /** Increments on every result, so the form remounts with the right values. */
   seq: number;
   /** The saved location, for the client's localStorage backup. */
@@ -81,13 +83,13 @@ export async function saveLocation(
 
   try {
     const hit = await geocodeAddress(address);
-    if (!hit) return { status: "error", message: NOT_FOUND(address), address, seq };
+    if (!hit) return { status: "error", message: NOT_FOUND(address), address, radiusKm, seq };
     const location = await persist({ lat: hit.lat, lon: hit.lon, label: address, radiusKm });
     return { status: "saved", message: `Gemt: ${location.label}.`, address, seq, location };
   } catch (error) {
     if (error instanceof GeocodingError) {
       console.error("Geocoding failed", error);
-      return { status: "error", message: LOOKUP_FAILED, address, seq };
+      return { status: "error", message: LOOKUP_FAILED, address, radiusKm, seq };
     }
     throw error;
   }

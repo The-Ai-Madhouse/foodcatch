@@ -166,6 +166,8 @@ export function LocationControl({ location }: { location: UserLocation }) {
   const message = note ?? (state.status === "error" ? { text: state.message, error: true } : null);
   // Remount the fields after every result and every new location, so they show the saved values.
   const formKey = `${state.seq}|${location.label}|${location.radiusKm}|${location.isDefault}`;
+  const shownRadius =
+    state.status === "error" && state.radiusKm ? state.radiusKm : location.radiusKm;
 
   return (
     <>
@@ -189,10 +191,10 @@ export function LocationControl({ location }: { location: UserLocation }) {
 
       <div
         role="status"
-        className="pointer-events-none fixed inset-x-0 top-14 z-40 flex justify-center"
+        className="pointer-events-none fixed inset-x-0 top-[52px] z-40 flex justify-center md:top-[60px]"
       >
         {toast ? (
-          <p className="rounded-full border border-good-line bg-good-bg px-3 py-1 text-meta font-semibold text-good-fg">
+          <p className="rounded-full border border-good-line bg-good-bg px-3 py-1.5 text-meta font-semibold text-good-fg shadow-md">
             Gemt ✓
           </p>
         ) : restoring ? (
@@ -280,7 +282,7 @@ export function LocationControl({ location }: { location: UserLocation }) {
                       type="radio"
                       name="radius"
                       value={km}
-                      defaultChecked={km === location.radiusKm}
+                      defaultChecked={km === shownRadius}
                       className="peer sr-only"
                     />
                     <span className="flex h-10 cursor-pointer items-center justify-center rounded-[8px] text-meta font-medium whitespace-nowrap text-ink-2 peer-checked:bg-brand peer-checked:text-page peer-focus-visible:outline-2 peer-focus-visible:outline-focus">

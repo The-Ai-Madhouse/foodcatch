@@ -175,15 +175,31 @@ function ChainWhere({ chainId, ctx }: { chainId: string; ctx: DealContext }) {
       />
     );
   }
+  // The page explains it in a notice; the card only says where the nearest store is.
   const outside = ctx.nearestOutside.get(chainId);
   return (
     <p className="flex min-h-11 items-center gap-2 text-meta text-warn-fg">
       <ChainDot chainId={chainId} />
       <span>
-        Ingen {chainName(chainId)} inden for {ctx.radiusKm} km
-        {outside
-          ? ` – nærmeste er ${shortStoreName(outside.name, chainId)}, ${formatDistance(outside.distanceKm)}`
-          : ""}
+        <span className="sr-only">
+          Ingen {chainName(chainId)} inden for {ctx.radiusKm} km.
+          {outside ? " Nærmeste butik: " : ""}
+        </span>
+        {outside ? (
+          <>
+            <strong className="font-semibold">{chainName(chainId)}</strong>{" "}
+            {shortStoreName(outside.name, chainId)}
+            <span className="whitespace-nowrap tabular">
+              {" "}
+              · {formatDistance(outside.distanceKm)}
+            </span>
+            <span aria-hidden="true"> · uden for din afstand</span>
+          </>
+        ) : (
+          <span aria-hidden="true">
+            Ingen {chainName(chainId)} inden for {ctx.radiusKm} km
+          </span>
+        )}
       </span>
     </p>
   );

@@ -90,7 +90,7 @@ test("home shows where to buy each offer, its size and its source", async ({ pag
   await page.goto("/?vis=alle");
   const card = page.locator("article").first();
   await expect(card).toBeVisible();
-  await expect(card).toContainText(/Netto · nærmest .+ \d+(?:,\d)? (?:m|km)/);
+  await expect(card).toContainText(/Nærmeste butik: Netto .+ · \d+(?:,\d)?\u00a0(?:m|km)/);
   await expect(card).toContainText(SIZE);
   const source = card.getByRole("link", { name: /Se tilbuddet i avisen/ });
   if ((await source.count()) > 0) {
@@ -110,6 +110,28 @@ test("the map renders store markers with attribution", async ({ page }) => {
   await expect(page.locator(".store-marker").first()).toBeAttached();
   expect(await page.locator(".store-marker").count()).toBeGreaterThan(0);
   await expect(page.locator(".maplibregl-ctrl-attrib")).toContainText("OpenStreetMap");
+});
+
+test("the nearest store's marker can be clicked and the sheet does not cover it", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/kort");
+  // DOM order is distance order: the first marker is the nearest store, often next to others.
+  const nearest = page.locator(".store-marker").first();
+  await expect(nearest).toBeVisible();
+  await nearest.click(); // a real pointer click: fails if a farther marker lies on top
+  await expect(page).toHaveURL(/[?&]butik=/);
+  await expect(nearest).toHaveAttribute("aria-pressed", "true");
+  if (testInfo.project.name !== "mobile") return;
+  // Phones: the map eases the selected marker into the part the bottom sheet leaves free.
+  const sheet = page.locator("[data-fullscreen-map] > div > section");
+  const sheetTop = (await sheet.boundingBox())?.y ?? 0;
+  await expect
+    .poll(async () => {
+      const box = await nearest.boundingBox();
+      return box ? box.y + box.height : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThanOrEqual(sheetTop);
 });
 
 test("a food-waste item shows its store, weight and source", async ({ page }) => {

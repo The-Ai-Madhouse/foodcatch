@@ -3,9 +3,9 @@ import { MapExplorer, type CheaperRow } from "@/components/map/MapExplorer";
 import { chainName } from "@/lib/chains";
 import { cheaperByChain, evaluateDeals, groupByListing, referenceListingIds } from "@/lib/deals";
 import type { FoodWasteItem } from "@/lib/foodwaste";
-import { formatUnitPrice, formatUnitPriceRange } from "@/lib/format";
+import { formatDkk, formatUnitPrice, formatUnitPriceRange, packSize } from "@/lib/format";
 import { sourceLink } from "@/lib/sources";
-import { nearestByChain, toMapStore } from "@/lib/stores";
+import { nearestByChain, shortStoreName, toMapStore } from "@/lib/stores";
 import { getUserLocation } from "@/server/location";
 import {
   getCurrentNettoDeals,
@@ -43,11 +43,29 @@ export default async function MapPage({ searchParams }: PageProps<"/kort">) {
   for (const [chainId, list] of cheaperByChain(deals, nearbyChains)) {
     cheaper[chainId] = list.map(({ deal, ref }) => {
       const detail = ref.listing_id ? details.get(ref.listing_id) : undefined;
+      const size = detail
+        ? packSize({
+            unit: detail.unit,
+            sizeMin: detail.sizeMin,
+            sizeMax: detail.sizeMax,
+            source: detail.source,
+            description: detail.description,
+          }).text
+        : "Vægt ukendt";
       return {
         key: `${deal.listingId}-${deal.variantIndex}`,
         title: deal.title,
         verdict: deal.status === "cheaper_elsewhere" ? "cheaper" : "maybe",
-        here: `${chainName(chainId)} ${formatUnitPrice(ref.unit_price, ref.unit ?? deal.unit)}`,
+        chain: chainName(chainId),
+        // Tjek titles often repeat the chain ("REMA 1000 Skiveost"); the chain is shown already.
+        name: ref.title ? shortStoreName(ref.title, chainId) : null,
+        facts: [
+          size,
+          detail?.price != null ? formatDkk(detail.price) : null,
+          formatUnitPrice(ref.unit_price, ref.unit ?? deal.unit),
+        ]
+          .filter(Boolean)
+          .join(" · "),
         netto:
           formatUnitPriceRange(deal.nettoUnitPriceBest, deal.nettoUnitPriceWorst, deal.unit) ??
           "ukendt",

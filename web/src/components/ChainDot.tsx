@@ -27,7 +27,7 @@ export function ChainDot({
       role={labelled ? undefined : "img"}
       aria-label={labelled ? undefined : chainName(chainId)}
       className={`inline-flex shrink-0 items-center justify-center rounded-full leading-none font-bold tracking-tight ${dims}`}
-      style={{ background: style.fill, color: style.text }}
+      style={{ background: style.fill, color: style.text, boxShadow: "0 0 0 1px var(--dot-ring)" }}
     >
       {size === "xs" ? null : style.monogram}
     </span>

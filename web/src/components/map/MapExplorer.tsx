@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChainDot } from "@/components/ChainDot";
 import { ChevronIcon, CloseIcon } from "@/components/Icons";
 import { ExternalLink, SourceLink } from "@/components/SourceLink";
@@ -22,8 +22,12 @@ export interface CheaperRow {
   title: string;
   /** `cheaper`: clearly cheaper; `maybe`: depends on Netto's pack size. */
   verdict: "cheaper" | "maybe";
-  /** "REMA 1000 39,00 kr./kg". */
-  here: string;
+  /** The chain that has it cheaper ("REMA 1000"). */
+  chain: string;
+  /** The product name at that chain, when known. */
+  name: string | null;
+  /** "500 g · 20,00 kr. · 40,00 kr./kg" (pack size, pack price, unit price). */
+  facts: string;
   /** Netto's unit price (range). */
   netto: string;
   link: SourceLinkData | null;
@@ -74,7 +78,20 @@ export function MapExplorer({
     initialChains ? new Set(initialChains) : null,
   );
   const [selectedId, setSelectedId] = useState<string | null>(initialStoreId);
-  const [snap, setSnap] = useState<Snap>(initialStoreId ? "half" : "peek");
+  // Open far enough to show the selected store, or "Skift afstand" when there are no stores.
+  const [snap, setSnap] = useState<Snap>(initialStoreId || stores.length === 0 ? "half" : "peek");
+  // The map area's height, so the map can keep the selected store above the bottom sheet.
+  const mapAreaRef = useRef<HTMLDivElement>(null);
+  const [mapAreaHeight, setMapAreaHeight] = useState(0);
+  useEffect(() => {
+    const element = mapAreaRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setMapAreaHeight(Math.round(entry.contentRect.height));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   const chains = useMemo(() => {
     const seen = new Map<string, number>();
@@ -106,7 +123,10 @@ export function MapExplorer({
     syncUrl(next, selectedId);
   }
 
-  const chips = <ChainChips chains={chains} filters={filters} onToggle={toggleChain} />;
+  const chips =
+    chains.length > 0 ? (
+      <ChainChips chains={chains} filters={filters} onToggle={toggleChain} />
+    ) : null;
   const panel = selected ? (
     <StoreDetail
       store={selected}
@@ -121,6 +141,12 @@ export function MapExplorer({
   );
   const sheetHeight =
     snap === "peek" ? `${PEEK_PX}px` : snap === "half" ? "50%" : "calc(100% - 64px)";
+  const sheetPx =
+    snap === "peek"
+      ? PEEK_PX
+      : snap === "half"
+        ? Math.round(mapAreaHeight / 2)
+        : Math.max(mapAreaHeight - 64, 0);
 
   return (
     <div
@@ -142,7 +168,7 @@ export function MapExplorer({
         </aside>
       ) : null}
 
-      <div className="relative h-full min-h-0">
+      <div ref={mapAreaRef} className="relative h-full min-h-0">
         <LazyStoreMap
           stores={stores}
           user={user}
@@ -150,7 +176,7 @@ export function MapExplorer({
           selectedId={selectedId}
           filters={filters}
           onSelect={select}
-          padding={desktop ? undefined : { top: 52, bottom: PEEK_PX }}
+          padding={desktop ? undefined : { top: 52, bottom: sheetPx }}
           className="h-full lg:rounded-xl lg:border lg:border-line"
         />
 
@@ -178,8 +204,9 @@ export function MapExplorer({
                   onClick={() => setSnap(snap === "peek" ? "half" : "peek")}
                   className="flex min-h-11 shrink-0 items-center justify-between px-4 text-left font-semibold text-ink"
                 >
-                  {listed.length} {listed.length === 1 ? "butik" : "butikker"} inden for {radiusKm}{" "}
-                  km
+                  {listed.length === 0
+                    ? `Ingen butikker inden for ${radiusKm} km`
+                    : `${listed.length} ${listed.length === 1 ? "butik" : "butikker"} inden for ${radiusKm} km`}
                   <ChevronIcon className={snap === "peek" ? "rotate-180" : ""} />
                 </button>
               ) : null}
@@ -395,9 +422,13 @@ function StoreDetail({
               {cheaper.map((row) => (
                 <li key={row.key} className="py-2">
                   <p className="font-medium text-ink">{row.title}</p>
+                  <p className="text-meta text-ink">
+                    <span className="font-semibold">{row.chain}:</span>{" "}
+                    {row.name ? <span className="text-ink-2">{row.name} · </span> : null}
+                    <span className="tabular">{row.facts}</span>
+                  </p>
                   <p className="text-meta text-ink-2">
-                    <span className="tabular">{row.here}</span> mod Netto{" "}
-                    <span className="tabular">{row.netto}</span>
+                    Netto: <span className="tabular">{row.netto}</span>
                     {row.verdict === "maybe" ? " · afhænger af pakningen" : ""}
                   </p>
                   <SourceLink link={row.link} />

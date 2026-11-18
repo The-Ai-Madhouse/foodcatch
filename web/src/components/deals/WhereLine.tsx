@@ -38,13 +38,16 @@ export function WhereLine({
       className="-mx-1 flex min-h-11 items-center gap-2 rounded-[10px] px-1 text-meta text-ink-2 no-underline hover:bg-surface-2"
     >
       <ChainDot chainId={chainId} />
+      {/* One line on a phone: "Netto Rådhuspladsen · 80 m · +22 andre". */}
       <span className="min-w-0">
-        <strong className="font-semibold text-ink">{chain}</strong> · nærmest {nearestName}{" "}
-        <span className="whitespace-nowrap tabular">{nearestDistance}</span>
+        <span className="sr-only">Nærmeste butik: </span>
+        <strong className="font-semibold text-ink">{chain}</strong> {nearestName}
+        <span className="whitespace-nowrap tabular"> · {nearestDistance}</span>
         {moreCount > 0 ? (
           <span className="whitespace-nowrap">
             {" "}
-            · +{moreCount} {moreCount === 1 ? "butik" : "butikker"}
+            · +{moreCount} {moreCount === 1 ? "anden" : "andre"}
+            <span className="sr-only"> {chain}-butikker i nærheden</span>
           </span>
         ) : null}
       </span>

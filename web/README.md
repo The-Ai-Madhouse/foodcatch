@@ -113,7 +113,8 @@ Pages never touch the database at build time, so `pnpm build` works without one.
 `pnpm e2e` runs Playwright (`e2e/`) in the installed Google Chrome (`channel: "chrome"`) at
 390×844 and 1440×900: the location survives reloads and is restored from `localStorage` without
 the cookie, "Brug min position" saves a (faked) browser position, cards show the store and pack
-size and link to the leaflet, the map renders markers with attribution, a clearance shows its
+size and link to the leaflet, the map renders markers with attribution, the nearest store's
+marker can be clicked (and stays above the bottom sheet on a phone), a clearance shows its
 store, weight and source, and no page scrolls sideways on a phone. No test geocodes an address,
 so Nominatim is never called.
 

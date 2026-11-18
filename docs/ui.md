@@ -440,12 +440,16 @@ ids food waste refers to); for all other chains only `source = 'tjek'` rows. Dis
 
 `nearestByChain`: the stores of each chain sorted by distance.
 
-* Deal card (chain-wide): chain dot + "**Netto** · nærmest Rådhuspladsen 80 m" and, if more,
-  " · +7 butikker". The store name drops the chain prefix here to save space. Tapping the line
-  opens `/kort?kaede=netto` (mobile) or filters the side map to Netto (desktop).
-* No store of the offer's chain within the radius: "Ingen Netto inden for {r} km – nærmeste er
-  {name}, {distance}" (nearest outside the radius, from an unbounded nearest query limited to 1)
-  in `--warn-fg`.
+* Deal card (chain-wide): chain dot + "**Netto** Rådhuspladsen · 80 m" and, if more,
+  " · +7 andre" – one line at 390 px (the first version, "Netto · nærmest Rådhuspladsen 80 m ·
+  +22 butikker", wrapped to two lines on every card). Screen readers hear "Nærmeste butik: Netto
+  Rådhuspladsen · 80 m · +7 andre Netto-butikker i nærheden". The store name drops the chain
+  prefix. Tapping the line opens `/kort?kaede=netto` (mobile) or filters the side map to Netto
+  (desktop).
+* No store of the offer's chain within the radius: the page shows the notice (§6.1); the card
+  only says where the nearest one is, in the same form and in `--warn-fg`: "**Netto** Grenå ·
+  52,9 km · uden for din afstand" (nearest outside the radius, from an unbounded nearest query
+  limited to 1; screen readers hear "Ingen Netto inden for {r} km. Nærmeste butik: …").
 * Comparison rows: chain + distance to its nearest store ("REMA 1000 · 330 m").
 * Food waste: the exact store (store group header, §6.2).
 
@@ -460,7 +464,7 @@ One card per **listing** (offer), not per variant. Variants are rows inside.
 ┌──────────────────────────────────────────────┐
 │ Hakket dansk grisekød 8-12 %     [✓ Godt køb] │  text-heading + badge
 │ 10,00 kr. · 300 g · 33,33 kr./kg              │  text-price + meta
-│ ● Netto · nærmest Rådhuspladsen 80 m · +7     │  where line
+│ ● Netto Rådhuspladsen · 80 m · +7 andre       │  where line
 │ lør. 14.–fre. 20. nov.                        │  period (meta)
 │ Billigst i nærheden. Næstbedst: REMA 1000     │  reason (meta, ink-2)
 │ 39,00 kr./kg                                  │
@@ -609,7 +613,9 @@ Mobile: full-screen map between top bar and tab bar.
 * Overlay at the top: horizontally scrollable chain filter chips (monogram dot + name, toggle
   buttons with `aria-pressed`), "Alle" first. Only chains with a store within the radius.
 * Bottom sheet with three snap points: peek (88 px: "{n} butikker inden for {r} km"), half,
-  full. In peek/half it lists stores nearest first (dot, name, distance, "{k} madspild",
+  full. It opens at half when a store is selected from the URL and when there is no store at
+  all (header "Ingen butikker inden for {r} km", so "Skift afstand" is visible); the chain chips
+  are hidden when there is no chain. In peek/half it lists stores nearest first (dot, name, distance, "{k} madspild",
   "{m} billigere end Netto"). Tap a row = select the store.
 * Map controls (right, 44 px buttons): "Centrér på mig" (crosshair), zoom +/− only on desktop
   (pinch on mobile). Attribution: MapLibre's compact control at the top left below the chips on
@@ -633,8 +639,10 @@ Ugens tilbud i Netto
   {source_store_id}`, §1.1).
 * For a non-Netto chain the second section is "Billigere her end i Netto": the evaluated deals
   whose cheapest counted reference is this chain and whose status is `cheaper_elsewhere` or
-  `undecided`: rows "{title} · {chain} {unitPrice} mod Netto {nettoUnitPrice}" with the source
-  link of the reference. Empty: "Ingen af ugens sammenlignede varer er billigere her."
+  `undecided`: rows of three lines – the Netto offer's title; "**{chain}:** {reference title
+  without the chain prefix} · {pack size} · {pack price} · {unitPrice}"; "Netto:
+  {nettoUnitPrice}" (+ " · afhænger af pakningen" when undecided) – and the source link of the
+  reference. The pack size follows §5.3 ("Vægt ukendt" when unknown). Empty: "Ingen af ugens sammenlignede varer er billigere her."
 * Food-waste section only for Salling stores; nothing selected and nothing to show: "Ingen
   madspild eller sammenlignede tilbud her lige nu."
 
@@ -666,15 +674,23 @@ MapLibre (~ 230 kB gzip JS + CSS) only loads on pages that show a map. Import
 * Style: OpenFreeMap `positron` / `dark` (§1.4). `attributionControl: { compact: true }` on
   mobile and `{ compact: false }` on desktop; never hidden or covered.
 * Initial view: `fitBounds` of the radius circle around the user (padding 24 px; on mobile the
-  bottom padding includes the sheet peek height). No animation when
+  bottom padding is the bottom sheet's current height – peek, half or full – so a selected store
+  is eased into the part of the map the sheet leaves free, with 24 px to spare). No animation when
   `prefers-reduced-motion: reduce`.
-* User position: GeoJSON source with a 7 px `--map-user` circle with a 2 px white stroke and a
-  radius ring polygon (64-point circle, fill `--map-ring`, 1 px dashed outline). Label in the
-  accessible list: "Din placering".
+* User position: an HTML marker (18 px `--map-user` dot, 3 px white stroke, 6 px `--map-ring`
+  halo, `pointer-events: none`) drawn **above** the store markers – a map layer was hidden under
+  them, because the nearest store is usually next to the user – and a radius ring polygon
+  (GeoJSON, 64-point circle, fill `--map-ring`, 1 px dashed outline). Title "Din placering".
 * Stores: HTML markers (`maplibregl.Marker({ element })`), each a `<button>` 28 px (44 px hit
   area) with the chain fill, monogram and outline; `aria-label="{store name}, {chain},
   {distance}"` and, on `/madspild`, a count bubble ("5"). Selected: 36 px with a 3 px `--ink`
   ring; dimmed (filtered-out or not highlighted) markers 35 % opacity and `tabIndex=-1`.
+  Stacking: nearer stores above farther ones (the DOM stays in distance order for the tab
+  order), dimmed ones below, the selected one on top (above the user dot); the map container
+  is `isolation: isolate`, so markers never cover the chips, the sheet or the map controls.
+  Every chain dot and marker has a 1 px `--dot-ring` (dark in light mode, light in dark mode),
+  so MENY's near-black and Netto's yellow stay visible on both map styles. The attribution has
+  an opaque light background in both modes so it stays legible on the dark style.
   Expected counts are ≤ ~150 markers (5 km in central Copenhagen), well within HTML-marker
   performance.
 * Interactions: tap/click marker → `onSelect(id)` (sheet/sidebar opens, URL `?butik=` updated

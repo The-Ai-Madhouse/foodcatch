@@ -9,7 +9,7 @@ import {
   type GeoJSONSource,
   type LngLatBoundsLike,
 } from "maplibre-gl";
-import type { Feature, Point, Polygon } from "geojson";
+import type { Feature, Polygon } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { CrosshairIcon } from "@/components/Icons";
@@ -107,24 +107,16 @@ function danishLabels(map: MapLibreMap) {
   }
 }
 
-/** Add (or update) the user's position and radius ring; called again after a style change. */
-function drawUser(map: MapLibreMap, user: Coordinates, radiusKm: number) {
-  const point: Feature<Point> = {
-    type: "Feature",
-    properties: {},
-    geometry: { type: "Point", coordinates: [user.lon, user.lat] },
-  };
+/** Add (or update) the radius ring; called again after a style change. */
+function drawRadius(map: MapLibreMap, user: Coordinates, radiusKm: number) {
   const ring = circlePolygon(user, radiusKm);
-  const userSource = map.getSource<GeoJSONSource>("fc-user");
   const ringSource = map.getSource<GeoJSONSource>("fc-radius");
-  if (userSource && ringSource) {
-    userSource.setData(point);
+  if (ringSource) {
     ringSource.setData(ring);
     return;
   }
   const colour = cssVar("--map-user", "#2a78d6");
   map.addSource("fc-radius", { type: "geojson", data: ring });
-  map.addSource("fc-user", { type: "geojson", data: point });
   map.addLayer({
     id: "fc-radius-fill",
     type: "fill",
@@ -137,17 +129,19 @@ function drawUser(map: MapLibreMap, user: Coordinates, radiusKm: number) {
     source: "fc-radius",
     paint: { "line-color": colour, "line-width": 1, "line-dasharray": [3, 2] },
   });
-  map.addLayer({
-    id: "fc-user",
-    type: "circle",
-    source: "fc-user",
-    paint: {
-      "circle-radius": 7,
-      "circle-color": colour,
-      "circle-stroke-width": 2,
-      "circle-stroke-color": "#ffffff",
-    },
-  });
+}
+
+/**
+ * The user's position: an HTML marker above the store markers (a map layer would be hidden
+ * under them, and the nearest store is usually right next to the user). It ignores pointer
+ * events, so the stores around it stay tappable.
+ */
+function createUserMarker(user: Coordinates): Marker {
+  const element = document.createElement("div");
+  element.className = "user-marker";
+  element.setAttribute("aria-hidden", "true");
+  element.title = "Din placering";
+  return new Marker({ element }).setLngLat([user.lon, user.lat]);
 }
 
 interface MarkerEntry {
@@ -202,6 +196,7 @@ export default function StoreMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef(new Map<string, MarkerEntry>());
+  const userMarkerRef = useRef<Marker | null>(null);
   const onSelectRef = useRef(onSelect);
   const viewRef = useRef({ user, radiusKm, padding });
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -237,12 +232,14 @@ export default function StoreMap({
     );
     if (desktop) map.addControl(new NavigationControl({ showCompass: false }), "bottom-right");
     mapRef.current = map;
+    const userMarker = createUserMarker(u).addTo(map);
+    userMarkerRef.current = userMarker;
 
     let loaded = false;
     map.on("style.load", () => {
       const view = viewRef.current;
       danishLabels(map);
-      drawUser(map, view.user, view.radiusKm);
+      drawRadius(map, view.user, view.radiusKm);
     });
     map.on("load", () => {
       loaded = true;
@@ -266,6 +263,8 @@ export default function StoreMap({
       dark.removeEventListener("change", onScheme);
       container.removeEventListener("keydown", onKey);
       markers.clear();
+      userMarker.remove();
+      userMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -308,6 +307,12 @@ export default function StoreMap({
 
   // Selection, highlight and filters.
   useEffect(() => {
+    // Nearer stores are drawn above farther ones: the nearest store is the one most likely to
+    // be wanted, and it would otherwise hide under its neighbours (the DOM is in distance order
+    // for the tab order, so later = farther = on top by default).
+    const rank = new Map(
+      [...stores].sort((a, b) => a.distanceKm - b.distanceKm).map((s, i) => [s.id, i]),
+    );
     for (const [id, entry] of markersRef.current) {
       const store = stores.find((s) => s.id === id);
       if (!store) continue;
@@ -320,11 +325,14 @@ export default function StoreMap({
       entry.button.setAttribute("aria-pressed", String(selected));
       entry.button.setAttribute("data-dimmed", String(dimmed));
       entry.button.setAttribute("tabindex", dimmed ? "-1" : "0");
-      entry.marker.getElement().style.setProperty("z-index", selected ? "3" : dimmed ? "1" : "2");
+      const base = selected ? 3000 : dimmed ? 1000 : 2000;
+      const z = selected ? base : base - Math.min(rank.get(id) ?? 999, 999);
+      entry.marker.getElement().style.setProperty("z-index", String(z));
     }
   }, [stores, selectedId, highlightChain, highlightStoreId, filters]);
 
-  // Keep a newly selected store in view.
+  // Keep a newly selected store in view, also when an overlay (the bottom sheet) grows.
+  const paddingKey = padding ? `${padding.top ?? 0},${padding.bottom ?? 0}` : "";
   useEffect(() => {
     const map = mapRef.current;
     const store = selectedId ? stores.find((s) => s.id === selectedId) : null;
@@ -334,11 +342,15 @@ export default function StoreMap({
     const pad = fullPadding(viewRef.current.padding);
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
+    // The overlays cover (nearly) the whole map, e.g. the sheet at full height.
+    if (pad.top + pad.bottom > height - 48) return;
+    // Room for the (enlarged) marker itself.
+    const margin = 24;
     const visible =
-      point.x >= pad.left &&
-      point.x <= width - pad.right &&
-      point.y >= pad.top &&
-      point.y <= height - pad.bottom;
+      point.x >= pad.left + margin &&
+      point.x <= width - pad.right - margin &&
+      point.y >= pad.top + margin &&
+      point.y <= height - pad.bottom - margin;
     if (!visible) {
       map.easeTo({
         center: [store.lon, store.lat],
@@ -346,13 +358,15 @@ export default function StoreMap({
         duration: matches(REDUCED_MOTION_QUERY) ? 0 : 400,
       });
     }
-  }, [selectedId, stores]);
+  }, [selectedId, stores, paddingKey]);
 
   // A new location or radius: redraw the ring and refit.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    drawUser(map, user, radiusKm);
+    if (!map) return;
+    userMarkerRef.current?.setLngLat([user.lon, user.lat]);
+    if (!map.isStyleLoaded()) return;
+    drawRadius(map, user, radiusKm);
     map.fitBounds(radiusBounds(user, radiusKm), {
       padding: fullPadding(viewRef.current.padding),
       duration: matches(REDUCED_MOTION_QUERY) ? 0 : 400,
@@ -376,7 +390,8 @@ export default function StoreMap({
         role="region"
         aria-label="Kort over butikker"
         // Inline: MapLibre's unlayered `.maplibregl-map { position: relative }` beats utilities.
-        style={{ position: "absolute", inset: 0 }}
+        // `isolation` keeps the markers' z-indexes inside the map, below the page's overlays.
+        style={{ position: "absolute", inset: 0, isolation: "isolate" }}
       />
       {status !== "ready" ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center text-meta text-ink-2">
