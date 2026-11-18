@@ -258,7 +258,8 @@ Ported from the PoC and **must keep its conservatism**:
 * Netto is evaluated at its **worst** (highest) unit price, references at their **best** (lowest).
 * Reference kinds: `offer` (current or upcoming competitor offers: Tjek offers of other chains
   and REMA 1000 campaign prices from the Rema catalogue), `regular` (Rema shelf price;
-  later other chains), `history` (earlier Netto offers of the same class), `ean_reference`
+  later other chains), `history` (Netto offers of the same class that ended before this offer
+  started; concurrent offers are not history), `ean_reference`
   (Salling originalPrice for the same EAN, when known).
 * "Same class" is evaluated in SQL as equal `classification.class_key` with both rows exact,
   which equals `comparability(a, b) == "same"` (`class_key` contains the type, every key

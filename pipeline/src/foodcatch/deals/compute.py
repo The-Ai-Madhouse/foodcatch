@@ -41,9 +41,12 @@ Reference kinds (references are always quoted at their *best*, i.e. lowest, unit
         Rema 1000 shelf prices: ``source='rema'``, ``kind='regular'``, valid now. Only the
         latest price per Rema product.
     ``history``
-        Other Netto offers of the class that started no later than this offer (any validity,
-        a different Tjek offer id, price applies, the latest version of that offer id - a
-        superseded mistaken price is no history), one per listing.
+        Other Netto offers of the class that *ended before this offer started* (a different
+        Tjek offer id, price applies, the latest version of that offer id - a superseded
+        mistaken price is no history), one per listing. A concurrent or overlapping offer
+        (e.g. the same product in two catalogues of one week) is not history: it would let an
+        offer be its own evidence of a good price. Netto weeks end at 22:59:59 before the next
+        one starts, so the current offer is history for next week's offer.
     ``ean_reference``
         A Netto Tjek offer carries no EAN, so EAN shelf prices are tied to it through the class:
         an *exact, homogeneous* listing of the same class that has an EAN (``product_id``, in
@@ -205,7 +208,7 @@ _REGULAR_REFS = _listing_refs(
 _HISTORY_REFS = _listing_refs(
     "history",
     f"{_netto_offer('rl')} AND rl.source_item_id <> t.source_item_id"
-    f" AND rl.valid_from <= t.valid_from AND {_latest_version('rl')}",
+    f" AND rl.valid_to < t.valid_from AND {_latest_version('rl')}",
     distinct_on="rl.id",
     order_by="rl.last_seen_at DESC",
 )

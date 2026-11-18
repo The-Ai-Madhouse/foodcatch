@@ -552,9 +552,6 @@ later work.
 * *Upcoming offers as references.* Competitor offers count from publication until they end,
   including offers that start later than the Netto offer; this is deliberate (more references,
   more conservative verdicts).
-* *History includes concurrent Netto offers.* `history` references are other Netto offers of
-  the class that started no later than the offer, including a concurrent offer of another
-  catalogue with the same price.
 * *EAN reference prices refresh with their listing.* A changed `product_reference_price` (a
   Salling `originalPrice`) reaches deals when the same-class listing changes or on
   `foodcatch deals recompute`; a change at a store outside the region, or a new net quantity

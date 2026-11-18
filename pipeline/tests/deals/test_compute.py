@@ -456,8 +456,11 @@ def test_history_contains_earlier_netto_offers_only(sc: Scenario) -> None:
     expired = sc.offer(
         PORK_8_12, unit_price=31.0, valid_from=NOW - 30 * DAY, valid_to=NOW - 25 * DAY
     )
-    upcoming = sc.offer(
-        PORK_8_12, unit_price=35.0, valid_from=NOW + 2 * DAY, valid_to=NOW + 9 * DAY
+    upcoming = sc.offer(  # next week: starts right after the current offer ends
+        PORK_8_12,
+        unit_price=35.0,
+        valid_from=NOW + 5 * DAY + timedelta(seconds=1),
+        valid_to=NOW + 12 * DAY,
     )
     # the same Tjek offer re-published with a new price is not its own history
     republished = sc.offer(
@@ -475,6 +478,21 @@ def test_history_contains_earlier_netto_offers_only(sc: Scenario) -> None:
     history = sc.refs(current)[0]
     assert history["chain_id"] == "netto"
     assert history["unit_price"] == 31.0
+
+
+def test_concurrent_netto_offers_are_not_each_others_history(sc: Scenario) -> None:
+    """Regression (finding C4): one week's duplicate offers must not make each other good."""
+    start, end = NOW - DAY, NOW + 5 * DAY
+    plain = sc.offer(PORK_8_12, unit_price=33.3333, valid_from=start, valid_to=end)
+    with_alternative = sc.offer(PORK_8_12, unit_price=33.3333, valid_from=start, valid_to=end)
+    overlapping = sc.offer(  # started earlier, still running when the others started
+        PORK_8_12, unit_price=30.0, valid_from=NOW - 3 * DAY, valid_to=NOW + DAY
+    )
+
+    recompute_deals(sc.conn)
+
+    for netto in (plain, with_alternative, overlapping):
+        assert sc.refs(netto) == []
 
 
 def test_ean_reference_uses_latest_shelf_price_per_chain(sc: Scenario) -> None:
