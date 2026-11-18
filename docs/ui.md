@@ -699,6 +699,9 @@ this for `CREATE OR REPLACE`). Grants are unchanged. The downgrade restores the 
 definitions (drop + create + grant, as in 0006). Architecture §7 must be updated in the same
 change.
 
+_Implemented by `pipeline/src/foodcatch/db/migrations/versions/0007_api_source_links_and_sizes.py`;
+the column contract is pinned in `pipeline/tests/api_contract.py`._
+
 ### 8.1 `api.stores` (append after `lon`)
 
 | Column | Type | Meaning | SQL source |

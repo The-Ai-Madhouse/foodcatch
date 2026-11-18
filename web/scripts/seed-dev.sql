@@ -97,7 +97,8 @@ VALUES
    'Netto', 'Vesterbrogade 37', '1620', 'København V', 55.6731, 12.5591); -- same store, Tjek id
 
 -- ---------------------------------------------------------------------------------------------
--- Products (EANs seen in food waste).
+-- Products (EANs seen in food waste). quantity_text/net_* are Open Food Facts data, which the web
+-- shows only as "pack size per Open Food Facts" (it may describe another pack).
 -- ---------------------------------------------------------------------------------------------
 INSERT INTO public.product (id, ean, name, brand, source_category, quantity_text, net_quantity, net_unit, nova_group, nutriscore_grade)
 VALUES
@@ -114,7 +115,7 @@ VALUES
   ('c0000000-0000-4000-8000-000000000006', '5701234000066', 'Smørbar', NULL,
    'Mejeri>Smør & fedtstoffer>Smørbar', '250 g', 0.25, 'kg', 2, 'e'),
   ('c0000000-0000-4000-8000-000000000007', '5701234000073', 'Mozzarella', NULL,
-   'Mejeri>Ost>Mozzarella', '125 g', 0.125, 'kg', 1, 'c'),
+   'Mejeri>Ost>Mozzarella', NULL, NULL, NULL, 1, 'c'), -- not found in Open Food Facts
   ('c0000000-0000-4000-8000-000000000008', '5701234000080', 'Hakket grisekød 8-12%', NULL,
    'Kød & fisk>Hakket kød>Grisekød', '500 g', 0.5, 'kg', 1, 'b');
 
@@ -251,41 +252,52 @@ VALUES
    false, NULL, pg_temp.day(-90), NULL, 'e0000000-0000-4000-8000-000000000003', '{}'),
 
   -- Salling food waste (clearances in specific stores) -----------------------------------------
+  -- extra.image: real Salling CDN URLs (pictures of other products; they only exercise the
+  -- layout), the placeholder ending in /image (w04) and no image at all (w08). w05 is sold by
+  -- weight (no size in the name, so no unit or unit price); w08's product has no Open Food Facts
+  -- size.
   ('a0000000-0000-4000-8000-000000000401', 'salling_food_waste', 'seed-w01', 'netto',
    'd0000000-0000-4000-8000-000000000001', NULL, 'clearance', 'HAKKET OKSEKØD 8-12%', '',
    'c0000000-0000-4000-8000-000000000001', 24.00, 44.95, 'kg', 0.5, 0.5, false, NULL,
    now() - interval '3 hours', now() + interval '10 hours', 'e0000000-0000-4000-8000-000000000004',
-   '{"stock": 3, "stock_unit": "each", "percent_discount": 46.6}'),
+   '{"stock": 3, "stock_unit": "each", "percent_discount": 46.6,
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/64b99ee6-cc51-4b09-aa1b-29b6ac50231e"}'),
   ('a0000000-0000-4000-8000-000000000402', 'salling_food_waste', 'seed-w02', 'foetex',
    'd0000000-0000-4000-8000-000000000006', NULL, 'clearance', 'ØKO LETMÆLK 0,5% 1L', '',
    'c0000000-0000-4000-8000-000000000002', 7.00, 13.95, 'l', 1, 1, false, NULL,
    now() - interval '2 hours', now() + interval '12 hours', 'e0000000-0000-4000-8000-000000000004',
-   '{"stock": 6, "stock_unit": "each", "percent_discount": 49.8}'),
+   '{"stock": 6, "stock_unit": "each", "percent_discount": 49.8,
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/fb2b2729-a8c5-41b9-bcb6-1b37987787ac"}'),
   ('a0000000-0000-4000-8000-000000000403', 'salling_food_waste', 'seed-w03', 'netto',
    'd0000000-0000-4000-8000-000000000002', NULL, 'clearance', 'SKYR NATUREL 1KG', '',
    'c0000000-0000-4000-8000-000000000003', 12.00, 22.95, 'kg', 1, 1, false, NULL,
    now() - interval '5 hours', now() + interval '1 day', 'e0000000-0000-4000-8000-000000000004',
-   '{"stock": 2, "stock_unit": "each", "percent_discount": 47.7}'),
+   '{"stock": 2, "stock_unit": "each", "percent_discount": 47.7,
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/950733da79a4a77a10477bf2fbed3ae9"}'),
   ('a0000000-0000-4000-8000-000000000404', 'salling_food_waste', 'seed-w04', 'foetex',
    'd0000000-0000-4000-8000-000000000006', NULL, 'clearance', 'FRILANDSÆG 10 STK', '',
    'c0000000-0000-4000-8000-000000000004', 18.00, 32.95, 'stk', 10, 10, false, NULL,
    now() - interval '4 hours', now() + interval '2 days', 'e0000000-0000-4000-8000-000000000004',
-   '{"stock": 4, "stock_unit": "each", "percent_discount": 45.4}'),
+   '{"stock": 4, "stock_unit": "each", "percent_discount": 45.4,
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/image"}'), -- Salling's placeholder: image_url is null
   ('a0000000-0000-4000-8000-000000000405', 'salling_food_waste', 'seed-w05', 'netto',
    'd0000000-0000-4000-8000-000000000001', NULL, 'clearance', 'KYLLINGEBRYSTFILET', '',
-   'c0000000-0000-4000-8000-000000000005', 39.00, 69.95, 'kg', 0.6, 0.6, false, NULL,
+   'c0000000-0000-4000-8000-000000000005', 39.00, 69.95, NULL, NULL, NULL, false, NULL,
    now() - interval '1 hour', now() + interval '9 hours', 'e0000000-0000-4000-8000-000000000004',
-   '{"stock": 1.2, "stock_unit": "kg", "percent_discount": 44.2}'),
+   '{"stock": 1.2, "stock_unit": "kg", "percent_discount": 44.2,
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/0f52621552c918ea2deefcc9fd5d54aa"}'), -- sold by weight: size unknown
   ('a0000000-0000-4000-8000-000000000406', 'salling_food_waste', 'seed-w06', 'foetex',
    'd0000000-0000-4000-8000-000000000006', NULL, 'clearance', 'SMØRBAR 250G', '',
    'c0000000-0000-4000-8000-000000000006', 10.00, 21.95, 'kg', 0.25, 0.25, false, NULL,
    now() - interval '1 hour', now() + interval '1 day', 'e0000000-0000-4000-8000-000000000004',
-   '{"stock": 8, "stock_unit": "each", "percent_discount": 54.4}'),
+   '{"stock": 8, "stock_unit": "each", "percent_discount": 54.4,
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/4ef94c78cf76398f2ae8f7bd4fdc8750"}'),
   ('a0000000-0000-4000-8000-000000000407', 'salling_food_waste', 'seed-w07', 'bilka',
    'd0000000-0000-4000-8000-000000000010', NULL, 'clearance', 'HAKKET GRISEKØD 8-12%', '',
    'c0000000-0000-4000-8000-000000000008', 15.00, 29.95, 'kg', 0.5, 0.5, false, NULL,
    now() - interval '2 hours', now() + interval '8 hours', 'e0000000-0000-4000-8000-000000000004',
-   '{"stock": 10, "stock_unit": "each", "percent_discount": 49.9}'),
+   '{"stock": 10, "stock_unit": "each", "percent_discount": 49.9,
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/629ca0c2-555a-42f0-9afd-7905e77094aa"}'),
   ('a0000000-0000-4000-8000-000000000408', 'salling_food_waste', 'seed-w08', 'netto',
    'd0000000-0000-4000-8000-000000000002', NULL, 'clearance', 'MOZZARELLA 125G', '',
    'c0000000-0000-4000-8000-000000000007', 6.00, 11.95, 'kg', 0.125, 0.125, false, NULL,

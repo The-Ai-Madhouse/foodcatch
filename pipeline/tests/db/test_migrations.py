@@ -9,6 +9,7 @@ from alembic.migration import MigrationContext
 from sqlalchemy import Connection, Engine, create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
+from api_contract import ADDED_IN_0007, API_COLUMNS, api_columns
 from dbtools import create_database, drop_database
 from foodcatch.db import migrate
 from foodcatch.db.engine import normalize_database_url
@@ -65,7 +66,7 @@ def test_migrations_match_table_definitions(db_engine: Engine) -> None:
 
 
 def test_single_head() -> None:
-    assert migrate.current_head() == "0006"
+    assert migrate.current_head() == "0007"
 
 
 def test_seed_data(db_engine: Engine) -> None:
@@ -162,5 +163,51 @@ def test_0002_moves_matcher_marker_and_back(empty_database: str) -> None:
         }
         assert extras["garbage"] == {}
         assert "note" not in columns
+    finally:
+        engine.dispose()
+
+
+def _web_role_can_select(conn: Connection, view: str) -> bool:
+    return bool(
+        conn.execute(
+            text("SELECT has_table_privilege('web_readonly', :view, 'SELECT')"),
+            {"view": f"api.{view}"},
+        ).scalar_one()
+    )
+
+
+def _view_definitions(conn: Connection) -> dict[str, str]:
+    rows = conn.execute(
+        text("SELECT viewname, definition FROM pg_catalog.pg_views WHERE schemaname = 'api'")
+    ).all()
+    return {row.viewname: row.definition for row in rows}
+
+
+def test_0007_appends_view_columns_and_back(empty_database: str) -> None:
+    """Up and down on a fresh database: only appended columns change, grants survive."""
+    engine = create_engine(normalize_database_url(empty_database))
+    before_0007 = {
+        view: [c for c in columns if c[0] not in ADDED_IN_0007.get(view, [])]
+        for view, columns in API_COLUMNS.items()
+    }
+    try:
+        migrate.upgrade(empty_database, "0006")
+        with engine.connect() as conn:
+            assert api_columns(conn) == before_0007
+            definitions = _view_definitions(conn)
+
+        migrate.upgrade(empty_database, "0007")
+        with engine.connect() as conn:
+            assert api_columns(conn) == API_COLUMNS
+            assert all(_web_role_can_select(conn, view) for view in API_VIEWS)
+
+        migrate.downgrade(empty_database, "0006")
+        with engine.connect() as conn:
+            assert _view_definitions(conn) == definitions
+            assert all(_web_role_can_select(conn, view) for view in API_VIEWS)
+
+        migrate.upgrade(empty_database, "0007")  # and back up again
+        with engine.connect() as conn:
+            assert api_columns(conn) == API_COLUMNS
     finally:
         engine.dispose()

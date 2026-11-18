@@ -299,21 +299,43 @@ The web app may only read these views (created in Alembic migrations, `GRANT SEL
 `foodcatch_web`) and refuses to serve with a login that could write (superuser, CREATEROLE,
 CREATEDB or write access to pipeline tables). Column changes are breaking changes for the web.
 
-* `api.stores` – `id, chain_id, chain_name, name, street, zip, city, lat, lon` (Tjek stores, all chains, plus Salling stores).
+* `api.stores` – `id, chain_id, chain_name, name, street, zip, city, lat, lon, source, source_store_id`
+  (Tjek stores, all chains, plus Salling stores). Netto, føtex and Bilka stores appear once per source
+  (`salling` and `tjek`); the web deduplicates them. `source_store_id` is the source's store id (Tjek: the
+  eTilbudsavis store page).
 * `api.current_netto_deals` – one row per (current or upcoming Netto offer listing, latest version of its
   Tjek offer id × healthy classified variant) under the current matcher: `listing_id, variant_index, title, description, price, unit, unit_price_min,
   unit_price_max, valid_from, valid_to, type_id, type_label, group_name, class_key, class_label, attrs,
-  is_exact, notes, price_applies, netto_unit_price_worst, netto_unit_price_best, references, member_only`
-  (`price_applies` etc. are null until the deal is computed; `references` is then `[]`).
+  is_exact, notes, price_applies, netto_unit_price_worst, netto_unit_price_best, references, member_only,
+  source, source_item_id, catalog_id, size_min, size_max, max_per_customer`
+  (`price_applies` etc. are null until the deal is computed; `references` is then `[]`). `source_item_id`
+  and `catalog_id` are the Tjek offer and catalog ids (eTilbudsavis `offer=` / `publication=`);
+  `size_min`/`size_max` are the pack size range in `unit`.
 * `api.food_waste_near` – current clearances with healthy classification:
   `listing_id, store_id, chain_id, store_name, street, zip, city, lat, lon, title, ean, price, reference_price,
-  discount_pct, unit, unit_price, valid_to, stock, stock_unit, type_label, class_label, is_exact`.
+  discount_pct, unit, unit_price, valid_to, stock, stock_unit, type_label, class_label, is_exact, size,
+  image_url, product_quantity_text, product_net_quantity, product_net_unit, last_seen_at`. `size` is the
+  net size parsed from the Salling name (in `unit`, null when the name states none); `image_url` is the
+  Salling product image (`https://digitalassets.sallinggroup.com/…`; null for Salling's placeholder
+  ending in `/image` and for any other host); `product_*` come from Open Food Facts and may describe
+  another pack size, so they are never used for unit prices; `last_seen_at` is the stock snapshot time.
 * `api.class_price_history` – `class_key, class_label, kind, chain_id, chain_name, listing_id, title, unit,
-  unit_price_min, unit_price_max, valid_from, valid_to, price_applies, member_only` for all classified listings (all
+  unit_price_min, unit_price_max, valid_from, valid_to, price_applies, member_only, source, source_item_id,
+  catalog_id, store_id, price, description, size_min, size_max` for all classified listings (all
   matcher-current). `price_applies` is the §6 rule (homogeneous offer, unknown range or spread ≤ 25 %);
-  the web leaves rows where it is false out of the chart and marks them in the table.
+  the web leaves rows where it is false out of the chart and marks them in the table. The web reads the
+  details of a deal's comparison rows (source link, pack price and size) here by `listing_id`;
+  `source_item_id` is the Tjek offer id, the REMA 1000 product id or `{salling store}:{label ean}`, and
+  `store_id` is set only for food-waste clearances.
 * `api.pipeline_status` – latest run per job: `job, status, started_at, finished_at, stats, error`,
   plus `api.review_queue_summary` – `reason, open_count`.
+
+Every column is a stored listing/store/product column or derived from one in SQL. Migration 0007 added
+the source ids, sizes and images for the redesigned web (`docs/ui.md` §8) from columns ingest already
+filled (`listing.extra.image` since the first Salling ingest), so it needed no backfill; a future column
+that needs a new ingested field is backfilled with `foodcatch reprocess` (runbook). The
+pipeline tests pin every view's columns, their order and types (`pipeline/tests/api_contract.py`,
+checked by `tests/db/test_contract.py` and, per migration step, `tests/db/test_migrations.py`).
 
 Location handling: the user's location (address → coordinates via Nominatim, cached; or a default from
 `FOODCATCH_DEFAULT_LOCATION`) is resolved server-side in the web app and kept in a cookie. Nearby chains =

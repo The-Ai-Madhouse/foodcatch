@@ -67,7 +67,8 @@ passed. It inserts:
   _Ingen kilopris_ and an upcoming offer that is not computed yet;
 - competitor offers, REMA 1000 shelf prices and earlier Netto offers (price history);
 - food-waste clearances in Netto and føtex nearby (plus one unhealthy and one distant item that
-  must not show);
+  must not show), with Salling product images, one placeholder image (shown as no image), one
+  item without an image, one sold by weight (no size) and one without an Open Food Facts size;
 - pipeline runs with one failed and one degraded job, and open review items.
 
 The seed also creates a local login role `foodcatch_web` (password `foodcatch_web`, member of the
