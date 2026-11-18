@@ -37,6 +37,11 @@
   --series-3: #1baf7a;
   --grid: #e1e0d9;
   --axis: #c3c2b7;
+
+  /* Map: user position dot and radius ring; sheet backdrop. */
+  --map-user: #2a78d6;
+  --map-ring: rgba(42, 120, 214, 0.12);
+  --overlay: rgba(11, 11, 11, 0.32);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -72,6 +77,10 @@
     --series-3: #199e70;
     --grid: #2c2c2a;
     --axis: #45443f;
+
+    --map-user: #5598e7;
+    --map-ring: rgba(85, 152, 231, 0.16);
+    --overlay: rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -99,7 +108,23 @@
   --color-neutral-fg: var(--neutral-fg);
   --color-neutral-bg: var(--neutral-bg);
   --color-neutral-line: var(--neutral-line);
+  --color-map-user: var(--map-user);
+  --color-overlay: var(--overlay);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Type scale (docs/ui.md §4.1). */
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.75rem;
+  --text-heading: 1.0625rem;
+  --text-heading--line-height: 1.5rem;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.375rem;
+  --text-price: 1.25rem;
+  --text-price--line-height: 1.5rem;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.125rem;
+  --text-micro: 0.75rem;
+  --text-micro--line-height: 1rem;
 }
 
 @layer base {
@@ -112,6 +137,8 @@
     background: var(--page);
     color: var(--ink);
     font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
     font-feature-settings: "tnum" 0;
     -webkit-font-smoothing: antialiased;
   }
@@ -131,6 +158,21 @@
     cursor: pointer;
   }
 
+  /* Custom disclosure markers (a chevron next to the label). */
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary {
+    list-style: none;
+  }
+
+  /* The full-screen map page has no footer below it on phones and tablets. */
+  @media (max-width: 1023px) {
+    body:has([data-fullscreen-map]) [data-site-footer] {
+      display: none;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -143,4 +185,87 @@
 
 @utility tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Rotates a disclosure chevron when its <details> is open. */
+@utility details-chevron {
+  transition: transform 150ms ease;
+  details[open] > summary & {
+    transform: rotate(180deg);
+  }
+}
+
+/* Room for the fixed tab bar on phones. */
+@utility pb-tabbar {
+  padding-bottom: calc(56px + env(safe-area-inset-bottom));
+}
+
+@utility bottom-tabbar {
+  bottom: calc(56px + env(safe-area-inset-bottom));
+}
+
+/* MapLibre: chain markers (docs/ui.md §7). */
+.store-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.store-marker__dot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: 2px solid var(--surface);
+  font: 700 10px/1 var(--font-sans);
+  letter-spacing: -0.02em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition:
+    width 120ms ease,
+    height 120ms ease,
+    opacity 120ms ease;
+}
+.store-marker[aria-pressed="true"] .store-marker__dot {
+  width: 36px;
+  height: 36px;
+  font-size: 12px;
+  outline: 3px solid var(--ink);
+}
+/* On the dot: MapLibre sets the marker element's own opacity inline. */
+.store-marker[data-dimmed="true"] .store-marker__dot {
+  opacity: 0.35;
+}
+.store-marker:focus-visible {
+  outline: none;
+}
+.store-marker:focus-visible .store-marker__dot {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.store-marker__count {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: var(--ink);
+  color: var(--page);
+  font: 600 11px/18px var(--font-sans);
+  text-align: center;
+}
+.maplibregl-ctrl-attrib {
+  font-size: 11px;
+}
+.maplibregl-map .maplibregl-ctrl-top-left {
+  top: var(--map-inset-top, 0px);
 }

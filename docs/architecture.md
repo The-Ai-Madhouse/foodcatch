@@ -337,9 +337,11 @@ that needs a new ingested field is backfilled with `foodcatch reprocess` (runboo
 pipeline tests pin every view's columns, their order and types (`pipeline/tests/api_contract.py`,
 checked by `tests/db/test_contract.py` and, per migration step, `tests/db/test_migrations.py`).
 
-Location handling: the user's location (address → coordinates via Nominatim, cached; or a default from
-`FOODCATCH_DEFAULT_LOCATION`) is resolved server-side in the web app and kept in a cookie. Nearby chains =
-chains with a store in `api.stores` within the chosen radius (haversine in SQL).
+Location handling: the user's location (address → coordinates via Nominatim, cached; the browser's
+position; or a default from `FOODCATCH_DEFAULT_LOCATION`) is resolved server-side in the web app and kept
+in a cookie for a year, with a client-side backup in `localStorage` that restores the cookie when it is
+gone (docs/ui.md §5.1). Nearby chains = chains with a store in `api.stores` within the chosen radius
+(haversine in SQL).
 
 ## 8. Environments and configuration
 

@@ -5,12 +5,16 @@ clearances, price history per product and pipeline health. Next.js (App Router, 
 Tailwind CSS, Vitest. The app runs locally only for now (see
 [ADR 0003](../docs/decisions/0003-local-only-web.md)).
 
-| Route              | Shows                                                                       |
-| ------------------ | --------------------------------------------------------------------------- |
-| `/`                | Netto offers on healthy staples with a verdict for your location and radius |
-| `/madspild`        | Food-waste clearances within your radius, largest discount first            |
-| `/vare/[classKey]` | Price history of one product class (SVG chart and table)                    |
-| `/status`          | Freshness and health of every pipeline job and the review queue             |
+| Route              | Shows                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/`                | "Tilbud": this week's Netto offers on healthy staples, one card per offer with where to buy, pack size, verdict and source link (`?vis=alle` for all)        |
+| `/madspild`        | "Madspild": clearances within your radius grouped by store, nearest first (`?sorter=rabat` for one list by discount)                                         |
+| `/kort`            | "Kort": every nearby store on a map, coloured by chain; a store shows its food waste or what is cheaper there than in Netto (`?kaede=netto,lidl&butik={id}`) |
+| `/vare/[classKey]` | Price history of one product (chart and a list with source links)                                                                                            |
+| `/status`          | "Datastatus": freshness of every pipeline job and the review queue (footer link)                                                                             |
+
+The design is specified in [docs/ui.md](../docs/ui.md). Phones are the primary target (bottom tab
+bar, full-screen map); from 1024 px `/` and `/madspild` show a map column next to the list.
 
 ## How it fits together
 
@@ -24,10 +28,24 @@ Tailwind CSS, Vitest. The app runs locally only for now (see
   pipeline's `deals/verdict.py`; both are tested against the shared
   [`fixtures/verdict_cases.json`](../fixtures/verdict_cases.json).
 - The user's location (address → coordinates via Nominatim, cached in memory and throttled to
-  one request per second) and radius (1–5 km) are kept in an HTTP-only cookie. Without a cookie the
-  app uses `FOODCATCH_DEFAULT_LOCATION` (`lat,lon`; default Rådhuspladsen, Copenhagen).
-- Nearby chains are the chains with a store in `api.stores` within the radius (haversine in SQL).
-  The verdict of each deal is computed per request from the deal's references and those chains.
+  one request per second, or the browser's position via "Brug min position") and radius (1–5 km)
+  are kept in an HTTP-only cookie for a year (renewed on every save) and saved under the text the
+  user typed. The client keeps a backup in `localStorage` (`foodcatch.location.v1`) and restores
+  the cookie from it when the cookie is gone; "Glem" removes both. Without either the app uses
+  `FOODCATCH_DEFAULT_LOCATION` (`lat,lon`; default Rådhuspladsen, Copenhagen).
+- Nearby stores are the rows of `api.stores` within the radius (haversine in SQL), one per
+  physical store (`lib/stores.ts`: Salling rows for Netto, føtex and Bilka, Tjek rows otherwise).
+  The verdict of each deal is computed per request from the deal's references and the chains of
+  those stores.
+- Source links (`lib/sources.ts`) use only URL templates verified in docs/ui.md §1.1:
+  eTilbudsavis offers and store pages, REMA 1000 product pages and Open Food Facts products.
+  Salling food waste has no product page, so none is invented.
+- The map (`components/map/StoreMap.tsx`) is MapLibre GL with OpenFreeMap vector tiles: no API
+  key, no cookies, attribution always visible. It is loaded on the client only, and only on pages
+  that show a map. MapLibre's worker is served from `/maplibre-worker.mjs` (a static route that
+  copies it from `node_modules`), because the bundled module cannot find it next to itself.
+- Product photos of clearances are plain `<img>` requests to Salling's image CDN (not the Salling
+  API, so they do not use its quota).
 
 ## Development
 
@@ -85,6 +103,22 @@ migration's `web_readonly` role) so the app can be run exactly as in production:
 | `pnpm typecheck`            | route type generation and `tsc --noEmit`        |
 | `pnpm test`                 | Vitest unit tests for `src/lib`                 |
 | `pnpm format`               | Prettier write                                  |
+| `pnpm e2e`                  | Playwright end-to-end tests (local only, below) |
 | `pnpm db:seed`              | load the development seed                       |
 
 Pages never touch the database at build time, so `pnpm build` works without one.
+
+## End-to-end tests
+
+`pnpm e2e` runs Playwright (`e2e/`) in the installed Google Chrome (`channel: "chrome"`) at
+390×844 and 1440×900: the location survives reloads and is restored from `localStorage` without
+the cookie, "Brug min position" saves a (faked) browser position, cards show the store and pack
+size and link to the leaflet, the map renders markers with attribution, a clearance shows its
+store, weight and source, and no page scrolls sideways on a phone. No test geocodes an address,
+so Nominatim is never called.
+
+They need a database with real data (`WEB_DATABASE_URL` in `.env.local`) and reuse a running
+`pnpm dev` on port 3000 (or start one); set `E2E_BASE_URL` to test another server, e.g.
+`pnpm build && pnpm start -p 3100` and `E2E_BASE_URL=http://127.0.0.1:3100 pnpm e2e`. They are
+**local only**: CI has neither a database with data nor Chrome, so they are not part of the CI
+workflow.

@@ -265,16 +265,18 @@ Existing tokens in `globals.css` stay (`--page`, `--surface`, `--surface-2`, `--
 **Chain colours** (map markers, chain dots, filter chips). Brand colours collide (most chains are
 blue, red or yellow), so this is a categorical palette loosely inspired by the brands, always
 paired with a **monogram** so colour is never the only cue. Text colour on the fill meets 4.5:1.
-Same fills in dark mode; markers get a 2 px `--surface` outline in both modes.
+Same fills in dark mode; markers get a 2 px `--surface` outline in both modes. Lidl and
+365discount are darker than first proposed (`#0A84C6`, `#2E8B3A`), which gave white monograms only
+4.1:1 and 4.3:1; `lib/chains.test.ts` checks every pair.
 
 | `chain_id` | Fill | Text | Monogram |
 |---|---|---|---|
 | `netto` | `#F2C200` | `#1a1a1a` | `N` |
 | `rema1000` | `#1B4F9C` | `#ffffff` | `R` |
-| `lidl` | `#0A84C6` | `#ffffff` | `L` |
+| `lidl` | `#0A78B5` | `#ffffff` | `L` |
 | `foetex` | `#5B3A9B` | `#ffffff` | `F` |
 | `bilka` | `#0E7C7B` | `#ffffff` | `B` |
-| `365discount` | `#2E8B3A` | `#ffffff` | `365` |
+| `365discount` | `#287D33` | `#ffffff` | `365` |
 | `superbrugsen` | `#D0262E` | `#ffffff` | `SB` |
 | `kvickly` | `#8C1C13` | `#ffffff` | `K` |
 | `meny` | `#1F1F1F` | `#ffffff` | `M` |
@@ -342,7 +344,7 @@ Behaviour:
   postnummer." / "Adresseopslaget virker ikke lige nu. Prøv igen om lidt." Geolocation errors:
   "Vi fik ikke adgang til din position. Skriv en adresse i stedet." The sheet stays open.
 * "Brug min position": `getCurrentPosition({enableHighAccuracy: false, timeout: 10000,
-  maximumAge: 300000})` → new server action `useCoordinates({lat, lon, accuracyM, radiusKm})`
+  maximumAge: 300000})` → new server action `saveCoordinates({lat, lon, accuracyM, radiusKm})`
   (validates with `isValidCoordinate`, no geocoding) → label "Min position". Pending text:
   "Finder din position…".
 * "Glem": deletes cookie **and** localStorage entry (`resetLocation` + client removal), falls back
@@ -402,8 +404,8 @@ Pure function `formatPackSize({unit, sizeMin, sizeMax, source, description})` in
 | `unit = stk` | "8 stk.", "6–10 stk." |
 | `source = 'rema'` | parse the leading token of `description` before " / " (`^(\d+(?:[.,]\d+)?)\s*(GR|KG|ML|CL|LTR|L|STK)\.?`), e.g. "400 GR." → "400 g", "1 LTR." → "1 l"; if it does not parse, the computed size with "ca. " ("ca. 400 g") |
 | Food waste, size from name (`size`) | as above |
+| Food waste, `stock_unit = 'kg'` | "Vægt varierer" (checked before OFF: a product sold by weight has no fixed pack size) |
 | Food waste, no name size, OFF size known | "{formatted OFF size} ifølge Open Food Facts" (from `product_net_quantity`/`product_net_unit`; else `product_quantity_text` verbatim) |
-| Food waste, `stock_unit = 'kg'` | "Vægt varierer" |
 | nothing known | "Vægt ukendt" |
 
 Card price line (one line, wraps only at the dots):
@@ -610,8 +612,8 @@ Mobile: full-screen map between top bar and tab bar.
   full. In peek/half it lists stores nearest first (dot, name, distance, "{k} madspild",
   "{m} billigere end Netto"). Tap a row = select the store.
 * Map controls (right, 44 px buttons): "Centrér på mig" (crosshair), zoom +/− only on desktop
-  (pinch on mobile). Attribution bottom-left (MapLibre compact control on mobile, full on
-  desktop).
+  (pinch on mobile). Attribution: MapLibre's compact control at the top left below the chips on
+  mobile (the bottom sheet would cover the bottom edge), the full control bottom-left on desktop.
 
 Desktop: left sidebar 380 px (filters + store list), map fills the rest.
 
@@ -766,7 +768,8 @@ No pipeline logic, table or verdict changes. Volume impact: none (views only).
   restore action).
 * New server queries: `getNearbyStores(area)`, `getNearestStoreOutside(area, chainId)`,
   `getReferenceDetails(listingIds)`, `getLatestRun(job)` (from `api.pipeline_status`).
-* New server actions: `useCoordinates`, `restoreLocation`; `saveLocation` returns
+* New server actions: `saveCoordinates` (not `useCoordinates`: a `use…` name reads as a React
+  hook to readers and to the hooks lint rule), `restoreLocation`; `saveLocation` returns
   `{status, message, address, seq, location?}`.
 * New dependency: `maplibre-gl@6.16.0` (exact version, as the other dependencies).
 * Images: plain `<img>` (not `next/image`, which would proxy Salling's CDN). Requests go to

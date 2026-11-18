@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Badge } from "@/components/Badge";
 import { Notice } from "@/components/Notice";
-import { PageHeader } from "@/components/PageHeader";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/format";
 import {
   HEALTH_META,
@@ -13,7 +12,7 @@ import {
 } from "@/lib/status";
 import { getPipelineStatus, getReviewQueueSummary } from "@/server/queries";
 
-export const metadata: Metadata = { title: "Status" };
+export const metadata: Metadata = { title: "Datastatus" };
 
 const OVERALL_TEXT = {
   good: { title: "Alt kører", body: "Alle datakilder er opdateret inden for deres tidsplan." },
@@ -38,19 +37,19 @@ export default async function StatusPage() {
 
   return (
     <>
-      <PageHeader
-        title="Status"
-        lead="Hvor friske er data? Seneste kørsel af hvert job i datapipelinen og køen af varer, der venter på manuel gennemgang."
-      />
+      <h1 className="text-title font-bold text-ink">Datastatus</h1>
+      <p className="mb-4 text-meta text-ink-2">
+        Seneste kørsel af hvert job i datapipelinen og køen af varer til manuel gennemgang.
+      </p>
       <Notice tone={tone} title={overall.title}>
         {overall.body} Opdateret {formatDateTime(now)}.
       </Notice>
 
       <section aria-labelledby="jobs-overskrift" className="mt-8">
-        <h2 id="jobs-overskrift" className="text-lg font-bold text-ink">
+        <h2 id="jobs-overskrift" className="text-heading font-semibold text-ink">
           Datakilder
         </h2>
-        <ul className="mt-3 grid gap-3 md:grid-cols-2">
+        <ul className="mt-3 grid gap-3 lg:grid-cols-2">
           {jobs.map((job) => (
             <li key={job.job}>
               <JobCard job={job} now={now} />
@@ -60,16 +59,16 @@ export default async function StatusPage() {
       </section>
 
       <section aria-labelledby="review-overskrift" className="mt-10">
-        <h2 id="review-overskrift" className="text-lg font-bold text-ink">
+        <h2 id="review-overskrift" className="text-heading font-semibold text-ink">
           Til manuel gennemgang
         </h2>
         {openTotal === 0 ? (
-          <p className="mt-2 text-sm text-ink-2">Ingen åbne sager.</p>
+          <p className="mt-2 text-meta text-ink-2">Ingen åbne sager.</p>
         ) : (
           <div className="mt-3 overflow-x-auto rounded-xl border border-line bg-surface">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-left text-meta">
               <caption className="sr-only">Åbne sager pr. årsag</caption>
-              <thead className="text-xs text-ink-3">
+              <thead className="text-micro text-ink-3">
                 <tr>
                   <th scope="col" className="px-3 py-2 font-medium">
                     Årsag
@@ -104,15 +103,15 @@ function JobCard({ job, now }: { job: JobAssessment; now: Date }) {
   const run = job.run;
   const stats = run ? summarizeStats(run.stats) : [];
   return (
-    <article className="h-full rounded-xl border border-line bg-surface p-4">
+    <article className="h-full rounded-xl border border-line bg-surface p-4 lg:p-5">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="font-semibold text-ink">{job.label}</h3>
+          <h3 className="text-heading font-semibold text-ink">{job.label}</h3>
           <p className="font-mono text-xs text-ink-3">{job.job}</p>
         </div>
         <Badge tone={meta.tone}>{meta.label}</Badge>
       </div>
-      <dl className="mt-3 space-y-1 text-sm text-ink-2">
+      <dl className="mt-3 space-y-1 text-meta text-ink-2">
         {job.schedule ? (
           <div>
             <dt className="inline">Plan: </dt>
@@ -140,9 +139,16 @@ function JobCard({ job, now }: { job: JobAssessment; now: Date }) {
         ) : null}
         {stats.length > 0 ? (
           <div>
-            <dt className="inline">Tal: </dt>
-            <dd className="inline tabular">
-              {stats.map(([k, v]) => `${k} ${formatNumber(v, 0)}`).join(" · ")}
+            <dt className="sr-only">Tal</dt>
+            <dd>
+              <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                {stats.map(([k, v]) => (
+                  <div key={k} className="flex gap-1">
+                    <dt className="text-ink-3">{k}</dt>
+                    <dd className="text-ink tabular">{formatNumber(v, 0)}</dd>
+                  </div>
+                ))}
+              </dl>
             </dd>
           </div>
         ) : null}

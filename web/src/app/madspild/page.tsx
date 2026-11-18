@@ -1,125 +1,188 @@
 import type { Metadata } from "next";
-import { Badge } from "@/components/Badge";
-import { LocationForm } from "@/components/LocationForm";
 import { Notice } from "@/components/Notice";
-import { PageHeader } from "@/components/PageHeader";
-import { chainName } from "@/lib/chains";
+import { Segmented } from "@/components/Segmented";
+import { FoodWasteItemRow } from "@/components/foodwaste/FoodWasteItemRow";
+import { StoreGroup } from "@/components/foodwaste/StoreGroup";
+import { ChevronIcon } from "@/components/Icons";
+import { OpenLocationButton } from "@/components/location/LocationControl";
+import { MapFocusProvider } from "@/components/map/MapFocus";
+import { SideMap } from "@/components/map/SideMap";
+import { latestSeen, type FoodWasteItem } from "@/lib/foodwaste";
+import { daysFromToday, formatClock, formatRelative } from "@/lib/format";
 import {
-  formatDateTime,
-  formatDistance,
-  formatDkk,
-  formatNumber,
-  formatPercent,
-  formatUnitPrice,
-} from "@/lib/format";
+  compareByDiscount,
+  groupByStore,
+  storeAddress,
+  storeDisplayName,
+  type MapStore,
+} from "@/lib/stores";
 import { getUserLocation } from "@/server/location";
-import { getFoodWasteNear, type FoodWasteItem } from "@/server/queries";
+import { getFoodWasteNear, getLatestRun } from "@/server/queries";
 
 export const metadata: Metadata = { title: "Madspild nær dig" };
 
-export default async function FoodWastePage() {
-  const location = await getUserLocation();
-  const items = await getFoodWasteNear(location);
-  const stores = new Set(items.map((i) => i.storeId)).size;
+/** Rows shown per store before "Vis {k} mere". */
+const VISIBLE_PER_STORE = 4;
 
-  return (
-    <>
-      <PageHeader
-        title="Madspild nær dig"
-        lead="Nedsatte sunde basisvarer med kort holdbarhed i Netto, føtex og Bilka inden for din radius. Største rabat først."
-      />
-      <LocationForm
-        label={location.label}
-        radiusKm={location.radiusKm}
-        isDefault={location.isDefault}
-      />
+const DAY_MS = 86_400_000;
 
-      <section aria-labelledby="madspild-liste" className="mt-8">
-        <h2 id="madspild-liste" className="text-xl font-bold text-ink">
-          {items.length > 0
-            ? `${items.length} ${items.length === 1 ? "vare" : "varer"} i ${stores} ${stores === 1 ? "butik" : "butikker"}`
-            : "Ingen varer lige nu"}
-        </h2>
-        {items.length === 0 ? (
-          <div className="mt-3">
-            <Notice>
-              Vi kender ingen nedsatte sunde basisvarer inden for {location.radiusKm} km lige nu.
-              Udvalget skifter i løbet af dagen – prøv igen senere eller med en større radius.
-            </Notice>
-          </div>
-        ) : (
-          <ul className="mt-4 grid gap-3 md:grid-cols-2">
-            {items.map((item) => (
-              <li key={item.listingId}>
-                <FoodWasteCard item={item} />
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-6 text-sm text-ink-3">
-          Kun varer, vi genkender som sunde basisvarer, vises. Lageret er et øjebliksbillede fra
-          sidste opdatering og kan være udsolgt.
-        </p>
-      </section>
-    </>
-  );
+function parseSort(value: string | string[] | undefined): "afstand" | "rabat" {
+  return value === "rabat" ? "rabat" : "afstand";
 }
 
-function FoodWasteCard({ item }: { item: FoodWasteItem }) {
-  const address = [item.street, [item.zip, item.city].filter(Boolean).join(" ")]
-    .filter(Boolean)
-    .join(", ");
+/** "opdateret kl. 13.37", "opdateret i går kl. 22.10", or relative (and stale) after 24 h. */
+function updatedText(at: string | null, now: Date): { text: string; stale: boolean } | null {
+  if (!at) return null;
+  const age = now.getTime() - Date.parse(at);
+  if (age > DAY_MS) return { text: `opdateret ${formatRelative(at, now)}`, stale: true };
+  const day = daysFromToday(at, now) === 0 ? "" : "i går ";
+  return { text: `opdateret ${day}kl. ${formatClock(at)}`, stale: false };
+}
+
+export default async function FoodWastePage({ searchParams }: PageProps<"/madspild">) {
+  const sort = parseSort((await searchParams).sorter);
+  const location = await getUserLocation();
+  const [items, run] = await Promise.all([
+    getFoodWasteNear(location),
+    getLatestRun("salling-food-waste"),
+  ]);
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const groups = groupByStore(items);
+  const updated = updatedText(run?.finishedAt ?? latestSeen(items), now);
+  const mapStores: MapStore[] = groups.map((g) => {
+    const first = g.items[0] as FoodWasteItem;
+    return {
+      id: g.storeId,
+      chainId: first.chainId,
+      name: storeDisplayName(first.storeName, first.chainId),
+      street: first.street,
+      zip: first.zip,
+      city: first.city,
+      lat: first.lat,
+      lon: first.lon,
+      distanceKm: g.distanceKm,
+      foodWasteCount: g.items.length,
+      cheaperCount: 0,
+      source: "salling",
+      sourceStoreId: null,
+    };
+  });
+
   return (
-    <article className="h-full rounded-xl border border-line bg-surface p-4">
-      <div className="flex items-start justify-between gap-2">
+    <MapFocusProvider>
+      <div className="lg:grid lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:gap-8">
         <div className="min-w-0">
-          <h3 className="font-semibold text-ink">{item.title}</h3>
-          <p className="text-sm text-ink-2">{item.classLabel}</p>
+          <h1 className="text-title font-bold text-ink">Madspild nær dig</h1>
+          {items.length > 0 ? (
+            <p className="text-meta text-ink-2">
+              {items.length} {items.length === 1 ? "vare" : "varer"} i {groups.length}{" "}
+              {groups.length === 1 ? "butik" : "butikker"}
+              {updated ? (
+                <span className={updated.stale ? "text-warn-fg" : undefined}>
+                  {" "}
+                  · {updated.text}
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+
+          {items.length === 0 ? (
+            <div className="mt-4">
+              <Notice title={`Ingen madspild inden for ${location.radiusKm} km lige nu`}>
+                Udvalget skifter i løbet af dagen. Prøv igen senere eller vælg en større afstand.
+                <div>
+                  <OpenLocationButton>Skift afstand</OpenLocationButton>
+                </div>
+              </Notice>
+            </div>
+          ) : (
+            <>
+              <div className="mt-3">
+                <Segmented
+                  label="Sortering"
+                  items={[
+                    { href: "/madspild", label: "Nærmest", active: sort === "afstand" },
+                    {
+                      href: "/madspild?sorter=rabat",
+                      label: "Størst rabat",
+                      active: sort === "rabat",
+                    },
+                  ]}
+                />
+              </div>
+
+              {sort === "afstand" ? (
+                <div className="mt-4 space-y-3">
+                  {groups.map((group) => {
+                    const first = group.items[0] as FoodWasteItem;
+                    const visible = group.items.slice(0, VISIBLE_PER_STORE);
+                    const more = group.items.slice(VISIBLE_PER_STORE);
+                    return (
+                      <StoreGroup
+                        key={group.storeId}
+                        storeId={group.storeId}
+                        chainId={first.chainId}
+                        name={storeDisplayName(first.storeName, first.chainId)}
+                        address={storeAddress(first)}
+                        distanceKm={group.distanceKm}
+                        lat={first.lat}
+                        lon={first.lon}
+                        itemCount={group.items.length}
+                      >
+                        <ul className="divide-y divide-line px-4 lg:px-5">
+                          {visible.map((item) => (
+                            <li key={item.listingId}>
+                              <FoodWasteItemRow item={item} now={nowIso} />
+                            </li>
+                          ))}
+                        </ul>
+                        {more.length > 0 ? (
+                          <details className="group/more border-t border-line">
+                            <summary className="flex h-11 items-center gap-1 px-4 text-meta font-medium text-link lg:px-5">
+                              <span className="group-open/more:hidden">Vis {more.length} mere</span>
+                              <span className="hidden group-open/more:inline">Vis færre</span>
+                              <ChevronIcon className="details-chevron" />
+                            </summary>
+                            <ul className="divide-y divide-line border-t border-line px-4 lg:px-5">
+                              {more.map((item) => (
+                                <li key={item.listingId}>
+                                  <FoodWasteItemRow item={item} now={nowIso} />
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        ) : null}
+                      </StoreGroup>
+                    );
+                  })}
+                </div>
+              ) : (
+                <ul className="mt-4 divide-y divide-line rounded-xl border border-line bg-surface px-4 lg:px-5">
+                  {[...items].sort(compareByDiscount).map((item) => (
+                    <li key={item.listingId}>
+                      <FoodWasteItemRow item={item} now={nowIso} showStore />
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <p className="mt-4 text-meta text-ink-3">
+                Lageret er et øjebliksbillede fra seneste opdatering. Varen kan være udsolgt.
+              </p>
+            </>
+          )}
         </div>
-        {item.discountPct != null ? (
-          <Badge tone="good">
-            <span className="sr-only">Rabat </span>−{formatPercent(item.discountPct)}
-          </Badge>
-        ) : null}
+
+        <aside aria-label="Butikker med madspild" className="hidden lg:block">
+          <SideMap
+            stores={mapStores}
+            user={{ lat: location.lat, lon: location.lon }}
+            radiusKm={location.radiusKm}
+            mode="foodwaste"
+          />
+        </aside>
       </div>
-      <p className="mt-3 flex flex-wrap items-baseline gap-x-2 text-sm">
-        <span className="text-lg font-bold text-ink tabular">{formatDkk(item.price)}</span>
-        {item.referencePrice != null ? (
-          <span className="text-ink-3 tabular">
-            før <s>{formatDkk(item.referencePrice)}</s>
-          </span>
-        ) : null}
-        {item.unitPrice != null ? (
-          <span className="text-ink-2 tabular">· {formatUnitPrice(item.unitPrice, item.unit)}</span>
-        ) : null}
-      </p>
-      <dl className="mt-3 space-y-1 text-sm text-ink-2">
-        <div>
-          <dt className="sr-only">Butik</dt>
-          <dd>
-            <span className="font-medium text-ink">
-              {item.storeName || chainName(item.chainId)}
-            </span>{" "}
-            · {formatDistance(item.distanceKm)}
-            {address ? <span className="block text-xs text-ink-3">{address}</span> : null}
-          </dd>
-        </div>
-        {item.stock != null ? (
-          <div>
-            <dt className="inline">På lager: </dt>
-            <dd className="inline tabular">
-              {formatNumber(item.stock, Number.isInteger(item.stock) ? 0 : 2)}{" "}
-              {item.stockUnit === "kg" ? "kg" : "stk."}
-            </dd>
-          </div>
-        ) : null}
-        {item.validTo ? (
-          <div>
-            <dt className="inline">Tilbuddet gælder til: </dt>
-            <dd className="inline">{formatDateTime(item.validTo)}</dd>
-          </div>
-        ) : null}
-      </dl>
-    </article>
+    </MapFocusProvider>
   );
 }

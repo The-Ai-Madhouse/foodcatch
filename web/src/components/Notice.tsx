@@ -12,7 +12,7 @@ export function Notice({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`rounded-lg border px-4 py-3 text-sm ${toneClasses(tone)}`}>
+    <div className={`rounded-xl border px-4 py-3 text-body ${toneClasses(tone)}`}>
       {title ? <p className="font-semibold">{title}</p> : null}
       <div className={title ? "mt-1" : undefined}>{children}</div>
     </div>
