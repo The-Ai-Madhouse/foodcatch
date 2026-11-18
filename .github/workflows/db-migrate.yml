@@ -87,6 +87,12 @@ jobs:
             sleep 30
           done
 
+      # libpq errors print the database host and user; GitHub only masks the whole secret.
+      - name: Mask database host in logs
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python3 ../.github/scripts/mask_database_url.py
+
       - name: Upgrade database
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

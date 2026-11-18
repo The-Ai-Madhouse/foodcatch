@@ -522,6 +522,11 @@ gh workflow run keepalive.yml              # verify that it works
 | `SALLING_API_KEY` | Salling developer portal | `gh secret set SALLING_API_KEY` |
 | `HEALTHCHECKS_URL_*` | check → *Settings* → regenerate ping URL | `gh secret set HEALTHCHECKS_URL_<JOB>` |
 
+A collect run between the two steps of a `DATABASE_URL` rotation fails to connect. The workflows
+mask the database host, endpoint id and user before running the pipeline
+(`.github/scripts/mask_database_url.py`), because connection errors print them and GitHub masks
+a secret only as a whole; the resolved IP addresses can still appear.
+
 ---
 
 ## 9. Known limitations
