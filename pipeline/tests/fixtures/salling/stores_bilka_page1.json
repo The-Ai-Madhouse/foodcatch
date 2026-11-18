@@ -1,0 +1,40 @@
+[
+ {
+  "id": "efba0457-090e-4132-81ba-c72b4c8e7fee",
+  "address": {
+   "city": "Tilst",
+   "country": "DK",
+   "extra": null,
+   "street": "Agerøvej 7",
+   "zip": "8381"
+  },
+  "attributes": {
+   "bakery": true,
+   "carlsJunior": true,
+   "flowers": true,
+   "garden": true,
+   "nonFood": true,
+   "parking": true,
+   "parkingRestrictions": false,
+   "petFood": true,
+   "scanAndGo": true,
+   "swipBox": true,
+   "wc": true,
+   "wifi": true,
+   "smileyscheme": "45965"
+  },
+  "brand": "bilka",
+  "coordinates": [
+   10.104849,
+   56.182413
+  ],
+  "created": "2026-11-18T13:17:17.576",
+  "distance_km": null,
+  "modified": "2026-11-18T13:17:17.576",
+  "name": "Bilka Tilst",
+  "phoneNumber": "89303000",
+  "sapSiteId": "1651",
+  "type": "Point",
+  "vikingStoreId": "5251"
+ }
+]
