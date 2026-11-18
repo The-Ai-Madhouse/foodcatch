@@ -292,7 +292,8 @@ Tjek unit prices have four decimals, so an identical price must not count as mor
 The web app may only read these views (created in Alembic migrations, `GRANT SELECT` to role
 `web_readonly`, a NOLOGIN group role). The web connects with a login role created
 `IN ROLE web_readonly` (production: `docs/setup.md` §1.3; locally `pnpm db:seed` creates
-`foodcatch_web`). Column changes are breaking changes for the web.
+`foodcatch_web`) and refuses to serve with a login that could write (superuser, CREATEROLE,
+CREATEDB or write access to pipeline tables). Column changes are breaking changes for the web.
 
 * `api.stores` – `id, chain_id, chain_name, name, street, zip, city, lat, lon` (Tjek stores, all chains, plus Salling stores).
 * `api.current_netto_deals` – one row per (current or upcoming Netto offer listing, latest version of its

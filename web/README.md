@@ -15,8 +15,11 @@ Tailwind CSS, Vitest. The app runs locally only for now (see
 ## How it fits together
 
 - The app reads **only** the read-only views in schema `api` (architecture §7) through
-  `src/server/db.ts` (the `postgres` package, `WEB_DATABASE_URL`). Sessions are opened with
-  `default_transaction_read_only`, so the app cannot write even with an owner connection.
+  `src/server/db.ts` (the `postgres` package, `WEB_DATABASE_URL`). The boundary is the read-only
+  login role: on its first query the app checks the login and refuses to serve if it is a
+  superuser, can create roles or databases, or can write pipeline tables (e.g. the owner URL
+  copied by mistake). Sessions are also opened with `default_transaction_read_only`, which only
+  guards against accidental writes (defence in depth).
 - `src/lib/` holds pure, unit-tested logic. `src/lib/verdict.ts` mirrors architecture §6 and the
   pipeline's `deals/verdict.py`; both are tested against the shared
   [`fixtures/verdict_cases.json`](../fixtures/verdict_cases.json).

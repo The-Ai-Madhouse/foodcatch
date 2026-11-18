@@ -386,8 +386,10 @@ your laptop and reads production data through the read-only role.
 3. Neon suspends the database after 5 minutes without queries. The first page load after a pause
    takes a moment longer while it wakes up.
 
-To use the local Docker database instead, use the default from `.env.example`
-(`postgresql://foodcatch:foodcatch@localhost:5432/foodcatch`).
+To use the local Docker database instead, seed it ([web/README.md](../web/README.md)) and use the
+read-only login from `.env.example`
+(`postgres://foodcatch_web:foodcatch_web@localhost:5432/foodcatch_web_dev`). The app refuses to
+serve with a login that can write (a superuser or the owner), so never use `DATABASE_URL` here.
 
 ---
 

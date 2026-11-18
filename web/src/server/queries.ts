@@ -6,7 +6,7 @@ import { parseReferences } from "@/lib/deals";
 import { EARTH_RADIUS_KM, boundingBox, type Coordinates } from "@/lib/geo";
 import type { PriceHistoryRow } from "@/lib/history";
 import type { PipelineRun } from "@/lib/status";
-import { db } from "./db";
+import { db, readOnlyDb } from "./db";
 
 /**
  * Typed queries against the read-only web contract (schema `api`, architecture §7).
@@ -83,7 +83,7 @@ function withinBox(area: SearchArea) {
 /** Chains with at least one store within the radius, nearest first. */
 export async function getNearbyChains(area: SearchArea): Promise<NearbyChain[]> {
   await connection();
-  const sql = db();
+  const sql = await readOnlyDb();
   const rows = await sql<
     { chainId: string; chainName: string; storeCount: number; nearestKm: number }[]
   >`
@@ -128,7 +128,7 @@ interface DealSqlRow {
 /** Current and upcoming Netto offers of healthy staples (one row per recognized variant). */
 export async function getCurrentNettoDeals(): Promise<DealRow[]> {
   await connection();
-  const sql = db();
+  const sql = await readOnlyDb();
   const rows = await sql<DealSqlRow[]>`
     SELECT listing_id AS "listingId", variant_index::int AS "variantIndex", title, description,
            price::float8 AS price, unit,
@@ -175,7 +175,7 @@ interface FoodWasteSqlRow extends Omit<FoodWasteItem, "validTo"> {
 /** Food-waste clearances of healthy staples within the radius, largest discount first. */
 export async function getFoodWasteNear(area: SearchArea, limit = 300): Promise<FoodWasteItem[]> {
   await connection();
-  const sql = db();
+  const sql = await readOnlyDb();
   const rows = await sql<FoodWasteSqlRow[]>`
     SELECT * FROM (
       SELECT listing_id AS "listingId", store_id AS "storeId", chain_id AS "chainId",
@@ -203,7 +203,7 @@ interface HistorySqlRow extends Omit<PriceHistoryRow, "validFrom" | "validTo"> {
 /** Every classified listing of one product class, oldest first. */
 export async function getClassPriceHistory(classKey: string): Promise<PriceHistoryRow[]> {
   await connection();
-  const sql = db();
+  const sql = await readOnlyDb();
   const rows = await sql<HistorySqlRow[]>`
     SELECT class_key AS "classKey", class_label AS "classLabel", kind, chain_id AS "chainId",
            chain_name AS "chainName", listing_id AS "listingId", title, unit,
@@ -232,7 +232,7 @@ interface PipelineSqlRow {
 /** The latest run of every pipeline job. */
 export async function getPipelineStatus(): Promise<PipelineRun[]> {
   await connection();
-  const sql = db();
+  const sql = await readOnlyDb();
   const rows = await sql<PipelineSqlRow[]>`
     SELECT job, status, started_at AS "startedAt", finished_at AS "finishedAt", stats, error
     FROM api.pipeline_status
@@ -254,7 +254,7 @@ export async function getPipelineStatus(): Promise<PipelineRun[]> {
 /** Open review items per reason. */
 export async function getReviewQueueSummary(): Promise<ReviewQueueEntry[]> {
   await connection();
-  const sql = db();
+  const sql = await readOnlyDb();
   const rows = await sql<ReviewQueueEntry[]>`
     SELECT reason, open_count::int AS "openCount"
     FROM api.review_queue_summary
