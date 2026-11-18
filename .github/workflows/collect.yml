@@ -1,0 +1,262 @@
+# Scheduled data collection (architecture §4, "Jobs and schedules").
+#
+# One workflow serves all six jobs. Each cron entry below maps to exactly one job in the
+# `resolve` job, so the runtime environment (secrets, uv version, steps) is defined once and
+# cannot drift between jobs. Per-job behaviour that a separate workflow would give is kept:
+#   * concurrency is per job (`collect-<job>`), so a slow run never cancels or blocks other jobs;
+#   * the run name shows the job; healthchecks.io has one check per job;
+#   * a single job can be paused without editing this file via the repository variable
+#     COLLECT_PAUSED_JOBS (e.g. "tjek-offers rema-products"); paused jobs only skip scheduled
+#     runs - a manual dispatch still runs them.
+#
+# Never add `pull_request` triggers: this workflow uses production secrets. Scheduled runs only
+# ever execute the default branch; workflow_dispatch requires write access to the repository.
+# See docs/setup.md (configuration) and docs/runbook.md (operations).
+
+name: collect
+
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+  && format('collect {0} (manual)', inputs.job)
+  || format('collect (schedule "{0}")', github.event.schedule) }}
+
+on:
+  schedule:
+    # Times are UTC. Minutes are off the hour: GitHub delays schedules at :00.
+    # Keep in sync with the `case` in the resolve job and with healthchecks.io (docs/setup.md).
+    - cron: "17 3 * * 1"     # salling-stores      Mon 03:17
+    - cron: "37 5,13 * * *"  # salling-food-waste  daily 05:37 and 13:37
+    - cron: "47 3 * * 1"     # tjek-stores         Mon 03:47
+    - cron: "7 4 * * *"      # tjek-offers         daily 04:07
+    - cron: "27 2 * * *"     # rema-products       daily 02:27
+    - cron: "7 6 * * *"      # off-enrich          daily 06:07
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Job to run
+        type: choice
+        required: true
+        options:
+          - salling-stores
+          - tjek-stores
+          - rema-products
+          - tjek-offers
+          - salling-food-waste
+          - off-enrich
+      accept_drop:
+        description: >-
+          Accept a large record-count drop as the new baseline
+          (sets QUALITY_DROP_THRESHOLD=1 for this run only; see docs/runbook.md)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: resolve job
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      job: ${{ steps.resolve.outputs.job }}
+      healthchecks_key: ${{ steps.resolve.outputs.healthchecks_key }}
+      skip: ${{ steps.resolve.outputs.skip }}
+    steps:
+      - name: Map trigger to job
+        id: resolve
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_JOB: ${{ inputs.job }}
+          PAUSED_JOBS: ${{ vars.COLLECT_PAUSED_JOBS }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            workflow_dispatch)
+              job="$INPUT_JOB"
+              ;;
+            schedule)
+              case "$SCHEDULE" in
+                "17 3 * * 1")    job=salling-stores ;;
+                "37 5,13 * * *") job=salling-food-waste ;;
+                "47 3 * * 1")    job=tjek-stores ;;
+                "7 4 * * *")     job=tjek-offers ;;
+                "27 2 * * *")    job=rema-products ;;
+                "7 6 * * *")     job=off-enrich ;;
+                *)
+                  echo "::error::No job is mapped to schedule '$SCHEDULE'."
+                  exit 1
+                  ;;
+              esac
+              ;;
+            *)
+              echo "::error::Unsupported trigger '$EVENT'."
+              exit 1
+              ;;
+          esac
+          if [[ ! "$job" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "::error::Invalid job name '$job'."
+            exit 1
+          fi
+
+          skip=false
+          paused=" ${PAUSED_JOBS//,/ } "
+          if [[ "$EVENT" == schedule && "$paused" == *" $job "* ]]; then
+            skip=true
+            echo "::notice::Job $job is paused (repository variable COLLECT_PAUSED_JOBS)."
+            echo "Job \`$job\` skipped: paused via \`COLLECT_PAUSED_JOBS\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # tjek-offers -> HEALTHCHECKS_URL_TJEK_OFFERS (same rule as foodcatch.config)
+          key="HEALTHCHECKS_URL_$(tr 'a-z-' 'A-Z_' <<< "$job")"
+          {
+            echo "job=$job"
+            echo "healthchecks_key=$key"
+            echo "skip=$skip"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved job: $job (skip=$skip)"
+
+  collect:
+    name: ${{ needs.resolve.outputs.job }}
+    needs: resolve
+    if: needs.resolve.outputs.skip != 'true'
+    runs-on: ubuntu-24.04
+    # The longest job (salling-food-waste: ~1,000 throttled requests) takes well under 15
+    # minutes; the margin covers Retry-After back-off. A hung run must not block its group.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read # to see whether a database migration is running
+    concurrency:
+      group: collect-${{ needs.resolve.outputs.job }}
+      cancel-in-progress: false
+    env:
+      JOB: ${{ needs.resolve.outputs.job }}
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.9"
+          enable-cache: true
+          cache-dependency-glob: pipeline/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      # Concurrency groups cannot span workflows, so this is a best-effort guard: never start
+      # collecting while db-migrate.yml is applying a migration (docs/runbook.md). Only
+      # migrations created *before* this run are awaited, and db-migrate.yml only awaits collect
+      # runs created before it, so the two workflows can never wait for each other.
+      - name: Wait for running database migrations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          if ! me=$(gh api "repos/$REPO/actions/runs/$GITHUB_RUN_ID" --jq .created_at); then
+            echo "::warning::Could not read this run's creation time; not waiting."
+            exit 0
+          fi
+          deadline=$(( $(date +%s) + 20 * 60 ))
+          while true; do
+            if ! busy=$(gh run list --repo "$REPO" --workflow db-migrate.yml --limit 10 \
+                --json status,createdAt \
+                --jq "[.[] | select(.status != \"completed\" and .createdAt < \"$me\")] | length"); then
+              echo "::warning::Could not query db-migrate runs; continuing."
+              break
+            fi
+            if [[ "$busy" == 0 ]]; then
+              break
+            fi
+            if (( $(date +%s) > deadline )); then
+              echo "::error::A database migration has been running for over 20 minutes."
+              exit 1
+            fi
+            echo "A database migration is running; waiting 30 s..."
+            sleep 30
+          done
+
+      - name: Collect
+        id: collect
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RAW_STORE_URL: ${{ vars.RAW_STORE_URL }}
+          S3_ENDPOINT_URL: ${{ vars.S3_ENDPOINT_URL }}
+          S3_REGION: ${{ vars.S3_REGION }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          SALLING_API_KEY: ${{ secrets.SALLING_API_KEY }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          HEALTHCHECKS_URL_SALLING_STORES: ${{ secrets.HEALTHCHECKS_URL_SALLING_STORES }}
+          HEALTHCHECKS_URL_SALLING_FOOD_WASTE: ${{ secrets.HEALTHCHECKS_URL_SALLING_FOOD_WASTE }}
+          HEALTHCHECKS_URL_TJEK_STORES: ${{ secrets.HEALTHCHECKS_URL_TJEK_STORES }}
+          HEALTHCHECKS_URL_TJEK_OFFERS: ${{ secrets.HEALTHCHECKS_URL_TJEK_OFFERS }}
+          HEALTHCHECKS_URL_REMA_PRODUCTS: ${{ secrets.HEALTHCHECKS_URL_REMA_PRODUCTS }}
+          HEALTHCHECKS_URL_OFF_ENRICH: ${{ secrets.HEALTHCHECKS_URL_OFF_ENRICH }}
+          REGION_CENTERS: ${{ vars.REGION_CENTERS }}
+          # Optional; unset below when empty so the pipeline defaults apply.
+          REGION_RADIUS_KM: ${{ vars.REGION_RADIUS_KM }}
+          DB_SIZE_BUDGET_MB: ${{ vars.DB_SIZE_BUDGET_MB }}
+          QUALITY_DROP_THRESHOLD: ${{ inputs.accept_drop && '1' || vars.QUALITY_DROP_THRESHOLD }}
+          LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+          LOG_FORMAT: json
+          FOODCATCH_ENV_FILE: ""
+        run: |
+          set -uo pipefail
+
+          # Fail fast on missing production configuration instead of silently falling back to
+          # development defaults (a file:// raw store would be lost with the runner).
+          missing=()
+          [[ -n "$DATABASE_URL" ]] || missing+=("secret DATABASE_URL")
+          [[ "$RAW_STORE_URL" == s3://* ]] || missing+=("variable RAW_STORE_URL (s3://<bucket>/raw)")
+          [[ -n "$S3_ENDPOINT_URL" ]] || missing+=("variable S3_ENDPOINT_URL")
+          [[ -n "$S3_ACCESS_KEY_ID" ]] || missing+=("secret S3_ACCESS_KEY_ID")
+          [[ -n "$S3_SECRET_ACCESS_KEY" ]] || missing+=("secret S3_SECRET_ACCESS_KEY")
+          [[ -n "$REGION_CENTERS" ]] || missing+=("variable REGION_CENTERS")
+          if [[ "$JOB" == salling-* && -z "$SALLING_API_KEY" ]]; then
+            missing+=("secret SALLING_API_KEY")
+          fi
+          if (( ${#missing[@]} > 0 )); then
+            for item in "${missing[@]}"; do echo "::error::Missing $item (docs/setup.md §4)."; done
+            exit 1
+          fi
+          for name in REGION_RADIUS_KM DB_SIZE_BUDGET_MB QUALITY_DROP_THRESHOLD LOG_LEVEL; do
+            [[ -n "${!name}" ]] || unset "$name"
+          done
+
+          uv run --no-sync foodcatch collect "$JOB"
+          status=$?
+          case "$status" in
+            0) result="succeeded" ;;
+            3) result="degraded (record count dropped; see docs/runbook.md)" ;;
+            *) result="failed (exit $status)" ;;
+          esac
+          echo "Job \`$JOB\`: **$result**" >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      # `foodcatch collect` pings healthchecks.io itself. This covers failures it cannot report:
+      # setup steps failing before it started, and timeouts/cancellations that killed it.
+      - name: Report failure to healthchecks.io
+        if: (failure() || cancelled()) && steps.collect.outcome != 'failure'
+        working-directory: .
+        env:
+          HEALTHCHECKS_URL: ${{ secrets[needs.resolve.outputs.healthchecks_key] }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUTCOME: ${{ steps.collect.outcome }}
+        run: |
+          if [[ -z "$HEALTHCHECKS_URL" ]]; then
+            echo "No healthchecks.io URL configured for $JOB."
+            exit 0
+          fi
+          curl --silent --show-error --max-time 10 --retry 3 \
+            --user-agent "foodcatch-ci (+https://github.com/toke-dk/foodcatch)" \
+            --data-raw "workflow ended before foodcatch could report (collect step: $OUTCOME): $RUN_URL" \
+            "${HEALTHCHECKS_URL%/}/fail" || echo "::warning::healthchecks.io ping failed."
