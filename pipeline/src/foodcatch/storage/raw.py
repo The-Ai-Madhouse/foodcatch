@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from urllib.parse import urlparse
@@ -48,6 +49,14 @@ class ObjectInfo:
 
     sha256: str
     bytes: int
+
+
+@dataclass(frozen=True, slots=True)
+class StoredObject:
+    """A key in the raw store and the time the object was written."""
+
+    key: str
+    modified_at: datetime
 
 
 def raw_key(
@@ -113,6 +122,10 @@ class RawStore(Protocol):
         """Whether ``key`` exists."""
         ...
 
+    def iter_objects(self, prefix: str = "") -> Iterator[StoredObject]:
+        """Every stored object whose key starts with ``prefix``, in key order."""
+        ...
+
 
 class LocalRawStore:
     """Raw store in a local directory."""
@@ -145,6 +158,19 @@ class LocalRawStore:
 
     def exists(self, key: str) -> bool:
         return self._path(key).is_file()
+
+    def iter_objects(self, prefix: str = "") -> Iterator[StoredObject]:
+        if not self.root.is_dir():
+            return
+        keys = sorted(
+            path.relative_to(self.root).as_posix()
+            for path in self.root.rglob("*")
+            if path.is_file()
+        )
+        for key in keys:
+            if key.startswith(prefix):
+                mtime = (self.root / key).stat().st_mtime
+                yield StoredObject(key, datetime.fromtimestamp(mtime, tz=UTC))
 
 
 class S3RawStore:
@@ -210,6 +236,16 @@ class S3RawStore:
                 return False
             raise
         return True
+
+    def iter_objects(self, prefix: str = "") -> Iterator[StoredObject]:
+        base = f"{self.prefix}/" if self.prefix else ""
+        paginator = self._client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=base + prefix):
+            for obj in page.get("Contents", []):
+                key = obj.get("Key", "")
+                modified = obj.get("LastModified")
+                if key.startswith(base) and modified is not None:
+                    yield StoredObject(key[len(base) :], modified.astimezone(UTC))
 
 
 def from_url(url: str, settings: Settings) -> RawStore:

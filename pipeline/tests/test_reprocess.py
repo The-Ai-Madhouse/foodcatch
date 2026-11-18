@@ -66,6 +66,20 @@ def test_replays_raw_objects_in_order_and_runs_hooks(
         stored_run, raw_store, settings, source="rema", since=date(2999, 1, 1), hooks=[]
     )
     assert future.objects == 0
+    past = reprocess(
+        stored_run, raw_store, settings, source="rema", until=date(2000, 1, 1), hooks=[]
+    )
+    assert past.objects == 0
+    window = reprocess(
+        stored_run,
+        raw_store,
+        settings,
+        source="rema",
+        since=date(2000, 1, 1),
+        until=date(2999, 1, 1),
+        hooks=[],
+    )
+    assert window.objects == 2
 
 
 def test_detects_tampered_raw_objects(

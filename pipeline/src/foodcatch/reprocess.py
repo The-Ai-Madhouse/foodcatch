@@ -46,9 +46,13 @@ def reprocess(
     *,
     source: str,
     since: date | None = None,
+    until: date | None = None,
     hooks: Sequence[PostFetchHook] = POST_FETCH_HOOKS,
 ) -> ReprocessResult:
-    """Re-ingest raw objects of ``source`` fetched on/after ``since`` (UTC) in one transaction.
+    """Re-ingest raw objects of ``source`` fetched in ``[since, until)`` (UTC days).
+
+    Everything runs in one transaction; split long replays into consecutive ranges with
+    ``until`` (exclusive) so each range commits on its own.
 
     Raises:
         UnknownSourceError: if ``source`` has no ingest module.
@@ -59,6 +63,9 @@ def reprocess(
     if since is not None:
         since_ts = datetime(since.year, since.month, since.day, tzinfo=UTC)
         query = query.where(raw_object.c.fetched_at >= since_ts)
+    if until is not None:
+        until_ts = datetime(until.year, until.month, until.day, tzinfo=UTC)
+        query = query.where(raw_object.c.fetched_at < until_ts)
     query = query.order_by(raw_object.c.fetched_at, raw_object.c.storage_key)
 
     state = PipelineState()

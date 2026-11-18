@@ -57,6 +57,13 @@ def _exercise(store: RawStore) -> None:
     assert store.get(key) == BODY  # unchanged
     with pytest.raises(RawObjectNotFoundError):
         store.get("tjek/offers/missing.json.gz")
+    store.put("rema/products/2026/01/02/run/00000.json.gz", BODY)
+    store.put("tjek/offers/2026/01/02/run/00001.json.gz", BODY)
+    listed = list(store.iter_objects("tjek/"))
+    assert [o.key for o in listed] == [key, "tjek/offers/2026/01/02/run/00001.json.gz"]
+    assert all(o.modified_at.tzinfo is not None for o in listed)
+    assert len(list(store.iter_objects())) == 3
+    assert list(store.iter_objects("salling/")) == []
 
 
 def test_local_store_roundtrip_and_gzip(tmp_path: Path) -> None:
