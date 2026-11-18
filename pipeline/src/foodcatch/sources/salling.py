@@ -9,7 +9,8 @@ Endpoints used (raw-store endpoint names in :data:`ENDPOINT_STORES` / :data:`END
 * ``GET /v2/stores?brand=netto|foetex|bilka&country=dk&per_page=..&page=..`` -> a JSON list of
   stores (``id`` uuid, ``name``, ``brand``, ``address{street, zip, city, country, extra}``,
   ``coordinates [lon, lat]``, ``hours`` (large; dropped after raw storage), ``attributes``).
-  Pagination is page based (the ``Link`` header also announces ``next``); a page shorter than
+  Pagination is page based; the ``Link`` response header announces ``rel="next"`` while more
+  pages follow (and ``x-total-count`` the total). Without a ``Link`` header a page shorter than
   ``per_page`` is the last one, and requesting a page beyond the last answers HTTP 400 ("The
   last page is currently N ..."). Without ``country=dk`` the ``netto`` brand includes the German
   and Polish stores.
@@ -33,7 +34,7 @@ import httpx
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
-from foodcatch.sources import Fetched, SourceHTTPError, get_validated
+from foodcatch.sources import Fetched, SourceHTTPError, get_validated, link_relations
 
 BASE_URL = "https://api.sallinggroup.com"
 BRANDS: tuple[str, ...] = ("netto", "foetex", "bilka")
@@ -169,10 +170,11 @@ def iter_stores(
 ) -> Iterator[Fetched[list[SallingStore]]]:
     """Yield every page of Danish stores of ``brand`` (one :class:`Fetched` per HTTP response).
 
-    Pages are requested until one is shorter than ``per_page`` (or repeats the previous page,
-    or :data:`MAX_STORE_PAGES` is reached). When the store count is an exact multiple of
-    ``per_page`` the extra request is answered with HTTP 400 "last page", which also ends the
-    iteration (:func:`is_past_last_page`).
+    When the response has a ``Link`` header, pages are requested while it announces
+    ``rel="next"``. Otherwise pages are requested until one is shorter than ``per_page``; when
+    the store count is an exact multiple of ``per_page`` the extra request is answered with
+    HTTP 400 "last page", which also ends the iteration (:func:`is_past_last_page`). A page
+    repeating the previous one and :data:`MAX_STORE_PAGES` stop the iteration as safety nets.
 
     Raises:
         SourceHTTPError: for HTTP errors (after the shared client's retries).
@@ -197,7 +199,10 @@ def iter_stores(
         if ids and ids == previous_ids:
             return
         yield fetched
-        if len(ids) < per_page:
+        links = link_relations(fetched.headers)
+        if links is not None and "next" not in links:
+            return
+        if links is None and len(ids) < per_page:
             return
         previous_ids = ids
 

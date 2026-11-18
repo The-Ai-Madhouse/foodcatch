@@ -11,6 +11,7 @@ Raw-store source names (``raw_object.source``, ``fetch_run.source``) are :data:`
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -50,6 +51,9 @@ class Fetched[T]:
         params: request parameters to record in ``raw_object.params`` (never secrets).
         body: the response body exactly as received.
         data: the validated payload.
+        url: the request URL without query string (for logs).
+        headers: the response headers (lower-case names; ``Set-Cookie`` removed), e.g. for
+            ``Link``-header pagination. Not recorded in the raw store.
     """
 
     endpoint: str
@@ -57,6 +61,7 @@ class Fetched[T]:
     body: bytes
     data: T
     url: str = field(default="", compare=False)
+    headers: Mapping[str, str] = field(default_factory=dict[str, str], compare=False)
 
 
 def get_validated[T](
@@ -101,4 +106,38 @@ def get_validated[T](
         body=response.content,
         data=data,
         url=public_url,
+        headers=response_headers(response),
     )
+
+
+_UNRECORDED_HEADERS = frozenset({"set-cookie"})
+_LINK_VALUE = re.compile(r"<(?P<url>[^>]*)>(?P<params>[^,<]*)")
+_LINK_REL = re.compile(r';\s*rel\s*=\s*(?:"(?P<quoted>[^"]*)"|(?P<token>[^;\s]+))', re.IGNORECASE)
+
+
+def response_headers(response: httpx.Response) -> dict[str, str]:
+    """Response headers with lower-case names, without ``Set-Cookie`` (repeats are joined)."""
+    return {
+        name: ", ".join(response.headers.get_list(name))
+        for name in {key.lower() for key in response.headers}
+        if name not in _UNRECORDED_HEADERS
+    }
+
+
+def link_relations(headers: Mapping[str, str]) -> dict[str, str] | None:
+    """Parse an RFC 8288 ``Link`` header into ``{rel: url}``; ``None`` without the header.
+
+    >>> link_relations({"link": '<https://x/?page=2>; rel="next", <https://x/?page=7>; rel="last"'})
+    {'next': 'https://x/?page=2', 'last': 'https://x/?page=7'}
+    """
+    value = headers.get("link")
+    if value is None:
+        return None
+    relations: dict[str, str] = {}
+    for link in _LINK_VALUE.finditer(value):
+        rel = _LINK_REL.search(link["params"])
+        if rel is None:
+            continue
+        for name in (rel["quoted"] or rel["token"] or "").split():
+            relations.setdefault(name.lower(), link["url"].strip())
+    return relations

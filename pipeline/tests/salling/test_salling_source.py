@@ -139,6 +139,42 @@ def test_iter_stores_exact_multiple_ends_with_empty_page(http_client: httpx.Clie
     assert route.call_count == 2
 
 
+def _link(page: int, *, last: int) -> dict[str, str]:
+    url = f"{STORES_URL}?brand=netto&country=dk&per_page=2&page={{}}"
+    parts = [f'<{url.format(last)}>; rel="last"']
+    if page < last:
+        parts.insert(0, f'<{url.format(page + 1)}>; rel="next"')
+    return {"Link": ", ".join(parts), "X-Total-Count": str(2 * last)}
+
+
+@respx.mock
+def test_iter_stores_follows_link_header_next(http_client: httpx.Client) -> None:
+    route = respx.get(STORES_URL).mock(
+        side_effect=[
+            httpx.Response(200, json=_store_page(["a", "b"]), headers=_link(1, last=2)),
+            httpx.Response(200, json=_store_page(["c", "d"]), headers=_link(2, last=2)),
+        ]
+    )
+    pages = list(iter_stores(http_client, API_KEY, brand="netto", per_page=2))
+
+    # The second page is full, but the Link header has no "next": no third request.
+    assert [[s.id for s in p.data] for p in pages] == [["a", "b"], ["c", "d"]]
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_iter_stores_link_header_next_wins_over_short_page(http_client: httpx.Client) -> None:
+    route = respx.get(STORES_URL).mock(
+        side_effect=[
+            httpx.Response(200, json=_store_page(["a"]), headers=_link(1, last=2)),
+            httpx.Response(200, json=_store_page(["b"]), headers=_link(2, last=2)),
+        ]
+    )
+    pages = list(iter_stores(http_client, API_KEY, brand="netto", per_page=2))
+    assert [[s.id for s in p.data] for p in pages] == [["a"], ["b"]]
+    assert route.call_count == 2
+
+
 # Recorded answer (trace id dropped) to a page number beyond the last page.
 PAST_LAST_PAGE = {
     "contactInfo": "apisupport@sallinggroup.com",
