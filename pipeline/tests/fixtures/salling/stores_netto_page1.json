@@ -1,0 +1,152 @@
+[
+ {
+  "id": "7fd81b2b-219b-4795-a561-c1a9d3fb28d1",
+  "address": {
+   "city": "Hvidovre",
+   "country": "DK",
+   "extra": null,
+   "street": "Laurits Olsens Vej 1",
+   "zip": "2650"
+  },
+  "attributes": {
+   "bakery": false,
+   "flowers": true,
+   "garden": false,
+   "holidayOpen": false,
+   "nonFood": true,
+   "open247": false,
+   "petFood": true,
+   "scanAndGo": true,
+   "spotCleaning": true,
+   "spotFood": true,
+   "spotNonfood": true,
+   "spotPersonalCare": true,
+   "spotPetFood": true,
+   "smileyscheme": "712525"
+  },
+  "brand": "netto",
+  "coordinates": [
+   12.4762406,
+   55.663435
+  ],
+  "created": "2026-11-18T13:17:20.260",
+  "distance_km": null,
+  "hours": [
+   {
+    "date": "2026-11-18",
+    "type": "store",
+    "open": "2026-11-18T07:00:00",
+    "close": "2026-11-18T22:00:00",
+    "closed": false,
+    "customerFlow": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0.1,
+     0.19,
+     0.3,
+     0.39,
+     0.52,
+     0.52,
+     0.42,
+     0.5,
+     0.59,
+     0.65,
+     0.67,
+     0.51,
+     0.38,
+     0.33,
+     0.23,
+     0.01,
+     0
+    ]
+   }
+  ],
+  "modified": "2026-11-18T13:17:20.260",
+  "name": "Netto Laurits Olsens Vej",
+  "phoneNumber": "87781319",
+  "sapSiteId": "7319",
+  "type": "Point",
+  "vikingStoreId": "7319"
+ },
+ {
+  "id": "0b52d54b-66e1-4d8c-a4a4-e243b5120946",
+  "address": {
+   "city": "Vanløse",
+   "country": "DK",
+   "extra": null,
+   "street": "Jyllingevej 9",
+   "zip": "2720"
+  },
+  "attributes": {
+   "bakery": false,
+   "garden": false,
+   "holidayOpen": true,
+   "nonFood": true,
+   "open247": false,
+   "petFood": true,
+   "scanAndGo": true,
+   "spotCleaning": false,
+   "spotFood": false,
+   "spotNonfood": false,
+   "spotPersonalCare": false,
+   "spotPetFood": false,
+   "smileyscheme": "119452"
+  },
+  "brand": "netto",
+  "coordinates": [
+   12.4931268,
+   55.6935308
+  ],
+  "created": "2026-11-18T13:17:20.263",
+  "distance_km": null,
+  "modified": "2026-11-18T13:17:20.263",
+  "name": "Netto Jyllingevej",
+  "phoneNumber": "87781320",
+  "sapSiteId": "7320",
+  "type": "Point",
+  "vikingStoreId": "7320"
+ },
+ {
+  "id": "e1ed4932-4bef-4220-ac59-211b3b561e57",
+  "address": {
+   "city": "København Ø",
+   "country": "DK",
+   "extra": null,
+   "street": "Østerbrogade 238",
+   "zip": "2100"
+  },
+  "attributes": {
+   "bakery": false,
+   "garden": false,
+   "holidayOpen": true,
+   "nonFood": true,
+   "open247": false,
+   "petFood": false,
+   "scanAndGo": true,
+   "spotCleaning": false,
+   "spotFood": false,
+   "spotNonfood": false,
+   "spotPersonalCare": false,
+   "spotPetFood": false,
+   "smileyscheme": "653960"
+  },
+  "brand": "netto",
+  "coordinates": [
+   12.5778762,
+   55.7143399
+  ],
+  "created": "2026-11-18T13:17:20.265",
+  "distance_km": null,
+  "modified": "2026-11-18T13:17:20.265",
+  "name": "Netto Østerbrogade Kb",
+  "phoneNumber": "87781321",
+  "sapSiteId": "7321",
+  "type": "Point",
+  "vikingStoreId": "7321"
+ }
+]

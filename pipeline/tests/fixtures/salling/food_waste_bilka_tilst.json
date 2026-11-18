@@ -1,0 +1,138 @@
+{
+ "clearances": [
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 86.05,
+    "ean": "2005256",
+    "endTime": "2026-11-18T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T11:34:08.000Z",
+    "newPrice": 48.95,
+    "originalPrice": 135,
+    "percentDiscount": 63.74,
+    "startTime": "2026-11-18T11:32:03.000Z",
+    "stock": 0.049764,
+    "stockUnit": "kg"
+   },
+   "product": {
+    "categories": {
+     "da": "Kød & fisk>Spareribs & barbecuekød",
+     "en": "Meat Fish>spareribs Barbecue Meat"
+    },
+    "description": "GRILLBAKKE 3 SLAGTERMEST.",
+    "ean": "250913",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/64b99ee6-cc51-4b09-aa1b-29b6ac50231e"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 19.95,
+    "ean": "2005232",
+    "endTime": "2026-11-24T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T11:34:08.000Z",
+    "newPrice": 30,
+    "originalPrice": 49.95,
+    "percentDiscount": 39.94,
+    "startTime": "2026-11-18T11:31:50.000Z",
+    "stock": 0.055338,
+    "stockUnit": "kg"
+   },
+   "product": {
+    "categories": {},
+    "description": "TILST SPEGEPØLSE",
+    "ean": "252593",
+    "image": null
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 9.05,
+    "ean": "5712580373140",
+    "endTime": "2026-11-19T22:59:59.000Z",
+    "lastUpdate": "2026-11-17T16:39:57.000Z",
+    "newPrice": 6.95,
+    "originalPrice": 16,
+    "percentDiscount": 56.56,
+    "startTime": "2026-11-17T16:39:24.000Z",
+    "stock": 3,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Brød & kager>Rugbrød>Kernerugbrød",
+     "en": "Bread And Cakes>Rye Breads>Seeded Rye Breads"
+    },
+    "description": "ØKO KERNEF RUGB LEVEBRØD",
+    "ean": "5701205009847",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/49596d95c79135dc3c3d4fbd68e0712b"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 24.71,
+    "ean": "5712580372778",
+    "endTime": "2026-11-20T22:59:59.000Z",
+    "lastUpdate": "2026-11-17T18:41:02.000Z",
+    "newPrice": 8.24,
+    "originalPrice": 32.95,
+    "percentDiscount": 75,
+    "startTime": "2026-11-17T13:31:33.000Z",
+    "stock": 1,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Mejeri & køl>Mejeri>Dessert & snacks>Mejeri & køl>Færdigretter på køl>Middagsretter",
+     "en": "Dairy And Cold Storage>Dairy>Desserts Snacks>Dairy And Cold Storage>Ready To Eat Meals>Dinner Meals"
+    },
+    "description": "RIS A LA MANDE STEFF H.",
+    "ean": "5710405599164",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/aed56ddf28bf95e5e1a157367563b73d"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 37.46,
+    "ean": "5712580373041",
+    "endTime": "2027-01-15T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T12:33:54.000Z",
+    "newPrice": 12.49,
+    "originalPrice": 49.95,
+    "percentDiscount": 75,
+    "startTime": "2026-11-17T14:44:54.000Z",
+    "stock": 1,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Kød & fisk>Spareribs & barbecuekød",
+     "en": "Meat Fish>spareribs Barbecue Meat"
+    },
+    "description": "PULLED CHICKEN 450G JENSENS",
+    "ean": "5705900033336",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/image"
+   }
+  }
+ ],
+ "store": {
+  "id": "efba0457-090e-4132-81ba-c72b4c8e7fee",
+  "address": {
+   "city": "Tilst",
+   "country": "DK",
+   "extra": null,
+   "street": "Agerøvej 7",
+   "zip": "8381"
+  },
+  "brand": "bilka",
+  "coordinates": [
+   10.104849,
+   56.182413
+  ],
+  "name": "Bilka Tilst",
+  "type": "Point"
+ }
+}

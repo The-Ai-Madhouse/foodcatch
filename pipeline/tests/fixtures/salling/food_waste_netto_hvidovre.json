@@ -1,0 +1,162 @@
+{
+ "clearances": [
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 12,
+    "ean": "5712580614182",
+    "endTime": "2026-11-18T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T09:25:03.000Z",
+    "newPrice": 4,
+    "originalPrice": 16,
+    "percentDiscount": 75,
+    "startTime": "2026-11-18T09:24:19.000Z",
+    "stock": 5,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Mejeri & køl>Pålæg>Kødpålæg>Kalkunpålæg",
+     "en": "Dairy And Cold Storage>Lunch Meats>Meat>Cold Cuts Turkey"
+    },
+    "description": "KALKUNBRYST EGELYKKE",
+    "ean": "4005097700259",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/0f52621552c918ea2deefcc9fd5d54aa"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 12,
+    "ean": "5712580611143",
+    "endTime": "2027-01-05T22:59:59.000Z",
+    "lastUpdate": "2026-11-17T13:15:00.000Z",
+    "newPrice": 32,
+    "originalPrice": 44,
+    "percentDiscount": 27.27,
+    "startTime": "2026-11-16T17:48:30.000Z",
+    "stock": 1,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Mejeri & køl>Mejeri>Ost>Ost i skiver",
+     "en": "Dairy And Cold Storage>Dairy>Cheese>Sliced Cheese"
+    },
+    "description": "GULD SKIVEOST 3X140G MAMMEN",
+    "ean": "5703985060032",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/c408dc15b25473abbb58972a874befe6"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 15.95,
+    "ean": "5712580613406",
+    "endTime": "2026-11-18T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T08:30:10.000Z",
+    "newPrice": 4,
+    "originalPrice": 19.95,
+    "percentDiscount": 79.95,
+    "startTime": "2026-11-18T08:28:23.000Z",
+    "stock": 1,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Mejeri & køl>Mejeri>Ost>Hytteost",
+     "en": "Dairy And Cold Storage>Dairy>Cheese>Cottage Cheese"
+    },
+    "description": "HYTTEOST 0,4% 450G DAIRY GOOOD",
+    "ean": "5706911032196",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/4ef94c78cf76398f2ae8f7bd4fdc8750"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 7.25,
+    "ean": "5712580607528",
+    "endTime": "2026-11-20T22:59:59.000Z",
+    "lastUpdate": "2026-11-17T16:00:17.000Z",
+    "newPrice": 13,
+    "originalPrice": 20.25,
+    "percentDiscount": 35.8,
+    "startTime": "2026-11-16T07:04:27.000Z",
+    "stock": 2,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Mejeri & køl>Mejeri>Yoghurt & syrnede mælkeprodukter>A38, tykmælk & ymer",
+     "en": "Dairy And Cold Storage>Dairy>Yoghurt Soured Milk Products>Soured Milk"
+    },
+    "description": "A38 ØKO 1KG ARLA CULTURA",
+    "ean": "5760466870306",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/950733da79a4a77a10477bf2fbed3ae9"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 1.95,
+    "ean": "5712580607481",
+    "endTime": "2026-11-18T22:59:59.000Z",
+    "lastUpdate": "2026-11-17T20:30:54.000Z",
+    "newPrice": 7,
+    "originalPrice": 8.95,
+    "percentDiscount": 21.79,
+    "startTime": "2026-11-16T06:56:14.000Z",
+    "stock": 1,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Mejeri & køl>Mejeri>Mælk>Sødmælk",
+     "en": "Dairy And Cold Storage>Dairy>Milk>Whole Milk"
+    },
+    "description": "ARLA SØDMÆLK ARLA",
+    "ean": "5711953146640",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/629ca0c2-555a-42f0-9afd-7905e77094aa"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 41,
+    "ean": "5712580614311",
+    "endTime": "2027-01-11T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T10:15:16.000Z",
+    "newPrice": 28,
+    "originalPrice": 69,
+    "percentDiscount": 59.42,
+    "startTime": "2026-11-18T10:14:14.000Z",
+    "stock": 22,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {},
+    "description": "MOZZARELLA 1KG SAY CHEESE",
+    "ean": "5703855102770",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/image"
+   }
+  }
+ ],
+ "store": {
+  "id": "7fd81b2b-219b-4795-a561-c1a9d3fb28d1",
+  "address": {
+   "city": "Hvidovre",
+   "country": "DK",
+   "extra": null,
+   "street": "Laurits Olsens Vej 1",
+   "zip": "2650"
+  },
+  "brand": "netto",
+  "coordinates": [
+   12.4762406,
+   55.663435
+  ],
+  "name": "Netto Laurits Olsens Vej",
+  "type": "Point"
+ }
+}

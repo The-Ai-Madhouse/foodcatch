@@ -1,0 +1,114 @@
+{
+ "clearances": [
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 4,
+    "ean": "5712580017402",
+    "endTime": "2026-11-18T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T07:55:56.000Z",
+    "newPrice": 12,
+    "originalPrice": 16,
+    "percentDiscount": 25,
+    "startTime": "2026-11-17T11:58:48.000Z",
+    "stock": 13,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Mejeri & køl>Pålæg>Kødpålæg>Kalkunpålæg",
+     "en": "Dairy And Cold Storage>Lunch Meats>Meat>Cold Cuts Turkey"
+    },
+    "description": "KALKUNBRYST EGELYKKE",
+    "ean": "4005097700259",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/0f52621552c918ea2deefcc9fd5d54aa"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 25,
+    "ean": "5712580015545",
+    "endTime": "2026-11-22T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T10:11:06.000Z",
+    "newPrice": 44,
+    "originalPrice": 69,
+    "percentDiscount": 36.23,
+    "startTime": "2026-11-13T08:12:41.000Z",
+    "stock": 1,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {},
+    "description": "MOZZARELLA 1KG SAY CHEESE",
+    "ean": "5703855102770",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/image"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 3.35,
+    "ean": "5712580017594",
+    "endTime": "2026-11-22T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T11:11:12.000Z",
+    "newPrice": 12,
+    "originalPrice": 15.35,
+    "percentDiscount": 21.82,
+    "startTime": "2026-11-18T07:53:33.000Z",
+    "stock": 89,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Mejeri & køl>Mejeri>Mælk>Skummetmælk",
+     "en": "Dairy And Cold Storage>Dairy>Milk>Nonfat Milk"
+    },
+    "description": "ØKO SKUMMETMÆLK LØGISMOSE",
+    "ean": "5710328002864",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/fb2b2729-a8c5-41b9-bcb6-1b37987787ac"
+   }
+  },
+  {
+   "offer": {
+    "currency": "DKK",
+    "discount": 9,
+    "ean": "5712580017587",
+    "endTime": "2026-11-18T22:59:59.000Z",
+    "lastUpdate": "2026-11-18T11:11:12.000Z",
+    "newPrice": 6,
+    "originalPrice": 15,
+    "percentDiscount": 60,
+    "startTime": "2026-11-18T07:11:27.000Z",
+    "stock": 25,
+    "stockUnit": "each"
+   },
+   "product": {
+    "categories": {
+     "da": "Mejeri & køl>Mejeri>Fløde & flødeskum>Piskefløde",
+     "en": "Dairy And Cold Storage>Dairy>Cream Whipped Cream>Whipping Cream"
+    },
+    "description": "PISKEFLØDE 36% ARLA",
+    "ean": "5711953177774",
+    "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/6b6972aa8ac2fc556d30b71ec5abcf34"
+   }
+  }
+ ],
+ "store": {
+  "id": "e1ed4932-4bef-4220-ac59-211b3b561e57",
+  "address": {
+   "city": "København Ø",
+   "country": "DK",
+   "extra": null,
+   "street": "Østerbrogade 238",
+   "zip": "2100"
+  },
+  "brand": "netto",
+  "coordinates": [
+   12.5778762,
+   55.7143399
+  ],
+  "name": "Netto Østerbrogade Kb",
+  "type": "Point"
+ }
+}
