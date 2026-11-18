@@ -20,8 +20,10 @@ to ``head`` and dropped afterwards, so concurrent sessions never interfere.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
+import socket
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
@@ -60,6 +62,51 @@ def _isolate_environment() -> Iterator[None]:
         get_settings.cache_clear()
         yield
     get_settings.cache_clear()
+
+
+class NetworkAccessError(RuntimeError):
+    """A test tried to open a real network connection (mock it with respx instead)."""
+
+
+def _is_local(address: object) -> bool:
+    if not isinstance(address, tuple) or not address:
+        return True  # AF_UNIX path or similar
+    host = str(address[0])  # pyright: ignore[reportUnknownArgumentType]
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.split("%", 1)[0]).is_loopback
+    except ValueError:
+        return False
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _block_network() -> Iterator[None]:
+    """Fail any test that opens a non-loopback connection: tests never hit real APIs.
+
+    respx and moto intercept requests before a socket is opened, and psycopg connects through
+    libpq (not Python sockets), so mocked HTTP, S3 and the test database keep working.
+    """
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+
+    def check(sock: socket.socket, address: object) -> None:
+        if not _is_local(address):
+            sock.close()  # the caller never gets a usable socket; avoid a ResourceWarning
+            raise NetworkAccessError(f"tests must not use the network (connect to {address!r})")
+
+    def connect(self: socket.socket, address: Any) -> None:
+        check(self, address)
+        real_connect(self, address)
+
+    def connect_ex(self: socket.socket, address: Any) -> int:
+        check(self, address)
+        return real_connect_ex(self, address)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(socket.socket, "connect", connect)
+        mp.setattr(socket.socket, "connect_ex", connect_ex)
+        yield
 
 
 @pytest.fixture(scope="session")
