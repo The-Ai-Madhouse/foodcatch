@@ -4,7 +4,8 @@
 !.env.example
 
 # Local data
-data/
+/data/
+pipeline/data/
 poc/data/
 
 # Python
