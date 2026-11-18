@@ -256,6 +256,10 @@ Ported from the PoC and **must keep its conservatism**:
 * A competitor offer's unit price counts only if its price **applies to the variant**
   (all variants of that offer are the same class, or the unit-price spread ≤ 25 %).
 * Netto is evaluated at its **worst** (highest) unit price, references at their **best** (lowest).
+* Unit prices compare only in the same unit. A price per piece (`stk`) is comparable only for
+  types counted in pieces (`ProductType.unit == "stk"`, i.e. eggs); a Netto variant of any other
+  type priced per `stk` has no unit price (`no_price`), so packs of different size are never
+  compared per piece.
 * Reference kinds: `offer` (current or upcoming competitor offers: Tjek offers of other chains
   and REMA 1000 campaign prices from the Rema catalogue), `regular` (Rema shelf price;
   later other chains), `history` (Netto offers of the same class that ended before this offer

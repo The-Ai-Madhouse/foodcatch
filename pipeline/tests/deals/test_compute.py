@@ -348,6 +348,45 @@ def test_different_class_and_unit_mismatch_are_not_references(sc: Scenario) -> N
     assert sc.refs(netto) == []
 
 
+MÆLK = Match(
+    type_id="mælk",
+    type_label="Mælk",
+    group_name="Mejeri",
+    attrs={"mælketype": "letmælk", "øko": "nej", "laktosefri": "ja"},
+    key_attrs=("mælketype", "øko", "laktosefri"),
+)
+ÆG = Match(
+    type_id="æg",
+    type_label="Æg",
+    group_name="Æg",
+    attrs={"produktion": "frilands", "laktosefri": "nej"},
+    key_attrs=("produktion", "laktosefri"),
+)
+
+
+def test_per_piece_price_of_a_volume_type_is_not_compared(sc: Scenario) -> None:
+    """Regression (finding C2): 0.5 l at 12 kr must not beat 1 l at 14 kr 'per stk'."""
+    netto = sc.offer(MÆLK, unit="stk", unit_price=12.0)
+    sc.offer(MÆLK, chain="superbrugsen", unit="stk", unit_price=14.0)
+    sc.offer(MÆLK, chain="lidl", unit="l", unit_price=10.0)  # another unit: never compared
+
+    recompute_deals(sc.conn)
+
+    row = sc.deal(netto)
+    assert row["netto_unit_price_worst"] is None  # verdict ``no_price``
+    assert row["references"] == []
+
+
+def test_eggs_are_compared_per_piece(sc: Scenario) -> None:
+    netto = sc.offer(ÆG, unit="stk", unit_price=2.5)
+    rema = sc.offer(ÆG, chain="rema1000", unit="stk", unit_price=2.75)
+
+    recompute_deals(sc.conn)
+
+    assert sc.deal(netto)["netto_unit_price_worst"] == Decimal("2.5")
+    assert sc.ref_listings(netto) == {("offer", rema)}
+
+
 def test_expired_competitor_offer_is_ignored_but_upcoming_counts(sc: Scenario) -> None:
     netto = sc.offer(MØRBRAD, unit_price=79.0)
     sc.offer(MØRBRAD, chain="lidl", unit_price=60.0, valid_from=NOW - 9 * DAY, valid_to=NOW - DAY)

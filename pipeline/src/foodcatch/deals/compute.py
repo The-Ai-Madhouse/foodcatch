@@ -19,6 +19,14 @@ Same class
     every key attribute known and equal, same processing state. Units must match
     (``listing.unit`` / ``product.net_unit`` equals the Netto listing's unit).
 
+Comparable unit
+    A price per piece (``unit = 'stk'``; Tjek's ``pcs`` with size 1) says nothing about the
+    amount unless the type itself is counted in pieces (``ProductType.unit == 'stk'``, i.e.
+    eggs). A Netto variant of any other type priced per ``stk`` (e.g. "Arla laktosefri mælk,
+    1 stk") therefore gets no unit price (verdict ``no_price``) and no references, so two packs
+    of different volume are never compared per piece. ``kg`` and ``l`` compare only with the
+    same unit.
+
 Price applies
     A listing's unit price applies to one of its variants when the offer is homogeneous
     (``same_class_variants >= offer_variants``) or the unit-price spread is small
@@ -93,9 +101,10 @@ from uuid import UUID
 from sqlalchemy import Connection, bindparam, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.types import Interval, Numeric
+from sqlalchemy.types import Interval, Numeric, Text
 
 from foodcatch.logging import get_logger
+from foodcatch.matching.taxonomy import PRODUCT_TYPES
 
 log = get_logger(__name__)
 
@@ -104,6 +113,9 @@ NETTO_CHAIN_ID: Final = "netto"
 
 PRICE_SPREAD_LIMIT: Final = Decimal("1.25")
 """An offer's unit price applies to a variant if ``unit_price_max <= limit * unit_price_min``."""
+
+PIECE_TYPE_IDS: Final = tuple(t.id for t in PRODUCT_TYPES if t.unit == "stk")
+"""Types compared per piece (``stk``); for every other type a per-piece price is not comparable."""
 
 EAN_REFERENCE_MAX_AGE: Final = timedelta(days=60)
 """EAN shelf prices last observed longer ago than this are not used as references."""
@@ -236,7 +248,10 @@ _EAN_REFS = """(
 _UPSERT_SQL = """
 WITH target AS MATERIALIZED (
     SELECT c.listing_id, c.variant_index, c.class_key, c.is_exact,
-           l.unit, l.valid_from, l.source_item_id, l.unit_price_min, l.unit_price_max,
+           CASE WHEN {comparable} THEN l.unit END AS unit,
+           l.valid_from, l.source_item_id,
+           CASE WHEN {comparable} THEN l.unit_price_min END AS unit_price_min,
+           CASE WHEN {comparable} THEN l.unit_price_max END AS unit_price_max,
            {price_applies} AS price_applies
     FROM classification c
     JOIN listing l ON l.id = c.listing_id
@@ -324,6 +339,7 @@ def _upsert_sql(*, scoped: bool) -> str:
         netto_offer=_netto_offer("l"),
         current=_current("l"),
         latest=_latest_version("l"),
+        comparable="(l.unit IS DISTINCT FROM 'stk' OR c.type_id = ANY(:piece_types))",
         scope=_SCOPE_LISTINGS if scoped else _SCOPE_ALL,
         offer_refs=_OFFER_REFS,
         regular_refs=_REGULAR_REFS,
@@ -337,6 +353,7 @@ def _upsert_sql(*, scoped: bool) -> str:
 _PARAM_TYPES = (
     bindparam("spread_limit", type_=Numeric()),
     bindparam("ean_max_age", type_=Interval()),
+    bindparam("piece_types", type_=ARRAY(Text())),
 )
 _UPSERT_ALL = text(_upsert_sql(scoped=False)).bindparams(*_PARAM_TYPES)
 _UPSERT_SCOPED = text(_upsert_sql(scoped=True)).bindparams(
@@ -368,6 +385,7 @@ def recompute_deals(conn: Connection, *, listing_ids: Collection[UUID] | None = 
         "netto": NETTO_CHAIN_ID,
         "spread_limit": PRICE_SPREAD_LIMIT,
         "ean_max_age": EAN_REFERENCE_MAX_AGE,
+        "piece_types": list(PIECE_TYPE_IDS),
     }
     if listing_ids is None:
         statement = _UPSERT_ALL
