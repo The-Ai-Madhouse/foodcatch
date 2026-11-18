@@ -1,0 +1,647 @@
+{
+ "data": [
+  {
+   "id": 100004,
+   "name": "JORDBÆRMARMELADE",
+   "underline": "285 GR. / EASIS",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [
+    {
+     "id": 31,
+     "name": "Ikke tilsat sukker",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/31-64.webp"
+    }
+   ],
+   "description": null,
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/100004/1-small-OJq52ElK9p.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/100004/1-medium-OJq52ElK9p.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/100004/1-large-OJq52ElK9p.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 23.95,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2025-11-20T00:00:00+00:00",
+     "ending_at": "2099-12-31T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "kg",
+     "compare_unit_price": 84.04,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": null,
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": false,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 100529,
+   "name": "KIRSEBÆRSAUCE",
+   "underline": "500 GR. / SKÆLSKØR PURERET",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [
+    {
+     "id": 9001,
+     "name": "Avisvare",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/9001-64.webp"
+    }
+   ],
+   "description": null,
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/100529/1-small-pYqxnMawP1.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/100529/1-medium-pYqxnMawP1.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/100529/1-large-pYqxnMawP1.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 20,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": true,
+     "is_campaign": true,
+     "starting_at": "2026-11-15T00:00:00+00:00",
+     "ending_at": "2026-11-21T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "kg",
+     "compare_unit_price": 40,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    },
+    {
+     "price": 27.95,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2026-11-22T00:00:00+00:00",
+     "ending_at": "2026-12-05T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "kg",
+     "compare_unit_price": 55.9,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": null,
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": true,
+   "is_batch_item": true,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 101394,
+   "name": "OAT BARISTA",
+   "underline": "1 LTR. / NATURLI'",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [
+    {
+     "id": 9001,
+     "name": "Avisvare",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/9001-64.webp"
+    }
+   ],
+   "description": "Denne 100 % plantebaserede havredrik er baristaens nye bedste ven. Med en cremethed i verdensklasse, er den helt perfekt til din yndlingskaffe.Skum og brug den til fremragende, plantebaseret barista art, eller nyd den lige som den er.<br /> OAT BARISTA er baseret på havre og har ingen tilsat sukker – sødmen kommer fra havren selv.<br />",
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/101394/1-small-vVoryaKJP3.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/101394/1-medium-vVoryaKJP3.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/101394/1-large-vVoryaKJP3.webp"
+    },
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/101394/2-small-vVoryaKJP3.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/101394/2-medium-vVoryaKJP3.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/101394/2-large-vVoryaKJP3.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 12,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": true,
+     "is_campaign": true,
+     "starting_at": "2026-11-15T00:00:00+00:00",
+     "ending_at": "2026-11-21T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "ltr",
+     "compare_unit_price": 12,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    },
+    {
+     "price": 18.15,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2026-11-22T00:00:00+00:00",
+     "ending_at": "2099-12-31T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "ltr",
+     "compare_unit_price": 18.15,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": null,
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": true,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 180055,
+   "name": "HAVREGRYN FINVALSEDE",
+   "underline": "1 KG. / REMA 1000, ØKOLOGISK",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [
+    {
+     "id": 2,
+     "name": "REMA1000",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/2-64.webp"
+    },
+    {
+     "id": 5,
+     "name": "Økologi",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/5-64.webp"
+    },
+    {
+     "id": 6,
+     "name": "Økologi",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/6-64.webp"
+    },
+    {
+     "id": 40,
+     "name": "Nøglehul",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/40-64.webp"
+    },
+    {
+     "id": 43,
+     "name": "Fuldkorn",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/43-64.webp"
+    }
+   ],
+   "description": null,
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/180055/1-small-A5qV6dglqa.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/180055/1-medium-A5qV6dglqa.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/180055/1-large-A5qV6dglqa.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 9.95,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2026-05-07T00:00:00+00:00",
+     "ending_at": "2099-12-31T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "kg",
+     "compare_unit_price": 9.95,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": null,
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": true,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 100325,
+   "name": "HAVREDRIK",
+   "underline": "1 LTR. / PLANTEKØKKENET",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [
+    {
+     "id": 2,
+     "name": "REMA1000",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/2-64.webp"
+    },
+    {
+     "id": 5,
+     "name": "Økologi",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/5-64.webp"
+    },
+    {
+     "id": 6,
+     "name": "Økologi",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/6-64.webp"
+    },
+    {
+     "id": 31,
+     "name": "Ikke tilsat sukker",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/31-64.webp"
+    },
+    {
+     "id": 40,
+     "name": "Nøglehul",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/40-64.webp"
+    }
+   ],
+   "description": null,
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/100325/1-small-Ea91Zd85Pz.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/100325/1-medium-Ea91Zd85Pz.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/100325/1-large-Ea91Zd85Pz.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 11.95,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2026-05-21T00:00:00+00:00",
+     "ending_at": "2026-11-21T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "ltr",
+     "compare_unit_price": 11.95,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": null,
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": true,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 200101,
+   "name": "GRØN TUBORG 4,6%",
+   "underline": "1.98 LTR. / 6 PK.",
+   "age_limit": 16,
+   "hazard_precaution_statements": [],
+   "labels": [
+    {
+     "id": 9001,
+     "name": "Avisvare",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/9001-64.webp"
+    }
+   ],
+   "description": null,
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/200101/1-small-ElPB633JPk.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/200101/1-medium-ElPB633JPk.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/200101/1-large-ElPB633JPk.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 24,
+     "price_over_max_quantity": 43.5,
+     "max_quantity": 12,
+     "is_advertised": true,
+     "is_campaign": true,
+     "starting_at": "2026-11-15T00:00:00+00:00",
+     "ending_at": "2026-11-21T00:00:00+00:00",
+     "deposit": 6,
+     "compare_unit": "ltr",
+     "compare_unit_price": 12.12,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    },
+    {
+     "price": 36,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": true,
+     "starting_at": "2026-11-22T00:00:00+00:00",
+     "ending_at": "2026-11-28T00:00:00+00:00",
+     "deposit": 6,
+     "compare_unit": "ltr",
+     "compare_unit_price": 18.18,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": null,
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": false,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 11240,
+   "name": "KAKAOMÆLK",
+   "underline": "20 CL. / REMA 1000",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [
+    {
+     "id": 2,
+     "name": "REMA1000",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/2-64.webp"
+    },
+    {
+     "id": 95,
+     "name": "Rainforest Alliance",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/95-64.webp"
+    }
+   ],
+   "description": null,
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/11240/1-small-rQqQVZD9ea.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/11240/1-medium-rQqQVZD9ea.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/11240/1-large-rQqQVZD9ea.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 3.33,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2025-10-16T00:00:00+00:00",
+     "ending_at": "2099-12-31T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "ltr",
+     "compare_unit_price": 16.65,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": "refrigerated_5_degrees_celsius",
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": true,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 130005,
+   "name": "TRUSSEINDLÆG",
+   "underline": "26 STK. / ALWAYS LONG",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [],
+   "description": null,
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/130005/1-small-xQq8gy6LoZ.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/130005/1-medium-xQq8gy6LoZ.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/130005/1-large-xQq8gy6LoZ.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 23.95,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2024-10-10T00:00:00+00:00",
+     "ending_at": "2099-12-31T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "stk",
+     "compare_unit_price": 0.92,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": null,
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": true,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 136810,
+   "name": "TANDTRÅD",
+   "underline": "40 MTR. / REMA 1000 MINT OG FLOUR",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [
+    {
+     "id": 2,
+     "name": "REMA1000",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/2-64.webp"
+    }
+   ],
+   "description": "Tag et stykke på ca. 50 cm. Vikler tråden omkring din højre og venstre pegefinger. Brug tommelfingrene som guide. Brug kun et kort stykke tråd til at arbejde med. Træk tråden i en savende bevægelse ned mellem tænderne. Mas ikke tråden hårdt op i  tandkødet, da dette kan forvolde skade. Hold tråden omkring forsiden og bagsiden af tanden i en vinkel og bevæg den nu forsigtig ned mod og et godt stykke under tandkødsranden. Dette gentages mod nabotanden.",
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/136810/1-small-Al90WGQyq8.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/136810/1-medium-Al90WGQyq8.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/136810/1-large-Al90WGQyq8.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 8,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2023-05-11T00:00:00+00:00",
+     "ending_at": "2099-12-31T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "mtr",
+     "compare_unit_price": 0.2,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": null,
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": true,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 20062,
+   "name": "SMØRBAR BLOK",
+   "underline": "200 GR. / NATURLI', ØKOLOGISK",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [
+    {
+     "id": 5,
+     "name": "Økologi",
+     "image": "https://static-assets.digital.rema1000.dk/product/labels/5-64.webp"
+    }
+   ],
+   "description": null,
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/20062/1-small-2B94vnlokM.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/20062/1-medium-2B94vnlokM.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/20062/1-large-2B94vnlokM.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 14.95,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2026-05-07T00:00:00+00:00",
+     "ending_at": "2026-11-28T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "kg",
+     "compare_unit_price": 74.75,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": "refrigerated_5_degrees_celsius",
+   "is_self_scale_item": false,
+   "is_weight_item": false,
+   "is_available_in_all_stores": false,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  },
+  {
+   "id": 306137,
+   "name": "TOMATER VEJ SELV",
+   "underline": "0.12 KG. / HOLLAND KL.1",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [],
+   "description": null,
+   "info": "Oprindelsesland: Holland",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/306137/1-small-JzPJ7w5Bok.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/306137/1-medium-JzPJ7w5Bok.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/306137/1-large-JzPJ7w5Bok.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 3.45,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2026-11-08T00:00:00+00:00",
+     "ending_at": "2026-12-05T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "kg",
+     "compare_unit_price": 30,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": null,
+   "is_self_scale_item": false,
+   "is_weight_item": true,
+   "is_available_in_all_stores": true,
+   "is_batch_item": false,
+   "origin_country": "NL",
+   "wine_labels": []
+  },
+  {
+   "id": 413723,
+   "name": "RØGET RIBBENSTEG",
+   "underline": "0.9 KG. / NØRMARK FOOD",
+   "age_limit": null,
+   "hazard_precaution_statements": [],
+   "labels": [],
+   "description": null,
+   "info": "",
+   "images": [
+    {
+     "small": "https://rema-product-images.digital.rema1000.dk/413723/1-small-MNqZKLOW9A.webp",
+     "medium": "https://rema-product-images.digital.rema1000.dk/413723/1-medium-MNqZKLOW9A.webp",
+     "large": "https://rema-product-images.digital.rema1000.dk/413723/1-large-MNqZKLOW9A.webp"
+    }
+   ],
+   "prices": [
+    {
+     "price": 71.91,
+     "price_over_max_quantity": null,
+     "max_quantity": null,
+     "is_advertised": false,
+     "is_campaign": false,
+     "starting_at": "2026-07-02T00:00:00+00:00",
+     "ending_at": "2026-12-05T00:00:00+00:00",
+     "deposit": null,
+     "compare_unit": "kg",
+     "compare_unit_price": 79.9,
+     "consumption_unit": null,
+     "consumption_quantity": null
+    }
+   ],
+   "temperature_zone": "refrigerated_5_degrees_celsius",
+   "is_self_scale_item": false,
+   "is_weight_item": true,
+   "is_available_in_all_stores": false,
+   "is_batch_item": false,
+   "origin_country": null,
+   "wine_labels": []
+  }
+ ],
+ "meta": {
+  "pagination": {
+   "current_page": 1,
+   "from": 1,
+   "last_page": 4,
+   "links": {
+    "first": "http://cphapp.rema1000.dk/api/v3/products?per_page=1000&page=1",
+    "last": "http://cphapp.rema1000.dk/api/v3/products?per_page=1000&page=4",
+    "prev": null,
+    "next": "http://cphapp.rema1000.dk/api/v3/products?per_page=1000&page=2"
+   },
+   "path": "http://cphapp.rema1000.dk/api/v3/products",
+   "per_page": 1000,
+   "to": 1000,
+   "total": 3956
+  }
+ }
+}
