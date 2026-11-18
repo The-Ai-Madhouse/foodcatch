@@ -16,7 +16,9 @@ UNKNOWN = "?"
 PROCESSING_ATTR = "forarbejdet"
 """Attribute naming the processing state (``marineret``, ``paneret``, ...); absent = ``nej``."""
 
-type SourceHint = Literal["text", "category"]
+type SourceHint = Literal["text", "category", "override"]
+"""Where the type came from: rules on the ``text``, the source ``category`` or a manual
+``override`` (``classification_override.action = 'force'``)."""
 
 
 @dataclass(slots=True)
@@ -32,7 +34,8 @@ class Match:
         key_attrs: names of all key attributes of this type, in class-key order, including the
             always-relevant ``øko``/``laktosefri`` where applicable.
         variant_text: the normalized text of this variant.
-        source_hint: whether the type came from the ``text`` or the source ``category``.
+        source_hint: whether the type came from the ``text``, the source ``category`` or a
+            manual ``override``.
         notes: Danish remarks for humans (e.g. ``type fundet i beskrivelse``).
         offer_variants: number of variants in the whole offer (including unrecognized ones).
         same_class_variants: how many of those share this match's class.
@@ -88,3 +91,12 @@ class Match:
         if self.attrs.get(PROCESSING_ATTR):
             bits.append(f"[{self.attrs[PROCESSING_ATTR]}]")
         return ", ".join(bits)
+
+    @property
+    def all_keys(self) -> tuple[str, ...]:
+        """Alias of :attr:`key_attrs` (the PoC's name)."""
+        return self.key_attrs
+
+    def label(self) -> str:
+        """Alias of :attr:`class_label` (the PoC's name)."""
+        return self.class_label
