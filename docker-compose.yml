@@ -7,7 +7,8 @@ services:
       POSTGRES_PASSWORD: foodcatch
       POSTGRES_DB: foodcatch
     ports:
-      - "5432:5432"
+      # Loopback only: the superuser password is public in this repository.
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

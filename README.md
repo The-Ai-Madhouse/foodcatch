@@ -59,7 +59,7 @@ foodcatch/
 Requirements: Docker, [uv](https://docs.astral.sh/uv/), Python 3.12 (uv can install it).
 
 ```bash
-docker compose up -d                  # Postgres 17 on localhost:5432
+docker compose up -d                  # Postgres 17 on 127.0.0.1:5432 (loopback only)
 cp .env.example .env                  # then fill in SALLING_API_KEY if you have one
 cd pipeline
 uv sync                               # create .venv with all dependencies
