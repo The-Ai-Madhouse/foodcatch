@@ -39,10 +39,18 @@ is sent as a header only and never recorded in raw-object parameters or logs.
 | `GET /v2/stores?brand=netto\|foetex\|bilka&country=dk&per_page=…&page=…` | paged (the `Link` header announces `rel="next"`; `x-total-count` the total). Stores: `id` (UUID), `name`, `brand`, `address{street, zip, city, country, extra}`, `coordinates` **`[lon, lat]`**, `hours[…]`, `attributes{…}` |
 | `GET /v1/food-waste/{storeId}` | clearances of one store: `{store, clearances: [{offer, product}]}` |
 
-Not used:
+**Rate limit (observed 2026-11-18, undocumented):** every response carries `Retry-After: 1`,
+and after about **60 requests** the key gets HTTP 429 for a long period (more than 37 minutes
+in our test, so the window is probably an hour). Iterating `/v1/food-waste/{storeId}` over all
+~721 stores is therefore impossible within the quota, and the `salling-food-waste` job is
+**paused** in production (`COLLECT_PAUSED_JOBS`) until it is redesigned to use the geo query
+below (one call returns the clearances of ~17 stores, so ~45–60 calls cover Denmark).
+
+Not used (yet):
 
 * `GET /v1/food-waste/?geo=lat,lon&radius=KM` (radius ≤ 100) and `?zip=NNNN`: return only the
-  ~17 nearest stores, so the job iterates over all stores from `/v2/stores` instead.
+  ~17 nearest stores per call. The planned redesign tiles Denmark with geo queries until every
+  known store has been covered.
 * `GET /v1/leaflet-offers`: answers 403 for our key (its scope does not include production
   access). Netto's leaflet offers come from Tjek instead.
 

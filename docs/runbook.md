@@ -451,6 +451,14 @@ gh workflow run keepalive.yml              # verify that it works
 Accepted trade-offs and open points, so nobody mistakes them for bugs. Each is a candidate for
 later work.
 
+**Collection**
+
+* *Salling food-waste is paused.* The Salling API allows only about 60 requests before it
+  answers 429 for a long period, so the per-store `salling-food-waste` job cannot cover the
+  ~721 stores. It is listed in the repository variable `COLLECT_PAUSED_JOBS` until the job is
+  redesigned around the geo query (see [data sources](data-sources.md#salling-group)). Do not
+  dispatch it manually in the meantime: it burns the quota and the run will fail.
+
 **Prices and deals**
 
 * *Member prices.* Tjek offers whose text marks a member price are stored with
