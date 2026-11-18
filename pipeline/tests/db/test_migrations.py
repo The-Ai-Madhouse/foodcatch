@@ -65,7 +65,7 @@ def test_migrations_match_table_definitions(db_engine: Engine) -> None:
 
 
 def test_single_head() -> None:
-    assert migrate.current_head() == "0001"
+    assert migrate.current_head() == "0002"
 
 
 def test_seed_data(db_engine: Engine) -> None:
@@ -100,3 +100,67 @@ def test_only_one_current_matcher_release(db_conn: Connection) -> None:
         db_conn.execute(
             text("INSERT INTO matcher_release (version, is_current) VALUES ('x', true)")
         )
+
+
+def test_0002_moves_matcher_marker_and_back(empty_database: str) -> None:
+    engine = create_engine(normalize_database_url(empty_database))
+    marker = '{"matcher": {"version": "2026.11.1", "fingerprint": "abc"}, "stock": 2}'
+    try:
+        migrate.upgrade(empty_database, "0001")
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO fetch_run (id, job, source, status)
+                    VALUES ('00000000-0000-0000-0000-000000000001', 'tjek-offers', 'tjek',
+                            'succeeded');
+                    INSERT INTO raw_object (id, fetch_run_id, source, endpoint, storage_key,
+                                            sha256, bytes)
+                    VALUES ('00000000-0000-0000-0000-000000000002',
+                            '00000000-0000-0000-0000-000000000001', 'tjek', 'offers', 'k',
+                            'x', 1);
+                    """
+                )
+            )
+            for item, extra in (("with-marker", marker), ("garbage", '{"matcher": "x"}')):
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO listing (source, source_item_id, chain_id, kind, title,
+                                             price, valid_from, raw_object_id, extra)
+                        VALUES ('tjek', :item, 'netto', 'offer', 'Mælk', 10, now(),
+                                '00000000-0000-0000-0000-000000000002', CAST(:extra AS jsonb))
+                        """
+                    ),
+                    {"item": item, "extra": extra},
+                )
+
+        migrate.upgrade(empty_database, "0002")
+        with engine.connect() as conn:
+            rows = {
+                r.source_item_id: r
+                for r in conn.execute(
+                    text(
+                        "SELECT source_item_id, extra, classified_version, classified_fingerprint"
+                        " FROM listing"
+                    )
+                )
+            }
+        assert rows["with-marker"].extra == {"stock": 2}
+        assert rows["with-marker"].classified_version == "2026.11.1"
+        assert rows["with-marker"].classified_fingerprint == "abc"
+        assert rows["garbage"].extra == {}
+        assert rows["garbage"].classified_version is None
+
+        migrate.downgrade(empty_database, "0001")
+        with engine.connect() as conn:
+            extras = dict(conn.execute(text("SELECT source_item_id, extra FROM listing")).all())
+            columns = {c["name"] for c in inspect(conn).get_columns("review_item")}
+        assert extras["with-marker"] == {
+            "matcher": {"version": "2026.11.1", "fingerprint": "abc"},
+            "stock": 2,
+        }
+        assert extras["garbage"] == {}
+        assert "note" not in columns
+    finally:
+        engine.dispose()

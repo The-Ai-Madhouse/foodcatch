@@ -6,6 +6,8 @@ Public functions (signatures are a contract; called by the job hooks and the CLI
   processed with ``version``.
 * :func:`reclassify_all` - classify every listing with ``version``, make it the current
   ``matcher_release`` and prune classifications of all but the two most recent versions.
+* :func:`set_current_release` / :func:`current_release` / :func:`prune_classifications` - the
+  release bookkeeping, also used by the post-fetch hook after a matcher upgrade.
 
 How a listing is classified:
 
@@ -23,11 +25,12 @@ How a listing is classified:
   whose offer also covers other products). Open items whose reason disappears on
   re-classification (or that an override settles) are closed as ``fixed``.
 
-Each processed listing records ``{"version", "fingerprint"}`` under ``listing.extra["matcher"]``.
-The fingerprint covers everything the result depends on (texts, category hint, override), so
-re-ingested listings are only re-classified when their input changed, and listings without any
-recognized variant are not re-classified on every run. Rows are only rewritten when the result
-changed, so unchanged listings keep their ``deal`` rows.
+Each processed listing records the matcher version and an input fingerprint in
+``listing.classified_version`` / ``listing.classified_fingerprint`` (columns no ingest module
+writes). The fingerprint covers everything the result depends on (texts, category hint,
+override), so re-ingested listings are only re-classified when their input changed, and listings
+without any recognized variant are not re-classified on every run. Rows are only rewritten when
+the result changed, so unchanged listings keep their ``deal`` rows.
 
 Both functions run inside the caller's transaction (never commit).
 """
@@ -48,14 +51,13 @@ from sqlalchemy import (
     any_,
     bindparam,
     delete,
-    func,
     insert,
     or_,
     select,
     true,
     update,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -83,9 +85,6 @@ BATCH_SIZE = 1000
 
 KEPT_VERSIONS = 2
 """Classifications of this many most recent matcher versions are kept (plus the current one)."""
-
-MARKER_KEY = "matcher"
-"""Key in ``listing.extra`` recording the version and input fingerprint of the last run."""
 
 FOOD_WASTE_SOURCE = "salling_food_waste"
 """Listings of this source use their product's category path as the category hint."""
@@ -272,8 +271,8 @@ def _listing_batches(
                 listing.c.source,
                 listing.c.title,
                 listing.c.description,
-                listing.c.extra[MARKER_KEY]["version"].astext.label("marker_version"),
-                listing.c.extra[MARKER_KEY]["fingerprint"].astext.label("marker_fingerprint"),
+                listing.c.classified_version.label("marker_version"),
+                listing.c.classified_fingerprint.label("marker_fingerprint"),
                 product.c.source_category,
             )
             .select_from(listing.outerjoin(product, product.c.id == listing.c.product_id))
@@ -445,14 +444,14 @@ def _process(
         update(listing)
         .where(listing.c.id == bindparam("target_id"))
         .values(
-            extra=listing.c.extra.op("||")(
-                func.jsonb_build_object(MARKER_KEY, bindparam("marker", type_=JSONB))
-            )
+            classified_version=bindparam("marker_version"),
+            classified_fingerprint=bindparam("marker_fingerprint"),
         ),
         [
             {
                 "target_id": listing_id,
-                "marker": {"version": version, "fingerprint": outcome.fingerprint},
+                "marker_version": version,
+                "marker_fingerprint": outcome.fingerprint,
             }
             for listing_id, outcome in outcomes.items()
         ],
@@ -493,7 +492,7 @@ def classify_pending(
         i.e. the listings whose deals need recomputing.
     """
     ensure_release(conn, version)
-    not_processed = func.coalesce(listing.c.extra[MARKER_KEY]["version"].astext, "") != version
+    not_processed = listing.c.classified_version.is_distinct_from(version)
     condition: ColumnElement[bool] = not_processed
     if listing_ids:
         condition = or_(listing.c.id == any_(_uuid_array(listing_ids)), not_processed)
@@ -514,15 +513,7 @@ def reclassify_all(conn: Connection, *, version: str = MATCHER_VERSION) -> int:
     Returns:
         Number of listings processed.
     """
-    created = ensure_release(conn, version)
-    conn.execute(
-        update(matcher_release)
-        .where(matcher_release.c.is_current, matcher_release.c.version != version)
-        .values(is_current=False)
-    )
-    conn.execute(
-        update(matcher_release).where(matcher_release.c.version == version).values(is_current=True)
-    )
+    created = set_current_release(conn, version)
     processed, changed = _run(conn, true(), version, force=True)
     pruned = prune_classifications(conn)
     _log.info(
@@ -534,6 +525,31 @@ def reclassify_all(conn: Connection, *, version: str = MATCHER_VERSION) -> int:
         pruned_rows=pruned,
     )
     return processed
+
+
+def set_current_release(conn: Connection, version: str) -> bool:
+    """Make ``version`` the only current ``matcher_release`` (inserting it if new).
+
+    Returns:
+        Whether a new release row was created.
+    """
+    created = ensure_release(conn, version)
+    conn.execute(
+        update(matcher_release)
+        .where(matcher_release.c.is_current, matcher_release.c.version != version)
+        .values(is_current=False)
+    )
+    conn.execute(
+        update(matcher_release).where(matcher_release.c.version == version).values(is_current=True)
+    )
+    return created
+
+
+def current_release(conn: Connection) -> str | None:
+    """The version of the current ``matcher_release`` (``None`` if none is current)."""
+    return conn.execute(
+        select(matcher_release.c.version).where(matcher_release.c.is_current)
+    ).scalar_one_or_none()
 
 
 def prune_classifications(conn: Connection, *, keep: int = KEPT_VERSIONS) -> int:

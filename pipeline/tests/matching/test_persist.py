@@ -24,7 +24,6 @@ from foodcatch.db.tables import (
 from foodcatch.matching import MATCHER_VERSION, classify, is_healthy_staple
 from foodcatch.matching.normalize import normalize
 from foodcatch.matching.persist import (
-    MARKER_KEY,
     NOTE_OVERRIDE,
     InvalidOverrideError,
     classify_pending,
@@ -158,10 +157,14 @@ def test_writes_every_match_field(db_conn: Connection, add_listing: ListingFacto
         "unknown_key_attribute": "open",
         "ambiguous_offer": "open",
     }
-    marker = db_conn.execute(
-        select(listing.c.extra[MARKER_KEY]).where(listing.c.id == listing_id)
-    ).scalar_one()
-    assert marker["version"] == MATCHER_VERSION
+    version, fingerprint, extra = db_conn.execute(
+        select(
+            listing.c.classified_version, listing.c.classified_fingerprint, listing.c.extra
+        ).where(listing.c.id == listing_id)
+    ).one()
+    assert version == MATCHER_VERSION
+    assert fingerprint
+    assert extra == {}  # ingest owns `extra`; matching never writes it
 
 
 def test_exact_single_variant_needs_no_review(
@@ -241,24 +244,46 @@ def test_changed_text_is_reclassified(db_conn: Connection, add_listing: ListingF
     assert _rows(db_conn, listing_id) == []
 
 
-def test_ingest_overwriting_extra_triggers_reclassification(
+def test_ingest_replacing_extra_does_not_trigger_reclassification(
     db_conn: Connection, add_listing: ListingFactory
 ) -> None:
     listing_id = add_listing("Mælk")
     classify_pending(db_conn, version=MATCHER_VERSION)
     db_conn.execute(update(listing).where(listing.c.id == listing_id).values(extra={"stock": 3}))
+    before = db_conn.execute(
+        select(review_item.c.id, review_item.c.status).where(review_item.c.listing_id == listing_id)
+    ).all()
 
-    # re-processed, but the identical result is not rewritten
+    # the marker lives in its own columns: nothing to re-process
     assert classify_pending(db_conn, version=MATCHER_VERSION) == []
-    extra = db_conn.execute(select(listing.c.extra).where(listing.c.id == listing_id)).scalar_one()
-    assert extra["stock"] == 3
-    assert extra[MARKER_KEY]["version"] == MATCHER_VERSION
+    row = db_conn.execute(
+        select(listing.c.extra, listing.c.classified_version).where(listing.c.id == listing_id)
+    ).one()
+    assert row.extra == {"stock": 3}
+    assert row.classified_version == MATCHER_VERSION
+    after = db_conn.execute(
+        select(review_item.c.id, review_item.c.status).where(review_item.c.listing_id == listing_id)
+    ).all()
+    assert after == before
 
 
-def test_malformed_marker_is_ignored(db_conn: Connection, add_listing: ListingFactory) -> None:
-    listing_id = add_listing("Hakket oksekød 8-12%", extra={MARKER_KEY: "garbage"})
+def test_unknown_or_partial_marker_is_reprocessed(
+    db_conn: Connection, add_listing: ListingFactory
+) -> None:
+    listing_id = add_listing(
+        "Hakket oksekød 8-12%", classified_version="2001.01.1", classified_fingerprint="x"
+    )
     assert classify_pending(db_conn, version=MATCHER_VERSION) == [listing_id]
     assert classify_pending(db_conn, version=MATCHER_VERSION) == []
+    db_conn.execute(
+        update(listing).where(listing.c.id == listing_id).values(classified_fingerprint=None)
+    )
+    # a touched listing with a missing fingerprint is re-processed; same result, not rewritten
+    assert classify_pending(db_conn, version=MATCHER_VERSION, listing_ids=[listing_id]) == []
+    fingerprint = db_conn.execute(
+        select(listing.c.classified_fingerprint).where(listing.c.id == listing_id)
+    ).scalar_one()
+    assert fingerprint is not None
 
 
 def test_resolved_review_item_is_not_reopened_and_stale_items_are_fixed(

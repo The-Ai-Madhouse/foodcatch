@@ -230,6 +230,10 @@ listing = Table(
         index=True,
     ),
     Column("extra", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
+    # Owned by matching.persist (never written by ingest): matcher version and input
+    # fingerprint of the listing's last classification.
+    Column("classified_version", Text),
+    Column("classified_fingerprint", Text),
     UniqueConstraint("source", "source_item_id", "valid_from", "price"),
     CheckConstraint(_in("source", LISTING_SOURCES), name="source"),
     CheckConstraint(_in("kind", LISTING_KINDS), name="kind"),
@@ -330,6 +334,7 @@ review_item = Table(
     Column("status", Text, nullable=False, server_default="open"),
     _ts("created_at"),
     _ts("resolved_at", nullable=True, default_now=False),
+    Column("note", Text),
     UniqueConstraint("listing_id", "reason"),
     CheckConstraint(_in("reason", REVIEW_REASONS), name="reason"),
     CheckConstraint(_in("status", REVIEW_STATUSES), name="status"),

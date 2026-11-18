@@ -83,6 +83,7 @@ def test_resolve(db_conn: Connection, listing_ids: list[UUID]) -> None:
     assert list_open(db_conn) == []
     (resolved,) = list_items(db_conn, status="accepted")
     assert resolved.id == item.id
+    assert resolved.note == "mælketype står kun på billedet"
     resolved_at = db_conn.execute(
         select(review_item.c.resolved_at).where(review_item.c.id == item.id)
     ).scalar_one()

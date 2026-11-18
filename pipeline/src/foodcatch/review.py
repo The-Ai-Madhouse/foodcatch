@@ -50,6 +50,8 @@ class ReviewItem:
     chain_id: str
     title: str
     description: str
+    note: str | None = None
+    """The reviewer's note (set by :func:`resolve`)."""
 
 
 def enqueue(conn: Connection, listing_id: UUID, reason: ReviewReason) -> bool:
@@ -121,6 +123,7 @@ def list_items(
             listing.c.chain_id,
             listing.c.title,
             listing.c.description,
+            review_item.c.note,
         )
         .join(listing, listing.c.id == review_item.c.listing_id)
         .where(review_item.c.status == status)
@@ -140,6 +143,7 @@ def list_items(
             chain_id=row.chain_id,
             title=row.title,
             description=row.description,
+            note=row.note,
         )
         for row in conn.execute(stmt)
     ]
@@ -155,7 +159,8 @@ def list_open(
 def resolve(conn: Connection, item_id: int, status: ReviewStatus, note: str | None = None) -> None:
     """Resolve item ``item_id`` as ``accepted``, ``rejected`` or ``fixed``.
 
-    ``note`` is written to the log only: ``review_item`` has no column for it yet.
+    ``note`` (the reviewer's reason, e.g. which override was added) is stored in
+    ``review_item.note``; ``None`` keeps an existing note.
 
     Raises:
         ValueError: ``status`` is ``open``.
@@ -166,7 +171,11 @@ def resolve(conn: Connection, item_id: int, status: ReviewStatus, note: str | No
     result = conn.execute(
         update(review_item)
         .where(review_item.c.id == item_id)
-        .values(status=status, resolved_at=func.now())
+        .values(
+            status=status,
+            resolved_at=func.now(),
+            note=func.coalesce(note, review_item.c.note),
+        )
         .returning(review_item.c.listing_id, review_item.c.reason)
     ).one_or_none()
     if result is None:
