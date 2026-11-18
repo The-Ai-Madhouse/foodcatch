@@ -31,10 +31,13 @@ class PipelineState:
     Attributes:
         listing_ids: listings inserted/changed in this run (hooks may add more).
         stats: counters persisted in ``fetch_run.stats``.
+        degraded_reasons: reasons the job itself reported for a ``degraded`` outcome (see
+            :meth:`JobContext.degrade`).
     """
 
     listing_ids: set[UUID] = field(default_factory=set[UUID])
     stats: Counter[str] = field(default_factory=Counter[str])
+    degraded_reasons: list[str] = field(default_factory=list[str])
 
 
 class JobContext:
@@ -94,6 +97,15 @@ class JobContext:
     def count(self, key: str, n: int = 1) -> None:
         """Increment the ``key`` counter by ``n``."""
         self.state.stats[key] += n
+
+    def degrade(self, reason: str) -> None:
+        """Finish the run as ``degraded`` (data is still committed) with ``reason``.
+
+        For incomplete runs the job can detect itself (e.g. a quota ended collection early),
+        in addition to the runner's record-count check.
+        """
+        self.log.warning("job.degrading", reason=reason)
+        self.state.degraded_reasons.append(reason)
 
     def mark_listings(self, ids: Iterable[UUID]) -> None:
         """Register listings for classification and deal computation."""

@@ -29,6 +29,7 @@ class Behaviour:
 
     records: int = 10
     fail: bool = False
+    degrade: str = ""
     raw_bodies: tuple[bytes, ...] = (b'{"a": 1}',)
 
 
@@ -42,6 +43,8 @@ def behaviour() -> Iterator[type[Behaviour]]:
         for body in B.raw_bodies:
             ctx.store_raw("offers", {"catalog_ids": "c1"}, body)
         ctx.record_ingest(IngestResult(records=B.records))
+        if B.degrade:
+            ctx.degrade(B.degrade)
         if B.fail:
             raise RuntimeError("source exploded")
 
@@ -155,6 +158,29 @@ def test_degraded_when_records_drop_more_than_threshold(
     assert [r.status for r in rows] == ["succeeded", "succeeded", "degraded"]
     assert rows[-1].error == result.message
     assert rows[-1].stats["quality"]["previous"] == 60
+
+
+def test_job_can_report_degraded_itself(
+    run: Runner, behaviour: type[Behaviour], clean_db: Engine
+) -> None:
+    behaviour.records = 100
+    behaviour.degrade = "quota ran out"
+    result = run()
+    assert result.status == "degraded"
+    assert result.message == "quota ran out"
+    assert result.stats["quality"]["status"] == "degraded"
+    rows = _runs(clean_db)
+    assert rows[-1].status == "degraded"
+    assert rows[-1].error == "quota ran out"
+
+    behaviour.degrade = ""
+    behaviour.records = 100
+    assert run().status == "succeeded"  # the degraded run is no baseline: 100 vs none
+
+    behaviour.records = 10
+    behaviour.degrade = "quota ran out"
+    both = run()
+    assert both.message.startswith("quota ran out; records dropped 90%")
 
 
 def test_threshold_is_configurable(

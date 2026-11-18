@@ -223,6 +223,7 @@ gh secret set SALLING_API_KEY
 | `QUALITY_DROP_THRESHOLD` | `0.5` | no (default 0.5) | record-count drop that marks a run degraded |
 | `DB_SIZE_BUDGET_MB` | `1024` | no (default 1024) | database budget for the 70 % warning |
 | `OFF_BATCH_SIZE` | `500` | no (default 500) | products looked up per `off-enrich` run |
+| `SALLING_FOOD_WASTE_MAX_CALLS` | `25` | no (default 25) | Salling requests per `salling-food-waste` run (runbook §3.5) |
 | `LOG_LEVEL` | `INFO` | no | pipeline log level |
 
 **`REGION_CENTERS` is not secret and appears in public logs.** Use a neighbourhood or city
@@ -319,7 +320,7 @@ next:
 
 | # | Job | Why at this point |
 |---|---|---|
-| 1 | `salling-stores` | food waste is fetched per Salling store |
+| 1 | `salling-stores` | food-waste queries are planned around the known Salling stores |
 | 2 | `tjek-stores` | stores of all chains (nearby-chain filter in the web app) |
 | 3 | `rema-products` | Rema shelf prices are `regular` references for deals |
 | 4 | `tjek-offers` | weekly offers of all chains, including Netto deals |
@@ -401,7 +402,7 @@ check the providers' pages if in doubt.
 | **Neon** compute | 100 CU-hours per project per month; scales to zero after 5 min idle | about 7 short runs a day at 0.25 CU, roughly 10–20 CU-hours a month, plus your web use | Neon console → *Usage*. |
 | **Neon** restore window | 6 hours of instant restore (point in time) | – | Older mistakes need a dump (runbook, "Backups"). |
 | **Neon** egress | 5 GB per month | small (the pipeline writes; the web reads small views) | Neon console → *Usage*. |
-| **Backblaze B2** storage | 10 GB free, then about $6 per TB-month | estimated a few GB a year of gzip JSON (dominated by food-waste snapshots of every Salling store, twice a day) | bucket size on the B2 *Buckets* page. Check after the first week and extrapolate. |
+| **Backblaze B2** storage | 10 GB free, then about $6 per TB-month | estimated a few GB a year of gzip JSON (dominated by Tjek offers and food-waste snapshots of up to 2 × 25 Salling geo queries a day) | bucket size on the B2 *Buckets* page. Check after the first week and extrapolate. |
 | **Backblaze B2** transactions / egress | API calls free; downloads free up to 3× stored data per month | uploads only, plus downloads when you reprocess | a large `reprocess` downloads the raw objects it replays. |
 | **GitHub Actions** | public repository: standard runners free and unlimited | about 7 runs a day, a few minutes each | schedules can be delayed or dropped (healthchecks.io catches it); workflows are disabled after 60 days without repository activity (`keepalive.yml` prevents it); **logs are public**. |
 | **healthchecks.io** | Hobbyist: 20 checks | 6 checks | – |

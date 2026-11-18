@@ -119,6 +119,10 @@ class Settings(BaseSettings):
     off_batch_size: int = Field(default=500, ge=1, le=10_000)
     """Products looked up per ``off-enrich`` run (``OFF_BATCH_SIZE``)."""
 
+    salling_food_waste_max_calls: int = Field(default=25, ge=1, le=1_000)
+    """Hard limit of Salling API requests per ``salling-food-waste`` run
+    (``SALLING_FOOD_WASTE_MAX_CALLS``; the key's quota is about 60 requests, see ADR 0005)."""
+
     log_level: str = "INFO"
     log_format: Literal["auto", "json", "console"] = "auto"
     git_sha: str | None = Field(

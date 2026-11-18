@@ -140,6 +140,9 @@ store = Table(
     Column("lon", Double),
     _ts("first_seen_at"),
     _ts("last_seen_at"),
+    # Scheduling state of `salling-food-waste` (jobs/salling.py): when a run last covered the
+    # store with a geo query. Not derived from raw data; NULL = never covered.
+    _ts("food_waste_checked_at", nullable=True, default_now=False),
     UniqueConstraint("source", "source_store_id"),
     CheckConstraint(_in("source", STORE_SOURCES), name="source"),
     CheckConstraint("lat IS NULL OR lat BETWEEN -90 AND 90", name="lat_range"),

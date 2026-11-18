@@ -65,7 +65,7 @@ def test_migrations_match_table_definitions(db_engine: Engine) -> None:
 
 
 def test_single_head() -> None:
-    assert migrate.current_head() == "0002"
+    assert migrate.current_head() == "0003"
 
 
 def test_seed_data(db_engine: Engine) -> None:

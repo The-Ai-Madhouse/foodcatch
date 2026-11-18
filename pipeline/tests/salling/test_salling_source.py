@@ -13,14 +13,17 @@ import pytest
 import respx
 from pydantic import TypeAdapter
 
+from foodcatch.http import NO_RETRY
 from foodcatch.sources import SourceHTTPError, SourceSchemaError
 from foodcatch.sources.salling import (
     BASE_URL,
     ENDPOINT_FOOD_WASTE,
+    ENDPOINT_FOOD_WASTE_GEO,
     ENDPOINT_STORES,
     FoodWasteResponse,
     SallingStore,
     fetch_food_waste,
+    fetch_food_waste_near,
     iter_stores,
 )
 
@@ -275,3 +278,70 @@ def test_food_waste_times_are_utc(fixture_bytes: Callable[[str], bytes]) -> None
     offer = response.clearances[0].offer
     assert offer.end_time.utcoffset() == datetime(2026, 1, 1, tzinfo=UTC).utcoffset()
     assert offer.end_time >= offer.start_time
+
+
+# --------------------------------------------------------------------------- geo query
+
+GEO_URL = f"{BASE_URL}/v1/food-waste/"
+GEO_FIXTURE = "salling/food_waste_geo_copenhagen.json"
+
+
+def test_geo_model_parses_recorded_response(fixture_bytes: Callable[[str], bytes]) -> None:
+    # Recorded 2026-11-18 at 55.6761,12.5683 (trimmed: 3 of 16 stores, 2 clearances each).
+    stores = TypeAdapter(list[FoodWasteResponse]).validate_json(fixture_bytes(GEO_FIXTURE))
+    assert [(s.store.brand, len(s.clearances)) for s in stores] == [
+        ("netto", 2),
+        ("foetex", 2),
+        ("netto", 0),  # stores without clearances are listed too
+    ]
+    first = stores[0]
+    assert first.store.name == "Netto Rådhuspladsen"
+    assert first.store.lat == pytest.approx(55.6766, abs=1e-3)
+    assert first.store.lon == pytest.approx(12.5681, abs=1e-3)
+    assert first.clearances[0].product.ean == "5703985054925"
+
+
+@respx.mock
+def test_fetch_food_waste_near(
+    http_client: httpx.Client, fixture_bytes: Callable[[str], bytes]
+) -> None:
+    body = fixture_bytes(GEO_FIXTURE)
+    route = respx.get(GEO_URL).mock(return_value=httpx.Response(200, content=body))
+
+    fetched = fetch_food_waste_near(http_client, API_KEY, lat=55.6761, lon=12.5683)
+
+    assert fetched.endpoint == ENDPOINT_FOOD_WASTE_GEO == "food-waste-geo"
+    assert fetched.params == {"geo": "55.676100,12.568300", "radius": 100}
+    assert fetched.body == body
+    assert len(fetched.data) == 3
+    request = route.calls.last.request
+    assert request.url.params["geo"] == "55.676100,12.568300"
+    assert request.url.params["radius"] == "100"
+    assert request.headers["Authorization"] == f"Bearer {API_KEY}"
+    assert API_KEY not in json.dumps(fetched.params)
+
+
+@respx.mock
+def test_fetch_food_waste_near_without_retries_reports_429_at_once(
+    http_client: httpx.Client,
+) -> None:
+    route = respx.get(GEO_URL).mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "3600"}, text="Too Many")
+    )
+    with pytest.raises(SourceHTTPError) as info:
+        fetch_food_waste_near(http_client, API_KEY, lat=55.0, lon=12.0, retry=NO_RETRY)
+    assert route.call_count == 1
+    assert info.value.status_code == 429
+    assert info.value.headers["retry-after"] == "3600"
+    assert API_KEY not in str(info.value)
+
+
+@pytest.mark.parametrize(
+    ("lat", "lon", "radius"),
+    [(91.0, 12.0, 100), (55.0, 181.0, 100), (55.0, 12.0, 0), (55.0, 12.0, 101)],
+)
+def test_fetch_food_waste_near_validates_arguments(
+    http_client: httpx.Client, lat: float, lon: float, radius: int
+) -> None:
+    with pytest.raises(ValueError, match=r"out of range|radius"):
+        fetch_food_waste_near(http_client, API_KEY, lat=lat, lon=lon, radius_km=radius)

@@ -52,7 +52,7 @@ foodcatch/
 │   │   ├── config.py          pydantic-settings Settings (env + .env)
 │   │   ├── cli.py             Typer app: `foodcatch ...`
 │   │   ├── logging.py         structured logging setup
-│   │   ├── http.py            shared httpx client: UA, timeouts, retry (tenacity), throttle
+│   │   ├── http.py            shared httpx client: UA, timeouts, retry (tenacity, per-request policy), throttle
 │   │   ├── monitoring.py      healthchecks.io pings + optional Sentry init
 │   │   ├── storage/raw.py     RawStore protocol; LocalRawStore, S3RawStore (B2)
 │   │   ├── db/
@@ -67,7 +67,8 @@ foodcatch/
 │   │   ├── ingest/            raw payload → normalized rows (idempotent upserts)
 │   │   ├── matching/          product recognition (ported from poc/matching.py)
 │   │   ├── deals/             reference prices + conservative verdicts
-│   │   ├── jobs/              orchestration of one job run (fetch_run bookkeeping, quality checks)
+│   │   ├── jobs/              orchestration of one job run (fetch_run bookkeeping, quality checks);
+│   │   │                      salling_geo.py plans the Salling food-waste geo queries
 │   │   ├── reprocess.py       replay raw objects through ingest, classify, deals
 │   │   ├── rawindex.py        rebuild missing raw_object rows from the raw store
 │   │   └── review.py          review queue helpers
@@ -117,8 +118,10 @@ Every job is a CLI command, e.g. `foodcatch collect salling-food-waste`. A job r
    pruned (the same as `foodcatch reclassify`).
 6. **Deals** – recomputes `deal` rows affected by the run: listings ingest changed and listings
    whose classification changed (`jobs/hooks.py`).
-7. **Quality checks** – compares record counts with the previous successful run of the same job;
-   a drop of more than 50 % (configurable) marks the run `degraded` and exits non-zero.
+7. **Quality checks** – compares the job's quality metric (`records` by default) with the
+   previous successful run of the same job; a drop of more than 50 % (configurable) marks the run
+   `degraded` and exits non-zero. A job can also report `degraded` itself when it could not
+   finish its work (e.g. the Salling quota ended a food-waste run before the region was covered).
 8. Finishes the `fetch_run` (`succeeded` / `degraded` / `failed`, counts, error) and pings
    healthchecks.io (`/start`, success, `/fail`) if a ping URL is configured.
 
@@ -139,13 +142,23 @@ scheduled workflows monthly. Operations: `docs/runbook.md`.
 | Job | Command | Schedule |
 |---|---|---|
 | Salling stores | `collect salling-stores` | weekly (Mon 03:17) |
-| Salling food waste | `collect salling-food-waste` | daily 05:37 and 13:37 |
+| Salling food waste | `collect salling-food-waste` | daily 05:37 and 13:37 (≤ `SALLING_FOOD_WASTE_MAX_CALLS` requests each) |
 | Tjek stores | `collect tjek-stores` | weekly (Mon 03:47) |
 | Tjek catalogs + offers | `collect tjek-offers` | daily 04:07 |
 | Rema catalogue | `collect rema-products` | daily 02:27 |
 | Open Food Facts | `collect off-enrich` | daily 06:07 (only EANs without data) |
 
 Minutes are deliberately off the hour (GitHub schedules are delayed at :00).
+
+**Salling request budget** ([ADR 0005](decisions/0005-salling-geo-tiling.md)). The Salling key
+answers HTTP 429 for a long time after about 60 requests. `salling-food-waste` therefore uses
+the geo query (one request returns the ~17 nearest stores) and plans its queries with
+`jobs/salling_geo.py`: region stores first, then the rest of Denmark in rotation (least
+recently covered first, persisted in `store.food_waste_checked_at`), never more than
+`SALLING_FOOD_WASTE_MAX_CALLS` (default 25) requests per run. A 429 stops the run's fetching at
+once without retries; the run keeps its data and is `degraded` only if the region was not fully
+covered. Its quality metric is `region_clearances` (not `records`), so the rotating national
+coverage does not trigger false alarms. `salling-stores` needs about 9 requests a week (one per page of 100 stores).
 
 ### Volume control (Neon free plan: 1 GB)
 
@@ -154,8 +167,9 @@ Minutes are deliberately off the hour (GitHub schedules are delayed at :00).
 * Food-waste clearances are stored as `listing`s only for stores within
   `REGION_RADIUS_KM` (default 30) of any configured `REGION_CENTERS` (default: home location).
   For **all** stores we upsert the EAN-level reference price into `product_reference_price`
-  (only when the price changes). Raw data for all stores remains in B2, so the region can be
-  widened later by reprocessing.
+  (only when the price changes). Region stores are covered every run; the rest of the country in
+  rotation over several runs (request budget above). Raw data for all covered stores remains in
+  B2, so the region can be widened later by reprocessing.
 * `classification` rows for matcher versions older than the two most recent are pruned.
 * `foodcatch db stats` reports table sizes; a quality check warns at 70 % of `DB_SIZE_BUDGET_MB`.
 
@@ -175,7 +189,9 @@ Seeded by migration.
 
 **`store`** – `id uuid pk`, `chain_id fk`, `source text` (salling|tjek), `source_store_id text`,
 `name`, `street`, `zip`, `city`, `lat double`, `lon double`, `first_seen_at`, `last_seen_at`,
-`unique(source, source_store_id)`. (Salling and Tjek ids for the same physical store are not linked in v1.)
+`food_waste_checked_at null` (scheduling state of `salling-food-waste`: when a run last covered
+the store; written by the job, not by ingest), `unique(source, source_store_id)`. (Salling and
+Tjek ids for the same physical store are not linked in v1.)
 
 **`product`** – `id uuid pk`, `ean text unique`, `name`, `brand`, `source_category text` (e.g. Salling path),
 `quantity_text`, `net_quantity numeric`, `net_unit text` (kg|l|stk), `nova_group smallint`,
@@ -293,6 +309,7 @@ chains with a store in `api.stores` within the chosen radius (haversine in SQL).
 | `RAW_STORE_URL` | pipeline | `file://./data/raw` locally, `s3://<bucket>/raw` in prod |
 | `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` | pipeline | B2 S3 API |
 | `SALLING_API_KEY` | pipeline | Salling Group developer API |
+| `SALLING_FOOD_WASTE_MAX_CALLS` | pipeline | default 25 – Salling requests per `salling-food-waste` run |
 | `REGION_CENTERS` | pipeline | `lat,lon;lat,lon` – where detailed food-waste is kept |
 | `REGION_RADIUS_KM` | pipeline | default 30 |
 | `HEALTHCHECKS_URL_<JOB>` | pipeline | optional ping URLs per job |

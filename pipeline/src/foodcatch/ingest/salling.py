@@ -6,7 +6,9 @@ Dispatch on ``payload.endpoint``:
 * ``stores`` - upsert ``store`` on ``(source, source_store_id)``; chain via
   ``chain.salling_brand``; coordinates are ``[lon, lat]``; hours/attributes are not kept.
   Stores outside Denmark or of an unmapped brand are skipped (counted).
-* ``food-waste`` - the response's ``store`` is upserted as above. Then, for **all** stores:
+* ``food-waste`` (one store) and ``food-waste-geo`` (a list of the same objects, one per store
+  near the query point; each element is ingested exactly like a ``food-waste`` response) - the
+  response's ``store`` is upserted as above. Then, for **all** stores:
 
   - ``product`` is upserted on ``ean`` = ``product.ean`` (never ``offer.ean``, which is the
     clearance-label code) with ``name`` = the abbreviated description and ``source_category`` =
@@ -61,6 +63,7 @@ from foodcatch.ingest import IngestResult, RawPayload
 from foodcatch.sources import SourceSchemaError
 from foodcatch.sources.salling import (
     ENDPOINT_FOOD_WASTE,
+    ENDPOINT_FOOD_WASTE_GEO,
     ENDPOINT_STORES,
     Clearance,
     FoodWasteResponse,
@@ -79,6 +82,7 @@ type NetUnit = Literal["kg", "l", "stk"]
 
 _STORES = TypeAdapter(list[SallingStore])
 _FOOD_WASTE = TypeAdapter(FoodWasteResponse)
+_FOOD_WASTE_GEO = TypeAdapter(list[FoodWasteResponse])
 
 
 class UnknownEndpointError(ValueError):
@@ -186,7 +190,8 @@ def ingest_payload(conn: Connection, payload: RawPayload, *, settings: Settings)
 
     Raises:
         SourceSchemaError: if the body does not match the endpoint's model.
-        UnknownEndpointError: for an endpoint other than ``stores`` / ``food-waste``.
+        UnknownEndpointError: for an endpoint other than ``stores``, ``food-waste`` and
+            ``food-waste-geo``.
     """
     try:
         if payload.endpoint == ENDPOINT_STORES:
@@ -195,6 +200,9 @@ def ingest_payload(conn: Connection, payload: RawPayload, *, settings: Settings)
         if payload.endpoint == ENDPOINT_FOOD_WASTE:
             response = _FOOD_WASTE.validate_json(payload.body)
             return ingest_food_waste(conn, payload, response, settings=settings)
+        if payload.endpoint == ENDPOINT_FOOD_WASTE_GEO:
+            responses = _FOOD_WASTE_GEO.validate_json(payload.body)
+            return ingest_food_waste_geo(conn, payload, responses, settings=settings)
     except ValidationError as exc:
         raise SourceSchemaError(
             f"salling/{payload.endpoint}: raw object {payload.raw_object_id} does not match the "
@@ -292,7 +300,8 @@ def _observed_at(conn: Connection, payload: RawPayload) -> datetime:
     return started_at if started_at is not None else payload.fetched_at
 
 
-def _valid(clearance: Clearance) -> bool:
+def is_valid_clearance(clearance: Clearance) -> bool:
+    """Whether a clearance is ingested (non-negative prices, a period, a product name)."""
     offer = clearance.offer
     return (
         offer.new_price >= 0
@@ -590,7 +599,7 @@ def ingest_food_waste(
         return IngestResult(counts=counts)
     chain_id = _chains_by_brand(conn)[response.store.brand.lower()]
 
-    clearances = [c for c in response.clearances if _valid(c)]
+    clearances = [c for c in response.clearances if is_valid_clearance(c)]
     counts["clearances"] += len(clearances)
     counts["clearances_invalid"] += len(response.clearances) - len(clearances)
 
@@ -626,3 +635,29 @@ def ingest_food_waste(
     counts["clearances_in_region"] += len(rows)
     listing_ids = upsert_listings(conn, rows, counts)
     return IngestResult(records=len(clearances), listing_ids=listing_ids, counts=counts)
+
+
+def ingest_food_waste_geo(
+    conn: Connection,
+    payload: RawPayload,
+    responses: Sequence[FoodWasteResponse],
+    *,
+    settings: Settings,
+) -> IngestResult:
+    """Ingest one ``GET /v1/food-waste/?geo=..`` response: each store as by
+    :func:`ingest_food_waste`.
+
+    A store listed twice in the same response is ingested once (the first occurrence). A store
+    contained in several responses of one run is ingested once per response; ingest is
+    idempotent, so only the counters (``records``, ``clearances``, ``listings_unchanged``, ...)
+    count it again.
+    """
+    result = IngestResult()
+    seen: set[str] = set()
+    for response in responses:
+        if response.store.id in seen:
+            result.counts["stores_duplicated"] += 1
+            continue
+        seen.add(response.store.id)
+        result.merge(ingest_food_waste(conn, payload, response, settings=settings))
+    return result
