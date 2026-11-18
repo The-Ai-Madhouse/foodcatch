@@ -204,3 +204,223 @@ export function formatRelative(value: Date | string, now: Date = new Date()): st
   const text = `${amount} ${amount === 1 ? singular : plural}`;
   return seconds < 0 ? `for ${text} siden` : `om ${text}`;
 }
+
+const compactFormats = new Map<number, Intl.NumberFormat>();
+
+/** A number with at most `maxDecimals` decimals and no trailing zeros: `1.450` -> `"1,45"`. */
+export function formatCompact(value: number, maxDecimals = 3): string {
+  let fmt = compactFormats.get(maxDecimals);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat("da-DK", { maximumFractionDigits: maxDecimals });
+    compactFormats.set(maxDecimals, fmt);
+  }
+  return fmt.format(value);
+}
+
+/** A range of formatted values; collapses to one value when both ends read the same. */
+function formatRange(lo: string, hi: string, suffix: string): string {
+  return lo === hi ? `${lo}${NBSP}${suffix}` : `${lo}–${hi}${NBSP}${suffix}`;
+}
+
+/**
+ * A pack size in its natural unit (docs/ui.md §5.3): grams/millilitres below 1 kg/l, otherwise
+ * kg/l with up to three decimals, pieces as "stk.". `(0.25, 0.4, "kg")` -> `"250–400 g"`.
+ * Returns null when no size is known.
+ */
+export function formatQuantity(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  unit: string | null | undefined,
+): string | null {
+  const lo = min ?? max;
+  const hi = max ?? min;
+  if (lo == null || hi == null || !Number.isFinite(lo) || !Number.isFinite(hi) || hi <= 0) {
+    return null;
+  }
+  if (unit === "kg" || unit === "l") {
+    if (hi < 1) {
+      const small = unit === "kg" ? "g" : "ml";
+      return formatRange(formatCompact(lo * 1000, 0), formatCompact(hi * 1000, 0), small);
+    }
+    return formatRange(formatCompact(lo), formatCompact(hi), unit);
+  }
+  if (unit === "stk") return formatRange(formatCompact(lo, 2), formatCompact(hi, 2), "stk.");
+  if (!unit) return null;
+  return formatRange(formatCompact(lo), formatCompact(hi), unit);
+}
+
+/** Where a shown pack size comes from; decides whether a unit price may be shown next to it. */
+export type PackSizeOrigin =
+  /** The source states it (Tjek quantity, size in the Salling name). */
+  | "source"
+  /** Parsed from REMA 1000's description ("400 GR. / …"). */
+  | "description"
+  /** Computed from price and compare price (approximate, shown with "ca."). */
+  | "computed"
+  /** Open Food Facts (crowd-sourced; never used for a unit price). */
+  | "off"
+  /** Sold by weight. */
+  | "variable"
+  | "unknown";
+
+export interface PackSize {
+  text: string;
+  origin: PackSizeOrigin;
+}
+
+export interface PackSizeInput {
+  unit: string | null;
+  sizeMin: number | null;
+  sizeMax: number | null;
+  /** Listing source: `tjek`, `rema` or `salling_food_waste`. */
+  source?: string | null;
+  /** Source description (REMA 1000: `"400 GR. / REMA 1000"`). */
+  description?: string | null;
+  /** Food waste: `kg` when sold by weight. */
+  stockUnit?: string | null;
+  /** Open Food Facts quantity of the product (food waste only). */
+  offNetQuantity?: number | null;
+  offNetUnit?: string | null;
+  offQuantityText?: string | null;
+}
+
+const REMA_SIZE = /^(\d+(?:[.,]\d+)?)\s*(GR|KG|ML|CL|LTR|L|STK)\.?(?=\s|\/|$)/i;
+
+const REMA_UNITS: Readonly<Record<string, [number, string]>> = {
+  GR: [0.001, "kg"],
+  KG: [1, "kg"],
+  ML: [0.001, "l"],
+  CL: [0.01, "l"],
+  LTR: [1, "l"],
+  L: [1, "l"],
+  STK: [1, "stk"],
+};
+
+/** The pack size stated in a REMA 1000 description (`"1 LTR. / ARLA"` -> `"1 l"`), or null. */
+export function parseRemaSize(description: string | null | undefined): string | null {
+  const head = description?.split(" / ")[0]?.trim();
+  const match = head ? REMA_SIZE.exec(head) : null;
+  if (!match?.[1] || !match[2]) return null;
+  const conversion = REMA_UNITS[match[2].toUpperCase()];
+  if (!conversion) return null;
+  const value = Number(match[1].replace(",", ".")) * conversion[0];
+  return formatQuantity(value, value, conversion[1]);
+}
+
+export const UNKNOWN_SIZE_TEXT = "Vægt ukendt";
+
+/**
+ * The pack size to show for an offer, shelf price or clearance, and where it comes from
+ * (docs/ui.md §5.3). Never a guess: "Vægt ukendt" when nothing is known.
+ */
+export function packSize(input: PackSizeInput): PackSize {
+  const stated = formatQuantity(input.sizeMin, input.sizeMax, input.unit);
+  if (input.source === "rema") {
+    const parsed = parseRemaSize(input.description);
+    if (parsed) return { text: parsed, origin: "description" };
+    if (stated) return { text: `ca. ${stated}`, origin: "computed" };
+    return { text: UNKNOWN_SIZE_TEXT, origin: "unknown" };
+  }
+  if (stated) return { text: stated, origin: "source" };
+  if (input.source === "salling_food_waste") {
+    // A product sold by weight has no fixed pack size, whatever Open Food Facts says.
+    if (input.stockUnit === "kg") return { text: "Vægt varierer", origin: "variable" };
+    const off =
+      formatQuantity(input.offNetQuantity, input.offNetQuantity, input.offNetUnit) ??
+      (input.offQuantityText?.trim() || null);
+    if (off) return { text: `${off} ifølge Open Food Facts`, origin: "off" };
+  }
+  return { text: UNKNOWN_SIZE_TEXT, origin: "unknown" };
+}
+
+/** The pack-size text of {@link packSize}. */
+export function formatPackSize(input: PackSizeInput): string {
+  return packSize(input).text;
+}
+
+/**
+ * A product name in sentence case when the source shouts it (Salling: `"HK GRIS 3-7%
+ * MESTERHAKKET"` -> `"Hk gris 3-7% mesterhakket"`). Names that already contain lower-case
+ * letters are kept as they are.
+ */
+export function displayTitle(title: string): string {
+  const trimmed = title.trim();
+  if (trimmed !== trimmed.toLocaleUpperCase("da-DK")) return trimmed;
+  const lower = trimmed.toLocaleLowerCase("da-DK");
+  return lower.charAt(0).toLocaleUpperCase("da-DK") + lower.slice(1);
+}
+
+/** The Copenhagen wall-clock time: `"13.37"`. */
+export function formatClock(value: Date | string): string {
+  const p = copenhagenParts(value);
+  return `${pad2(p.hour)}.${pad2(p.minute)}`;
+}
+
+const dayKey = (p: CopenhagenParts): number => Date.UTC(p.year, p.month - 1, p.day);
+
+/** Calendar days from `now` to `value` in Copenhagen (0 = today, 1 = tomorrow, -1 = yesterday). */
+export function daysFromToday(value: Date | string, now: Date): number {
+  return Math.round((dayKey(copenhagenParts(value)) - dayKey(copenhagenParts(now))) / 86_400_000);
+}
+
+/**
+ * When a clearance ends: `"til i dag"`, `"til i morgen"` or `"til tors. 20. nov."`, with the time
+ * only when it is not the end of the day (`"til i dag kl. 18.00"`).
+ */
+export function formatEnd(value: Date | string, now: Date): string {
+  const end = displayEnd(value);
+  const p = copenhagenParts(end);
+  const days = daysFromToday(end, now);
+  const day = days === 0 ? "i dag" : days === 1 ? "i morgen" : formatDayDate(end);
+  const endOfDay = p.hour === 23 && p.minute === 59;
+  return endOfDay ? `til ${day}` : `til ${day} kl.${NBSP}${formatClock(end)}`;
+}
+
+/** Stock left: `"1 stk. tilbage"`, `"1,96 kg tilbage"`. */
+export function formatStock(stock: number | null, stockUnit: string | null): string | null {
+  if (stock == null || !Number.isFinite(stock)) return null;
+  const unit = stockUnit === "kg" ? "kg" : "stk.";
+  return `${formatCompact(stock, 2)}${NBSP}${unit} tilbage`;
+}
+
+/**
+ * A compact validity period for cards: `"lør. 14.–fre. 20. nov."` within one month,
+ * `"fre. 28. nov.–tors. 4. dec."` across months. The end is shown as its last day.
+ */
+export function formatShortPeriod(
+  from: Date | string | null | undefined,
+  to: Date | string | null | undefined,
+): string {
+  if (from && to) {
+    const end = displayEnd(to);
+    const a = copenhagenParts(from);
+    const b = copenhagenParts(end);
+    if (a.year === b.year && a.month === b.month) {
+      if (a.day === b.day) return formatDayDate(from);
+      return `${WEEKDAYS[a.weekday]} ${a.day}.–${formatDayDate(end)}`;
+    }
+    return `${formatDayDate(from)}–${formatDayDate(end)}`;
+  }
+  return formatPeriod(from, to);
+}
+
+const MONTH_NAMES = [
+  "januar",
+  "februar",
+  "marts",
+  "april",
+  "maj",
+  "juni",
+  "juli",
+  "august",
+  "september",
+  "oktober",
+  "november",
+  "december",
+] as const;
+
+/** A month heading: `"november 2026"`. */
+export function formatMonth(value: Date | string): string {
+  const p = copenhagenParts(value);
+  return `${MONTH_NAMES[p.month - 1]} ${p.year}`;
+}

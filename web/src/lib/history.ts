@@ -28,6 +28,17 @@ export interface PriceHistoryRow {
   priceApplies: boolean;
   /** Only members get this price (e.g. Netto+, Coop members). */
   memberOnly: boolean;
+  /** `tjek`, `rema` or `salling_food_waste`. */
+  source: string | null;
+  sourceItemId: string | null;
+  catalogId: string | null;
+  /** Store of a food-waste clearance (null for chain-wide prices). */
+  storeId: string | null;
+  /** Pack price. */
+  price: number | null;
+  description: string | null;
+  sizeMin: number | null;
+  sizeMax: number | null;
 }
 
 export type SeriesKey = "netto_offer" | "other_offer" | "regular";

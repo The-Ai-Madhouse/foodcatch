@@ -81,3 +81,74 @@ export function parseLocationCookie(value: string | null | undefined): UserLocat
   }
   return { lat, lon, label: sanitizeLabel(label), radiusKm: clampRadius(r), isDefault: false };
 }
+
+/** localStorage key of the client-side backup of the location (docs/ui.md §5.1). */
+export const LOCATION_STORAGE_KEY = "foodcatch.location.v1";
+
+/** Label of a location taken from the browser's geolocation. */
+export const MY_POSITION_LABEL = "Min position";
+
+/** The location as kept in localStorage (and as returned by the location actions). */
+export interface StoredLocation {
+  lat: number;
+  lon: number;
+  label: string;
+  r: number;
+  savedAt: string;
+}
+
+/**
+ * Validate a stored location (a JSON string or an already parsed value) with the cookie's rules.
+ * Returns null for anything malformed; never throws.
+ */
+export function parseStoredLocation(value: unknown): StoredLocation | null {
+  let data = value;
+  if (typeof value === "string") {
+    try {
+      data = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
+  const { savedAt } = data as Record<string, unknown>;
+  const parsed = parseLocationCookie(JSON.stringify(data));
+  if (!parsed) return null;
+  const savedAtMs = typeof savedAt === "string" ? Date.parse(savedAt) : Number.NaN;
+  return {
+    lat: Math.round(parsed.lat * 1e5) / 1e5,
+    lon: Math.round(parsed.lon * 1e5) / 1e5,
+    label: parsed.label,
+    r: parsed.radiusKm,
+    savedAt: Number.isFinite(savedAtMs)
+      ? new Date(savedAtMs).toISOString()
+      : new Date(0).toISOString(),
+  };
+}
+
+/** The stored form of a location. */
+export function toStoredLocation(
+  loc: Pick<UserLocation, "lat" | "lon" | "label" | "radiusKm">,
+  now: Date,
+): StoredLocation {
+  const parsed = parseStoredLocation({
+    ...JSON.parse(serializeLocation(loc)),
+    savedAt: now.toISOString(),
+  });
+  if (!parsed) throw new RangeError("Invalid location");
+  return parsed;
+}
+
+/** Whether two locations show the same place, label and radius (ignores `savedAt`). */
+export function sameStoredLocation(
+  a: Pick<StoredLocation, "lat" | "lon" | "label" | "r"> | null,
+  b: Pick<StoredLocation, "lat" | "lon" | "label" | "r"> | null,
+): boolean {
+  if (!a || !b) return a === b;
+  return (
+    Math.abs(a.lat - b.lat) < 1e-5 &&
+    Math.abs(a.lon - b.lon) < 1e-5 &&
+    a.label === b.label &&
+    a.r === b.r
+  );
+}

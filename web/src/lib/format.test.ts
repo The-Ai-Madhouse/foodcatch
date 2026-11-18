@@ -13,6 +13,17 @@ import {
   formatRelative,
   formatUnitPrice,
   formatUnitPriceRange,
+  daysFromToday,
+  displayTitle,
+  formatClock,
+  formatEnd,
+  formatMonth,
+  formatPackSize,
+  formatQuantity,
+  formatShortPeriod,
+  formatStock,
+  packSize,
+  parseRemaSize,
 } from "./format";
 
 // Tests compare with plain spaces; the formatter uses non-breaking spaces.
@@ -130,5 +141,162 @@ describe("formatRelative", () => {
   it("describes the future", () => {
     expect(formatRelative("2026-11-20T12:00:00Z", now)).toBe("om 2 dage");
     expect(formatRelative("2026-11-18T13:00:00Z", now)).toBe("om 1 time");
+  });
+});
+
+describe("formatQuantity", () => {
+  it("shows grams and millilitres below 1 kg / 1 l", () => {
+    expect(plain(formatQuantity(0.3, 0.3, "kg"))).toBe("300 g");
+    expect(plain(formatQuantity(0.25, 0.4, "kg"))).toBe("250–400 g");
+    expect(plain(formatQuantity(0.5, 0.5, "l"))).toBe("500 ml");
+    expect(plain(formatQuantity(0.25, 0.33, "l"))).toBe("250–330 ml");
+  });
+
+  it("shows kg and l from 1 with up to three decimals", () => {
+    expect(plain(formatQuantity(1, 1, "kg"))).toBe("1 kg");
+    expect(plain(formatQuantity(0.8, 1.45, "kg"))).toBe("0,8–1,45 kg");
+    expect(plain(formatQuantity(1.5, 1.5, "l"))).toBe("1,5 l");
+    expect(plain(formatQuantity(1.2345, 1.2345, "kg"))).toBe("1,235 kg");
+  });
+
+  it("shows pieces", () => {
+    expect(plain(formatQuantity(8, 8, "stk"))).toBe("8 stk.");
+    expect(plain(formatQuantity(6, 10, "stk"))).toBe("6–10 stk.");
+  });
+
+  it("collapses equal ends and fills a missing end", () => {
+    expect(plain(formatQuantity(0.3, null, "kg"))).toBe("300 g");
+    expect(plain(formatQuantity(0.3001, 0.2999, "kg"))).toBe("300 g");
+  });
+
+  it("returns null without a usable size", () => {
+    expect(formatQuantity(null, null, "kg")).toBeNull();
+    expect(formatQuantity(0, 0, "kg")).toBeNull();
+    expect(formatQuantity(1, 1, null)).toBeNull();
+    expect(formatQuantity(Number.NaN, 1, "kg")).toBeNull();
+  });
+});
+
+describe("packSize", () => {
+  const tjek = { unit: "kg", sizeMin: 0.3, sizeMax: 0.3, source: "tjek" };
+
+  it("uses the size the source states", () => {
+    expect(plain(formatPackSize(tjek))).toBe("300 g");
+    expect(packSize(tjek).origin).toBe("source");
+  });
+
+  it("parses REMA 1000's description, else marks the computed size as approximate", () => {
+    expect(parseRemaSize("400 GR. / REMA 1000")).toBe("400\u00a0g");
+    expect(plain(parseRemaSize("1 LTR. / GRAM SLOT, ØKOLOGISK"))).toBe("1 l");
+    expect(plain(parseRemaSize("1 KG. / YOGGI"))).toBe("1 kg");
+    expect(plain(parseRemaSize("33 CL / FAXE"))).toBe("330 ml");
+    expect(plain(parseRemaSize("10 STK. / HEDEGAARD"))).toBe("10 stk.");
+    expect(plain(parseRemaSize("1,5 KG / X"))).toBe("1,5 kg");
+    expect(parseRemaSize("6 X 330 ML / FAXE")).toBeNull();
+    expect(parseRemaSize("2 MTR. / X")).toBeNull();
+    expect(parseRemaSize(null)).toBeNull();
+
+    const rema = { unit: "kg", sizeMin: 0.28498, sizeMax: 0.28498, source: "rema" };
+    expect(plain(formatPackSize({ ...rema, description: "285 GR. / EASIS" }))).toBe("285 g");
+    expect(packSize({ ...rema, description: "285 GR. / EASIS" }).origin).toBe("description");
+    expect(plain(formatPackSize({ ...rema, description: "SÆT / X" }))).toBe("ca. 285 g");
+    expect(packSize({ ...rema, description: null }).origin).toBe("computed");
+  });
+
+  const waste = {
+    unit: null,
+    sizeMin: null,
+    sizeMax: null,
+    source: "salling_food_waste",
+    stockUnit: "each",
+  };
+
+  it("uses a food-waste size from the Salling name first", () => {
+    expect(plain(formatPackSize({ ...waste, unit: "kg", sizeMin: 0.25, sizeMax: 0.25 }))).toBe(
+      "250 g",
+    );
+  });
+
+  it("says when the weight varies, whatever Open Food Facts says", () => {
+    expect(
+      formatPackSize({ ...waste, stockUnit: "kg", offNetQuantity: 0.5, offNetUnit: "kg" }),
+    ).toBe("Vægt varierer");
+  });
+
+  it("falls back to Open Food Facts, marked as such", () => {
+    const off = packSize({ ...waste, offNetQuantity: 1, offNetUnit: "kg" });
+    expect(plain(off.text)).toBe("1 kg ifølge Open Food Facts");
+    expect(off.origin).toBe("off");
+    expect(formatPackSize({ ...waste, offQuantityText: "4 x 125 g" })).toBe(
+      "4 x 125 g ifølge Open Food Facts",
+    );
+  });
+
+  it("never guesses", () => {
+    expect(packSize(waste)).toEqual({ text: "Vægt ukendt", origin: "unknown" });
+    expect(packSize({ unit: "kg", sizeMin: null, sizeMax: null, source: "tjek" }).text).toBe(
+      "Vægt ukendt",
+    );
+  });
+});
+
+describe("displayTitle", () => {
+  it("puts shouted names in sentence case", () => {
+    expect(displayTitle("HK GRIS 3-7% MESTERHAKKET")).toBe("Hk gris 3-7% mesterhakket");
+    expect(displayTitle("ØKO FRAICHE 9% LØGISMOSE")).toBe("Øko fraiche 9% løgismose");
+  });
+
+  it("keeps names that already use lower case", () => {
+    expect(displayTitle("Øko yoghurt naturel Løgismose")).toBe("Øko yoghurt naturel Løgismose");
+  });
+});
+
+describe("clearance dates", () => {
+  const now = new Date("2026-11-18T12:00:00Z");
+
+  it("counts Copenhagen calendar days", () => {
+    expect(daysFromToday("2026-11-18T22:59:00Z", now)).toBe(0);
+    expect(daysFromToday("2026-11-18T23:30:00Z", now)).toBe(1);
+    expect(daysFromToday("2026-11-17T12:00:00Z", now)).toBe(-1);
+  });
+
+  it("says today, tomorrow or the day, and the time only when it is not the end of the day", () => {
+    expect(formatEnd("2026-11-18T22:59:00Z", now)).toBe("til i dag");
+    expect(formatEnd("2026-11-18T22:59:59Z", now)).toBe("til i dag");
+    expect(formatEnd("2026-11-19T22:59:59Z", now)).toBe("til i morgen");
+    expect(formatEnd("2026-11-21T22:59:59Z", now)).toBe("til lør. 21. nov.");
+    expect(plain(formatEnd("2026-11-18T17:00:00Z", now))).toBe("til i dag kl. 18.00");
+    // An exclusive end at Copenhagen midnight is the end of the day before.
+    expect(formatEnd("2026-11-19T23:00:00Z", now)).toBe("til i morgen");
+  });
+
+  it("formats the clock and the month", () => {
+    expect(formatClock("2026-11-18T12:37:00Z")).toBe("13.37");
+    expect(formatMonth("2026-11-01T00:30:00Z")).toBe("november 2026");
+  });
+
+  it("formats stock", () => {
+    expect(plain(formatStock(1, "each"))).toBe("1 stk. tilbage");
+    expect(plain(formatStock(1.96, "kg"))).toBe("1,96 kg tilbage");
+    expect(formatStock(null, "each")).toBeNull();
+  });
+});
+
+describe("formatShortPeriod", () => {
+  it("shortens a period within one month", () => {
+    expect(formatShortPeriod("2026-11-13T23:00:00Z", "2026-11-20T22:59:59Z")).toBe(
+      "lør. 14.–fre. 20. nov.",
+    );
+  });
+
+  it("spells out both months across a month", () => {
+    expect(formatShortPeriod("2026-11-27T23:00:00Z", "2026-12-04T22:59:59Z")).toBe(
+      "lør. 28. nov.–fre. 4. dec.",
+    );
+  });
+
+  it("handles one day and open ends", () => {
+    expect(formatShortPeriod("2026-11-17T23:00:00Z", "2026-11-18T22:59:59Z")).toBe("ons. 18. nov.");
+    expect(formatShortPeriod("2026-11-17T23:00:00Z", null)).toBe("fra ons. 18. nov.");
   });
 });

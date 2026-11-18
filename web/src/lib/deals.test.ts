@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   type DealRow,
-  countByStatus,
+  cheaperByChain,
+  cleanClassLabel,
   evaluateDeals,
-  explainStatus,
-  filterDeals,
-  groupDeals,
+  filterListings,
+  groupByListing,
+  groupListings,
   memberPriceLabel,
   parseDealFilter,
   parseReferences,
+  referenceListingIds,
   referenceViews,
   unitPriceWord,
+  verdictBadgeLabel,
+  verdictReason,
 } from "./deals";
 
 function row(overrides: Partial<DealRow> = {}): DealRow {
@@ -40,6 +44,12 @@ function row(overrides: Partial<DealRow> = {}): DealRow {
       { kind: "regular", chain_id: "rema1000", unit_price: 49.9 },
     ],
     memberOnly: false,
+    source: "tjek",
+    sourceItemId: "quPV2BQEWPxpWQGWNTYwj",
+    catalogId: "40K-WXWp",
+    sizeMin: 0.3,
+    sizeMax: 0.3,
+    maxPerCustomer: null,
     ...overrides,
   };
 }
@@ -116,98 +126,6 @@ describe("evaluateDeals", () => {
   });
 });
 
-describe("filtering and grouping", () => {
-  const deals = evaluateDeals(
-    [
-      row(),
-      row({
-        listingId: "2",
-        title: "Hakket oksekød 14-18%",
-        typeId: "hakket_oksekød",
-        typeLabel: "Hakket oksekød",
-        nettoUnitPriceWorst: 72,
-        nettoUnitPriceBest: 54,
-        references: [{ kind: "offer", chain_id: "meny", unit_price: 49.9 }],
-      }),
-      row({
-        listingId: "3",
-        title: "Æg 10 stk",
-        typeId: "æg",
-        typeLabel: "Æg",
-        groupName: "Æg",
-        unit: "stk",
-      }),
-      row({
-        listingId: "4",
-        title: "Skyr",
-        typeId: "skyr",
-        typeLabel: "Skyr",
-        groupName: "Mejeri",
-      }),
-      row({ listingId: "5", groupName: "Snacks", typeId: "x", typeLabel: "X", isExact: false }),
-    ],
-    ["superbrugsen", "meny"],
-  );
-
-  it("filters good deals by default", () => {
-    expect(parseDealFilter(undefined)).toBe("gode");
-    expect(parseDealFilter("alle")).toBe("alle");
-    expect(parseDealFilter(["alle"])).toBe("gode");
-    expect(filterDeals(deals, "gode").map((d) => d.listingId)).toEqual([
-      "00000000-0000-0000-0000-000000000001",
-      "3",
-      "4",
-    ]);
-    expect(filterDeals(deals, "alle")).toHaveLength(5);
-  });
-
-  it("groups in shopping order, unknown groups last", () => {
-    const groups = groupDeals(deals);
-    expect(groups.map((g) => g.groupName)).toEqual(["Kød", "Æg", "Mejeri", "Snacks"]);
-    expect(groups[0]?.types.map((t) => t.typeLabel)).toEqual(["Hakket grisekød", "Hakket oksekød"]);
-  });
-
-  it("counts statuses", () => {
-    const counts = countByStatus(deals);
-    expect(counts.good_deal).toBe(3);
-    expect(counts.cheaper_elsewhere).toBe(1);
-    expect(counts.not_exact).toBe(1);
-    expect(counts.pending).toBe(0);
-  });
-});
-
-describe("explanations", () => {
-  const plain = (s: string) => s.replace(/ /g, " ");
-
-  it("explains a good deal with prices", () => {
-    const [deal] = evaluateDeals([row()], ["superbrugsen"]);
-    expect(plain(explainStatus(deal!))).toBe(
-      "Nettos højeste kilopris (33,33 kr./kg) er lig med eller lavere end den billigste sammenligning (39,00 kr./kg).",
-    );
-  });
-
-  it("uses the right unit word", () => {
-    expect(unitPriceWord("l")).toBe("literpris");
-    expect(unitPriceWord("stk")).toBe("stykpris");
-    expect(unitPriceWord(null)).toBe("kilopris");
-  });
-
-  it("has an explanation for every status", () => {
-    const statuses = [
-      row({ nettoUnitPriceWorst: null }),
-      row({ priceApplies: false }),
-      row({ isExact: false }),
-      row({ references: [] }),
-      row({ nettoUnitPriceWorst: 60, nettoUnitPriceBest: 30 }),
-      row({ nettoUnitPriceWorst: 60, nettoUnitPriceBest: 50 }),
-      row({ priceApplies: null }),
-      row(),
-    ];
-    const texts = evaluateDeals(statuses, ["superbrugsen"]).map(explainStatus);
-    expect(new Set(texts).size).toBe(statuses.length);
-  });
-});
-
 describe("referenceViews", () => {
   it("sorts by price and marks counted and cheapest references", () => {
     const [deal] = evaluateDeals(
@@ -233,14 +151,219 @@ describe("referenceViews", () => {
   });
 });
 
-describe("member prices", () => {
-  it("a marked Netto member price can be a good deal and says so", () => {
-    const [deal] = evaluateDeals([row({ memberOnly: true })], ["superbrugsen", "rema1000"]);
-    expect(deal?.status).toBe("good_deal");
-    expect(deal && explainStatus(deal)).toContain("medlemspris og gælder kun med Netto+");
+describe("listings, filtering and grouping", () => {
+  const deals = evaluateDeals(
+    [
+      row(),
+      row({
+        listingId: "2",
+        title: "Hakket oksekød 14-18%",
+        typeId: "hakket_oksekød",
+        typeLabel: "Hakket oksekød",
+        nettoUnitPriceWorst: 72,
+        nettoUnitPriceBest: 54,
+        references: [{ kind: "offer", chain_id: "meny", unit_price: 49.9 }],
+      }),
+      row({ listingId: "3", title: "Æg 10 stk", typeId: "æg", groupName: "Æg", unit: "stk" }),
+      row({ listingId: "4", title: "Skyr", typeId: "skyr", groupName: "Mejeri" }),
+      row({ listingId: "5", groupName: "Snacks", typeId: "x", typeLabel: "X", isExact: false }),
+      // One offer, two recognised variants with different verdicts.
+      row({
+        listingId: "6",
+        variantIndex: 0,
+        title: "Yoghurt naturel eller græsk",
+        groupName: "Mejeri",
+        classLabel: "Yoghurt, naturel, fedt?",
+        isExact: false,
+      }),
+      row({
+        listingId: "6",
+        variantIndex: 1,
+        title: "Yoghurt naturel eller græsk",
+        groupName: "Mejeri",
+        classLabel: "Græsk yoghurt, 10%",
+      }),
+    ],
+    ["superbrugsen", "meny"],
+  );
+  const listings = groupByListing(deals);
+
+  it("makes one entry per listing with the best variant first", () => {
+    expect(listings).toHaveLength(6);
+    const yoghurt = listings.find((l) => l.listingId === "6");
+    expect(yoghurt?.variants.map((v) => v.variantIndex)).toEqual([1, 0]);
+    expect(yoghurt?.status).toBe("good_deal");
+    expect(yoghurt?.offer.variantIndex).toBe(0);
   });
 
-  it("a competitor member price counts and the plain explanation has no member note", () => {
+  it("filters good deals by default; a listing counts if any variant is good", () => {
+    expect(parseDealFilter(undefined)).toBe("gode");
+    expect(parseDealFilter("alle")).toBe("alle");
+    expect(parseDealFilter(["alle"])).toBe("gode");
+    expect(filterListings(listings, "gode").map((l) => l.listingId)).toEqual([
+      "00000000-0000-0000-0000-000000000001",
+      "3",
+      "4",
+      "6",
+    ]);
+    expect(filterListings(listings, "alle")).toHaveLength(6);
+  });
+
+  it("groups in shopping order, unknown groups last, good deals first within a group", () => {
+    const groups = groupListings(listings);
+    expect(groups.map((g) => g.groupName)).toEqual(["Kød", "Æg", "Mejeri", "Snacks"]);
+    expect(groups[0]?.listings.map((l) => l.offer.title)).toEqual([
+      "Hakket grisekød 8-12%",
+      "Hakket oksekød 14-18%",
+    ]);
+    expect(groups[2]?.listings.map((l) => l.offer.title)).toEqual([
+      "Skyr",
+      "Yoghurt naturel eller græsk",
+    ]);
+  });
+});
+
+describe("cleanClassLabel", () => {
+  it("drops attributes the matcher could not determine", () => {
+    expect(cleanClassLabel("Kyllingebryst(filet), tilsat vand?")).toBe("Kyllingebryst(filet)");
+    expect(cleanClassLabel("Yoghurt, naturel, fedt?, økologisk")).toBe(
+      "Yoghurt, naturel, økologisk",
+    );
+    expect(cleanClassLabel("Hakket grisekød, 8-12%")).toBe("Hakket grisekød, 8-12%");
+  });
+});
+
+describe("verdictReason", () => {
+  const plain = (s: string) => s.replace(/ /g, " ");
+  const nearby = new Set(["superbrugsen", "rema1000"]);
+  const distances: Record<string, number> = { superbrugsen: 0.33, rema1000: 1.25 };
+  const km = (chainId: string) => distances[chainId] ?? null;
+
+  it("names the runner-up of a good deal", () => {
+    const [deal] = evaluateDeals([row()], nearby);
+    expect(plain(verdictReason(deal!, nearby, km))).toBe(
+      "Billigst i nærheden. Næstbedst: SuperBrugsen 39,00 kr./kg",
+    );
+  });
+
+  it("names the cheaper chain and its distance", () => {
+    const [deal] = evaluateDeals(
+      [row({ nettoUnitPriceWorst: 60, nettoUnitPriceBest: 50 })],
+      nearby,
+    );
+    expect(deal?.status).toBe("cheaper_elsewhere");
+    expect(plain(verdictReason(deal!, nearby, km))).toBe(
+      "SuperBrugsen har den til 39,00 kr./kg (330 m)",
+    );
+  });
+
+  it("explains an undecided deal by the pack size", () => {
+    const [deal] = evaluateDeals(
+      [row({ nettoUnitPriceWorst: 60, nettoUnitPriceBest: 30 })],
+      nearby,
+    );
+    expect(plain(verdictReason(deal!, nearby, km))).toBe(
+      "Afhænger af pakningen – SuperBrugsen har 39,00 kr./kg (330 m)",
+    );
+  });
+
+  it("speaks of Netto's own past offers without a distance", () => {
+    const [deal] = evaluateDeals(
+      [
+        row({
+          nettoUnitPriceWorst: 60,
+          nettoUnitPriceBest: 50,
+          references: [{ kind: "history", chain_id: "netto", unit_price: 35 }],
+        }),
+      ],
+      nearby,
+    );
+    expect(plain(verdictReason(deal!, nearby, km))).toBe(
+      "Netto havde den til 35,00 kr./kg i et tidligere tilbud.",
+    );
+  });
+
+  it("has a fixed reason for every other status", () => {
+    const deals = evaluateDeals(
+      [
+        row({ nettoUnitPriceWorst: null }),
+        row({ priceApplies: false }),
+        row({ isExact: false }),
+        row({ references: [] }),
+        row({ priceApplies: null }),
+      ],
+      nearby,
+    );
+    expect(deals.map((d) => verdictReason(d, nearby, km))).toEqual([
+      "Kilden oplyser ikke vægten.",
+      "Prisen dækker flere forskellige varer.",
+      "Tilbuddet oplyser ikke alle egenskaber (fx fedtprocent).",
+      "Ingen butik i nærheden har præcis samme vare.",
+      "Sammenligningen er ikke beregnet endnu.",
+    ]);
+  });
+
+  it("uses the right unit word", () => {
+    expect(unitPriceWord("l")).toBe("literpris");
+    expect(unitPriceWord("stk")).toBe("stykpris");
+    expect(unitPriceWord(null)).toBe("kilopris");
+  });
+});
+
+describe("cheaperByChain", () => {
+  it("lists deals per chain whose cheapest counted price is there", () => {
+    const nearby = new Set(["rema1000", "lidl"]);
+    const deals = evaluateDeals(
+      [
+        row({
+          listingId: "a",
+          title: "B-vare",
+          nettoUnitPriceWorst: 60,
+          nettoUnitPriceBest: 50,
+          references: [
+            { kind: "regular", chain_id: "rema1000", unit_price: 40, listing_id: "r1" },
+            { kind: "offer", chain_id: "lidl", unit_price: 45 },
+          ],
+        }),
+        row({
+          listingId: "b",
+          title: "A-vare",
+          nettoUnitPriceWorst: 60,
+          nettoUnitPriceBest: 30,
+          references: [{ kind: "offer", chain_id: "rema1000", unit_price: 40 }],
+        }),
+        // A good deal is not listed.
+        row({ listingId: "c", references: [{ kind: "offer", chain_id: "lidl", unit_price: 90 }] }),
+        // The cheapest is Netto's own past offer: not "here".
+        row({
+          listingId: "d",
+          nettoUnitPriceWorst: 60,
+          nettoUnitPriceBest: 50,
+          references: [{ kind: "history", chain_id: "netto", unit_price: 20 }],
+        }),
+      ],
+      nearby,
+    );
+    const byChain = cheaperByChain(deals, nearby);
+    expect([...byChain.keys()]).toEqual(["rema1000"]);
+    expect(byChain.get("rema1000")?.map((e) => [e.deal.title, e.deal.status])).toEqual([
+      ["B-vare", "cheaper_elsewhere"],
+      ["A-vare", "undecided"],
+    ]);
+    expect(referenceListingIds(deals)).toEqual(["r1"]);
+  });
+});
+
+describe("member prices", () => {
+  it("a marked Netto member price can be a good deal and the badge says so", () => {
+    const [deal] = evaluateDeals([row({ memberOnly: true })], ["superbrugsen", "rema1000"]);
+    expect(deal?.status).toBe("good_deal");
+    expect(verdictBadgeLabel(deal!.status, deal!.memberOnly)).toBe("Godt køb med Netto+");
+    expect(verdictBadgeLabel("good_deal", false)).toBe("Godt køb");
+    expect(verdictBadgeLabel("undecided", true)).toBe("Uafklaret");
+  });
+
+  it("a competitor member price counts like any other price", () => {
     const [deal] = evaluateDeals(
       [
         row({
@@ -250,13 +373,12 @@ describe("member prices", () => {
       ["kvickly"],
     );
     expect(deal?.status).toBe("cheaper_elsewhere");
-    expect(deal && explainStatus(deal)).not.toContain("medlemspris");
   });
 
   it("labels the membership per chain", () => {
-    expect(memberPriceLabel("netto")).toBe("Medlemspris (Netto+)");
-    expect(memberPriceLabel("superbrugsen")).toBe("Medlemspris (Coop-medlem)");
-    expect(memberPriceLabel("365discount")).toBe("Medlemspris (Coop-medlem)");
+    expect(memberPriceLabel("netto")).toBe("Kræver Netto+");
+    expect(memberPriceLabel("superbrugsen")).toBe("Kræver Coop-medlem");
+    expect(memberPriceLabel("365discount")).toBe("Kræver Coop-medlem");
     expect(memberPriceLabel("lidl")).toBe("Medlemspris");
   });
 });

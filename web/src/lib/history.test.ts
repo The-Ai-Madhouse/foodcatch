@@ -28,6 +28,14 @@ function row(overrides: Partial<PriceHistoryRow> = {}): PriceHistoryRow {
     validTo: "2026-11-22T22:59:59Z",
     priceApplies: true,
     memberOnly: false,
+    source: "tjek",
+    sourceItemId: null,
+    catalogId: null,
+    storeId: null,
+    price: null,
+    description: null,
+    sizeMin: null,
+    sizeMax: null,
     ...overrides,
   };
 }

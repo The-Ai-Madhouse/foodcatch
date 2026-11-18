@@ -6,7 +6,11 @@ import {
   defaultLocation,
   parseCoordinates,
   parseLocationCookie,
+  parseStoredLocation,
+  sameStoredLocation,
   serializeLocation,
+  toStoredLocation,
+  type StoredLocation,
 } from "./location";
 
 describe("parseCoordinates", () => {
@@ -86,5 +90,43 @@ describe("location cookie", () => {
     ]) {
       expect(parseLocationCookie(bad)).toBeNull();
     }
+  });
+});
+
+describe("stored location (localStorage backup)", () => {
+  const entry = {
+    lat: 55.6894,
+    lon: 12.5541,
+    label: "Nørrebrogade 10, 2200 København N",
+    r: 3,
+    savedAt: "2026-11-18T12:00:00.000Z",
+  };
+
+  it("parses a JSON string or an object", () => {
+    expect(parseStoredLocation(JSON.stringify(entry))).toEqual(entry);
+    expect(parseStoredLocation(entry)).toEqual(entry);
+  });
+
+  it("applies the cookie's rules", () => {
+    expect(parseStoredLocation({ ...entry, r: 9 })?.r).toBe(5);
+    expect(parseStoredLocation({ ...entry, savedAt: "nonsense" })?.savedAt).toBe(
+      "1970-01-01T00:00:00.000Z",
+    );
+    for (const bad of [null, "", "{", "[]", 42, { ...entry, lat: 99 }, { ...entry, lon: "12" }]) {
+      expect(parseStoredLocation(bad)).toBeNull();
+    }
+  });
+
+  it("round-trips a location and compares without the time", () => {
+    const stored = toStoredLocation(
+      { lat: 55.68940123, lon: 12.55410123, label: entry.label, radiusKm: 3 },
+      new Date(entry.savedAt),
+    );
+    expect(stored).toEqual(entry);
+    const later: StoredLocation = { ...entry, savedAt: "2027-01-01T00:00:00.000Z" };
+    expect(sameStoredLocation(stored, later)).toBe(true);
+    expect(sameStoredLocation(stored, { ...entry, r: 2 })).toBe(false);
+    expect(sameStoredLocation(null, null)).toBe(true);
+    expect(sameStoredLocation(stored, null)).toBe(false);
   });
 });

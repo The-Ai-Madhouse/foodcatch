@@ -4,8 +4,11 @@ import { connection } from "next/server";
 import type { DealRow } from "@/lib/deals";
 import { parseReferences } from "@/lib/deals";
 import { EARTH_RADIUS_KM, boundingBox, type Coordinates } from "@/lib/geo";
+import type { FoodWasteItem } from "@/lib/foodwaste";
 import type { PriceHistoryRow } from "@/lib/history";
 import type { PipelineRun } from "@/lib/status";
+import type { ReferenceDetail } from "@/lib/deals";
+import { dedupeStores, type NearbyStore } from "@/lib/stores";
 import { db, readOnlyDb } from "./db";
 
 /**
@@ -18,38 +21,6 @@ import { db, readOnlyDb } from "./db";
 
 export interface SearchArea extends Coordinates {
   radiusKm: number;
-}
-
-export interface NearbyChain {
-  chainId: string;
-  chainName: string;
-  /** Store rows within the radius (Salling and Tjek may list the same physical store). */
-  storeCount: number;
-  nearestKm: number;
-}
-
-export interface FoodWasteItem {
-  listingId: string;
-  storeId: string;
-  chainId: string;
-  storeName: string;
-  street: string | null;
-  zip: string | null;
-  city: string | null;
-  distanceKm: number;
-  title: string;
-  ean: string | null;
-  price: number;
-  referencePrice: number | null;
-  discountPct: number | null;
-  unit: string | null;
-  unitPrice: number | null;
-  validTo: string | null;
-  stock: number | null;
-  stockUnit: string | null;
-  typeLabel: string;
-  classLabel: string;
-  isExact: boolean;
 }
 
 export interface ReviewQueueEntry {
@@ -80,25 +51,75 @@ function withinBox(area: SearchArea) {
     AND lon BETWEEN ${box.minLon}::float8 AND ${box.maxLon}::float8`;
 }
 
-/** Chains with at least one store within the radius, nearest first. */
-export async function getNearbyChains(area: SearchArea): Promise<NearbyChain[]> {
+interface StoreSqlRow {
+  id: string;
+  chainId: string;
+  chainName: string;
+  name: string;
+  street: string | null;
+  zip: string | null;
+  city: string | null;
+  lat: number;
+  lon: number;
+  source: string | null;
+  sourceStoreId: string | null;
+  distanceKm: number;
+}
+
+/**
+ * Stores within the radius, one row per physical store (Salling rows for Netto, føtex and
+ * Bilka, Tjek rows otherwise; docs/ui.md §5.5), nearest first.
+ */
+export async function getNearbyStores(area: SearchArea): Promise<NearbyStore[]> {
   await connection();
   const sql = await readOnlyDb();
-  const rows = await sql<
-    { chainId: string; chainName: string; storeCount: number; nearestKm: number }[]
-  >`
-    SELECT chain_id AS "chainId", chain_name AS "chainName",
-           count(*)::int AS "storeCount", min(distance_km)::float8 AS "nearestKm"
-    FROM (
-      SELECT chain_id, chain_name, ${distanceKm(area)} AS distance_km
+  const rows = await sql<StoreSqlRow[]>`
+    SELECT * FROM (
+      SELECT id::text AS id, chain_id AS "chainId", chain_name AS "chainName", name, street, zip,
+             city, lat::float8 AS lat, lon::float8 AS lon, source,
+             source_store_id AS "sourceStoreId", ${distanceKm(area)}::float8 AS "distanceKm"
       FROM api.stores
       WHERE ${withinBox(area)}
     ) s
-    WHERE distance_km <= ${area.radiusKm}::float8
-    GROUP BY chain_id, chain_name
-    ORDER BY min(distance_km), chain_name
+    WHERE "distanceKm" <= ${area.radiusKm}::float8
+    ORDER BY "distanceKm", name
   `;
-  return rows.map((r) => ({ ...r }));
+  return dedupeStores(rows.map((r) => ({ ...r })));
+}
+
+/** The nearest store of a chain regardless of the radius (for "nearest is 6.3 km away"). */
+export async function getNearestStore(
+  center: Coordinates,
+  chainId: string,
+): Promise<NearbyStore | null> {
+  await connection();
+  const sql = await readOnlyDb();
+  const rows = await sql<StoreSqlRow[]>`
+    SELECT id::text AS id, chain_id AS "chainId", chain_name AS "chainName", name, street, zip,
+           city, lat::float8 AS lat, lon::float8 AS lon, source,
+           source_store_id AS "sourceStoreId", ${distanceKm(center)}::float8 AS "distanceKm"
+    FROM api.stores
+    WHERE chain_id = ${chainId}
+    ORDER BY "distanceKm", name
+    LIMIT 1
+  `;
+  const row = rows[0];
+  return row ? { ...row } : null;
+}
+
+/** Stores by id (e.g. the stores of food-waste rows in a price history), with no distance. */
+export async function getStoresByIds(ids: readonly string[]): Promise<Map<string, NearbyStore>> {
+  if (ids.length === 0) return new Map();
+  await connection();
+  const sql = await readOnlyDb();
+  const rows = await sql<StoreSqlRow[]>`
+    SELECT id::text AS id, chain_id AS "chainId", chain_name AS "chainName", name, street, zip,
+           city, lat::float8 AS lat, lon::float8 AS lon, source,
+           source_store_id AS "sourceStoreId", 0::float8 AS "distanceKm"
+    FROM api.stores
+    WHERE id = ANY(${[...new Set(ids)]}::uuid[])
+  `;
+  return new Map(rows.map((r) => [r.id, { ...r }]));
 }
 
 interface DealSqlRow {
@@ -124,6 +145,12 @@ interface DealSqlRow {
   nettoUnitPriceBest: number | null;
   references: unknown;
   memberOnly: boolean;
+  source: string | null;
+  sourceItemId: string | null;
+  catalogId: string | null;
+  sizeMin: number | null;
+  sizeMax: number | null;
+  maxPerCustomer: number | null;
 }
 
 /** Current and upcoming Netto offers of healthy staples (one row per recognized variant). */
@@ -140,7 +167,10 @@ export async function getCurrentNettoDeals(): Promise<DealRow[]> {
            price_applies AS "priceApplies",
            netto_unit_price_worst::float8 AS "nettoUnitPriceWorst",
            netto_unit_price_best::float8 AS "nettoUnitPriceBest",
-           "references", member_only AS "memberOnly"
+           "references", member_only AS "memberOnly", source,
+           source_item_id AS "sourceItemId", catalog_id AS "catalogId",
+           size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax",
+           max_per_customer::int AS "maxPerCustomer"
     FROM api.current_netto_deals
     ORDER BY valid_from, title, variant_index
   `;
@@ -167,11 +197,18 @@ export async function getCurrentNettoDeals(): Promise<DealRow[]> {
     nettoUnitPriceBest: r.nettoUnitPriceBest,
     references: parseReferences(r.references),
     memberOnly: r.memberOnly,
+    source: r.source,
+    sourceItemId: r.sourceItemId,
+    catalogId: r.catalogId,
+    sizeMin: r.sizeMin,
+    sizeMax: r.sizeMax,
+    maxPerCustomer: r.maxPerCustomer,
   }));
 }
 
-interface FoodWasteSqlRow extends Omit<FoodWasteItem, "validTo"> {
+interface FoodWasteSqlRow extends Omit<FoodWasteItem, "validTo" | "lastSeenAt"> {
   validTo: Date | null;
+  lastSeenAt: Date | null;
 }
 
 /** Food-waste clearances of healthy staples within the radius, largest discount first. */
@@ -186,7 +223,11 @@ export async function getFoodWasteNear(area: SearchArea, limit = 300): Promise<F
              title, ean, price::float8 AS price, reference_price::float8 AS "referencePrice",
              discount_pct::float8 AS "discountPct", unit, unit_price::float8 AS "unitPrice",
              valid_to AS "validTo", stock::float8 AS stock, stock_unit AS "stockUnit",
-             type_label AS "typeLabel", class_label AS "classLabel", is_exact AS "isExact"
+             type_label AS "typeLabel", class_label AS "classLabel", is_exact AS "isExact",
+             lat::float8 AS lat, lon::float8 AS lon, size::float8 AS size,
+             image_url AS "imageUrl", product_quantity_text AS "productQuantityText",
+             product_net_quantity::float8 AS "productNetQuantity",
+             product_net_unit AS "productNetUnit", last_seen_at AS "lastSeenAt"
       FROM api.food_waste_near
       WHERE ${withinBox(area)}
     ) f
@@ -194,7 +235,7 @@ export async function getFoodWasteNear(area: SearchArea, limit = 300): Promise<F
     ORDER BY "discountPct" DESC NULLS LAST, "distanceKm", title
     LIMIT ${limit}::int
   `;
-  return rows.map((r) => ({ ...r, validTo: toIso(r.validTo) }));
+  return rows.map((r) => ({ ...r, validTo: toIso(r.validTo), lastSeenAt: toIso(r.lastSeenAt) }));
 }
 
 interface HistorySqlRow extends Omit<PriceHistoryRow, "validFrom" | "validTo"> {
@@ -211,7 +252,9 @@ export async function getClassPriceHistory(classKey: string): Promise<PriceHisto
            chain_name AS "chainName", listing_id AS "listingId", title, unit,
            unit_price_min::float8 AS "unitPriceMin", unit_price_max::float8 AS "unitPriceMax",
            valid_from AS "validFrom", valid_to AS "validTo", price_applies AS "priceApplies",
-           member_only AS "memberOnly"
+           member_only AS "memberOnly", source, source_item_id AS "sourceItemId",
+           catalog_id AS "catalogId", store_id::text AS "storeId", price::float8 AS price,
+           description, size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax"
     FROM api.class_price_history
     WHERE class_key = ${classKey}
     ORDER BY valid_from, chain_name, title
@@ -252,6 +295,40 @@ export async function getPipelineStatus(): Promise<PipelineRun[]> {
         : {},
     error: r.error,
   }));
+}
+
+/** The latest run of one pipeline job, or null when it never ran. */
+export async function getLatestRun(job: string): Promise<PipelineRun | null> {
+  const runs = await getPipelineStatus();
+  return runs.find((r) => r.job === job) ?? null;
+}
+
+interface ReferenceDetailSqlRow extends Omit<ReferenceDetail, "validTo"> {
+  validTo: Date | null;
+}
+
+/**
+ * Size, pack price and source ids of the listings that deals refer to (`deal.references` carry
+ * only unit prices), keyed by listing id.
+ */
+export async function getReferenceDetails(
+  listingIds: readonly string[],
+): Promise<Map<string, ReferenceDetail>> {
+  const ids = [...new Set(listingIds)];
+  if (ids.length === 0) return new Map();
+  await connection();
+  const sql = await readOnlyDb();
+  const rows = await sql<ReferenceDetailSqlRow[]>`
+    SELECT DISTINCT ON (listing_id)
+           listing_id::text AS "listingId", source, source_item_id AS "sourceItemId",
+           catalog_id AS "catalogId", chain_id AS "chainId", price::float8 AS price,
+           description, unit, size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax",
+           valid_to AS "validTo"
+    FROM api.class_price_history
+    WHERE listing_id = ANY(${ids}::uuid[])
+    ORDER BY listing_id
+  `;
+  return new Map(rows.map((r) => [r.listingId, { ...r, validTo: toIso(r.validTo) }]));
 }
 
 /** Open review items per reason. */
