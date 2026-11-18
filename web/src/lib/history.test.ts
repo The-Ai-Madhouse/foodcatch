@@ -26,6 +26,7 @@ function row(overrides: Partial<PriceHistoryRow> = {}): PriceHistoryRow {
     unitPriceMax: 33.33,
     validFrom: "2026-11-15T23:00:00Z",
     validTo: "2026-11-22T22:59:59Z",
+    priceApplies: true,
     ...overrides,
   };
 }
@@ -120,6 +121,20 @@ describe("buildPriceChart", () => {
     const model = buildPriceChart([old, long], NOW);
     expect(model.marks).toHaveLength(1);
     expect(model.marks[0]?.start).toBe(NOW.getTime() - MAX_WINDOW_DAYS * 86_400_000);
+  });
+
+  it("leaves out offers whose price covers other products", () => {
+    // regression: "hel kylling eller hakket kyllingekød" must not chart as the mince's price
+    const model = buildPriceChart(
+      [
+        row({ listingId: "1" }),
+        row({ listingId: "2", unitPriceMin: 20, unitPriceMax: 61.25, priceApplies: false }),
+      ],
+      NOW,
+    );
+    expect(model.marks.map((m) => m.row.listingId)).toEqual(["1"]);
+    expect(model.excluded).toBe(1);
+    expect(model.yDomain[0]).toBeGreaterThan(20);
   });
 
   it("handles a class without chartable rows", () => {

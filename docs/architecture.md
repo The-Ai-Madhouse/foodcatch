@@ -301,7 +301,9 @@ The web app may only read these views (created in Alembic migrations, `GRANT SEL
   `listing_id, store_id, chain_id, store_name, street, zip, city, lat, lon, title, ean, price, reference_price,
   discount_pct, unit, unit_price, valid_to, stock, stock_unit, type_label, class_label, is_exact`.
 * `api.class_price_history` – `class_key, class_label, kind, chain_id, chain_name, listing_id, title, unit,
-  unit_price_min, unit_price_max, valid_from, valid_to` for all classified listings (all matcher-current).
+  unit_price_min, unit_price_max, valid_from, valid_to, price_applies` for all classified listings (all
+  matcher-current). `price_applies` is the §6 rule (homogeneous offer, unknown range or spread ≤ 25 %);
+  the web leaves rows where it is false out of the chart and marks them in the table.
 * `api.pipeline_status` – latest run per job: `job, status, started_at, finished_at, stats, error`,
   plus `api.review_queue_summary` – `reason, open_count`.
 

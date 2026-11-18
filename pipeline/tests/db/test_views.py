@@ -117,6 +117,50 @@ def test_current_netto_deals_shows_only_the_latest_version_of_an_offer(
     assert [r.listing_id for r in rows] == [ids[35]]
 
 
+def test_class_price_history_marks_prices_of_other_products(
+    db_conn: Connection, raw_payload: Callable[..., RawPayload]
+) -> None:
+    """Regression (finding C9): a "hel kylling eller hakket" kilo range is not the mince's."""
+    payload = raw_payload("tjek", "offers", [])
+    expected = {}
+    for title, low, high, variants, applies in (
+        ("Hakket oksekød 8-12%", 80, 80, 1, True),
+        ("Hakket oksekød 8-12% eller oksemørbrad", 60, 200, 2, False),
+        ("Hakket oksekød 8-12% eller culottesteg", 80, 100, 2, True),  # spread <= 25 %
+    ):
+        listing_id = uuid4()
+        db_conn.execute(
+            insert(listing).values(
+                id=listing_id,
+                source="tjek",
+                source_item_id=title,
+                chain_id="netto",
+                kind="offer",
+                title=title,
+                price=40,
+                unit="kg",
+                unit_price_min=low,
+                unit_price_max=high,
+                valid_from=NOW - timedelta(days=1),
+                valid_to=NOW + timedelta(days=3),
+                raw_object_id=payload.raw_object_id,
+            )
+        )
+        _classify(db_conn, listing_id)
+        db_conn.execute(
+            update(classification)
+            .values(offer_variants=variants)
+            .where(classification.c.listing_id == listing_id)
+        )
+        expected[listing_id] = applies
+
+    rows = db_conn.execute(
+        text("SELECT listing_id, price_applies FROM api.class_price_history")
+    ).all()
+
+    assert dict(rows) == expected
+
+
 def test_food_waste_near_shows_only_items_seen_in_latest_run(
     db_conn: Connection, raw_payload: Callable[..., RawPayload]
 ) -> None:

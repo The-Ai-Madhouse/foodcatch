@@ -169,7 +169,8 @@ export function PriceChart({
       {model.excluded > 0 ? (
         <p className="mt-2 text-xs text-ink-3">
           {model.excluded} {model.excluded === 1 ? "pris" : "priser"} vises kun i tabellen
-          (madspild, anden enhed, ukendt kilopris eller ældre end et år).
+          (madspild, anden enhed, ukendt kilopris, pris for flere forskellige varer eller ældre end
+          et år).
         </p>
       ) : null}
     </figure>

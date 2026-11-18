@@ -21,6 +21,11 @@ export interface PriceHistoryRow {
   unitPriceMax: number | null;
   validFrom: string;
   validTo: string | null;
+  /**
+   * Whether the row's unit price is this product's: false for a multi-product offer whose
+   * kilo price range mostly belongs to another product (same rule as the deals, §6).
+   */
+  priceApplies: boolean;
 }
 
 export type SeriesKey = "netto_offer" | "other_offer" | "regular";
@@ -70,7 +75,10 @@ export interface PriceChartModel {
   yDomain: [number, number];
   xTicks: Tick[];
   yTicks: Tick[];
-  /** Rows left out of the chart (other unit, clearance, no unit price or outside the window). */
+  /**
+   * Rows left out of the chart (other unit, clearance, no unit price, a price that covers
+   * other products, or outside the window).
+   */
   excluded: number;
 }
 
@@ -179,6 +187,7 @@ export function buildPriceChart(rows: readonly PriceHistoryRow[], now: Date): Pr
     const low = row.unitPriceMin ?? row.unitPriceMax;
     const high = row.unitPriceMax ?? row.unitPriceMin;
     if (series == null || low == null || high == null || row.unit !== unit) continue;
+    if (!row.priceApplies) continue;
     const start = Date.parse(row.validFrom);
     const openEnded = row.validTo == null;
     const end = openEnded ? Math.max(nowMs, start + DAY_MS) : Date.parse(row.validTo ?? "");

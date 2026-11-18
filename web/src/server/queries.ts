@@ -208,7 +208,7 @@ export async function getClassPriceHistory(classKey: string): Promise<PriceHisto
     SELECT class_key AS "classKey", class_label AS "classLabel", kind, chain_id AS "chainId",
            chain_name AS "chainName", listing_id AS "listingId", title, unit,
            unit_price_min::float8 AS "unitPriceMin", unit_price_max::float8 AS "unitPriceMax",
-           valid_from AS "validFrom", valid_to AS "validTo"
+           valid_from AS "validFrom", valid_to AS "validTo", price_applies AS "priceApplies"
     FROM api.class_price_history
     WHERE class_key = ${classKey}
     ORDER BY valid_from, chain_name, title

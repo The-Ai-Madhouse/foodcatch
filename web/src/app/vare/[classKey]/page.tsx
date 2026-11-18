@@ -30,7 +30,7 @@ export default async function ClassHistoryPage({ params }: PageProps<"/vare/[cla
     <>
       <PageHeader
         title={first.classLabel}
-        lead={`Prishistorik for præcis denne vare: Netto-tilbud, andre kæders tilbud og normalpriser, som vi har registreret dem (${rows.length} ${rows.length === 1 ? "pris" : "priser"}).`}
+        lead={`Prishistorik for præcis denne vare: Netto-tilbud, andre kæders tilbud og normalpriser, som vi har registreret dem (${rows.length} ${rows.length === 1 ? "pris" : "priser"}). Tilbud, hvor én pris dækker flere forskellige varer, vises kun i tabellen.`}
       />
       <PriceChart model={model} title={first.classLabel} now={now.getTime()} />
 
@@ -72,6 +72,11 @@ export default async function ClassHistoryPage({ params }: PageProps<"/vare/[cla
                   <td className="px-3 py-2 text-right whitespace-nowrap tabular">
                     {formatUnitPriceRange(r.unitPriceMin, r.unitPriceMax, r.unit) ??
                       `ukendt pr. ${unitLabel(r.unit)}`}
+                    {r.priceApplies ? null : (
+                      <span className="block text-xs text-ink-3">
+                        gælder flere varer – ikke i grafen
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
