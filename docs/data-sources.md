@@ -36,7 +36,7 @@ is sent as a header only and never recorded in raw-object parameters or logs.
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /v2/stores?brand=netto\|foetex\|bilka&per_page=…&page=…` | stores: `id` (UUID), `name`, `brand`, `address{street, zip, city, country, extra}`, `coordinates` **`[lon, lat]`**, `hours[…]`, `attributes{…}` |
+| `GET /v2/stores?brand=netto\|foetex\|bilka&country=dk&per_page=…&page=…` | paged (the `Link` header announces `rel="next"`; `x-total-count` the total). Stores: `id` (UUID), `name`, `brand`, `address{street, zip, city, country, extra}`, `coordinates` **`[lon, lat]`**, `hours[…]`, `attributes{…}` |
 | `GET /v1/food-waste/{storeId}` | clearances of one store: `{store, clearances: [{offer, product}]}` |
 
 Not used:
@@ -133,6 +133,9 @@ gives the number of pages (about 3,956 products, so 4 requests per run).
   `price_over_max_quantity`, `deposit`.
 * **No EAN.** Rema products are matched to other sources by recognition of name and size only.
 * The non-campaign price is Rema's shelf price. It serves as a `regular` reference in deals.
+  Campaign prices (`is_campaign`) become listings of kind `offer` and serve as `offer`
+  references - the catalogue also lists in-store campaigns that are not in Rema's Tjek leaflet.
+  A campaign that is in both appears twice among a deal's references (same price).
   Rema is the only chain whose full shelf prices we have.
 * `compare_unit` values need normalizing (`ltr` → `l`, `stk.` → `stk`).
 * The catalogue has no store dimension; it is treated as Rema's national price list.

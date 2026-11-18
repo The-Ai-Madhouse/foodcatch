@@ -43,6 +43,7 @@ foodcatch/
 │   ├── architecture.md        this file
 │   ├── setup.md               step-by-step: Neon, B2, GitHub secrets, healthchecks, Sentry
 │   ├── data-sources.md        what each external API gives, limits, terms caveats
+│   ├── runbook.md             operations: failures, reprocessing, migrations, restore, limits
 │   └── decisions/             ADRs (NNNN-title.md)
 ├── pipeline/
 │   ├── pyproject.toml         uv project; ruff, pyright, pytest config
@@ -67,16 +68,20 @@ foodcatch/
 │   │   ├── matching/          product recognition (ported from poc/matching.py)
 │   │   ├── deals/             reference prices + conservative verdicts
 │   │   ├── jobs/              orchestration of one job run (fetch_run bookkeeping, quality checks)
+│   │   ├── reprocess.py       replay raw objects through ingest, classify, deals
+│   │   ├── rawindex.py        rebuild missing raw_object rows from the raw store
 │   │   └── review.py          review queue helpers
 │   └── tests/
 ├── web/
 │   ├── package.json           pnpm
+│   ├── scripts/               development seed (pnpm db:seed)
 │   ├── src/app/               routes (Danish UI)
 │   ├── src/server/            db client + typed queries (server-only)
 │   ├── src/lib/               pure logic (deal filtering, formatting) – unit tested
 │   └── src/components/
 ├── poc/                       archived proof of concept (not used by production code)
-└── .github/workflows/         ci.yml, collect-*.yml
+└── .github/workflows/         ci.yml (checks + actionlint), collect.yml (all scheduled jobs),
+                               db-migrate.yml (production migrations), keepalive.yml
 ```
 
 ## 3. Conventions
@@ -105,18 +110,31 @@ Every job is a CLI command, e.g. `foodcatch collect salling-food-waste`. A job r
    `raw_object` row (sha256, bytes, params). Raw objects are never modified or deleted.
 4. **Ingest** – parses validated payloads into normalized rows. Idempotent: re-running the same
    raw objects yields the same database state (upserts on natural keys).
-5. **Classify** – runs product recognition (`matching/`) for new/changed `listing`s with the
-   current `MATCHER_VERSION`.
-6. **Deals** – recomputes `deal` rows affected by the run.
+5. **Classify** – runs product recognition (`matching/`) with the code's `MATCHER_VERSION` for
+   new/changed `listing`s and every listing not yet classified with that version. If that
+   version is not the current `matcher_release` (first run after a matcher upgrade), every
+   listing has now been classified with it, so it is made current and old classifications are
+   pruned (the same as `foodcatch reclassify`).
+6. **Deals** – recomputes `deal` rows affected by the run: listings ingest changed and listings
+   whose classification changed (`jobs/hooks.py`).
 7. **Quality checks** – compares record counts with the previous successful run of the same job;
    a drop of more than 50 % (configurable) marks the run `degraded` and exits non-zero.
 8. Finishes the `fetch_run` (`succeeded` / `degraded` / `failed`, counts, error) and pings
    healthchecks.io (`/start`, success, `/fail`) if a ping URL is configured.
 
-`foodcatch reprocess --source <s> [--since DATE]` replays steps 4–6 from the raw store.
-`foodcatch reclassify` re-runs steps 5–6 for all listings (used after matcher changes).
+`foodcatch reprocess --source <s> [--since DATE] [--until DATE]` replays steps 4–6 from the raw
+store. `foodcatch raw reindex` rebuilds missing `raw_object` rows from the raw store (after a
+database restore). `foodcatch reclassify` re-runs steps 5–6 for all listings (after matcher or
+override changes). `foodcatch review list|resolve` works through the review queue.
 
 ### Jobs and schedules (GitHub Actions, times UTC)
+
+All six jobs run from one workflow, `.github/workflows/collect.yml`: each cron entry maps to
+exactly one job, with a per-job concurrency group, per-job healthchecks.io check, manual
+dispatch (`gh workflow run collect.yml -f job=<job>`) and the repository variable
+`COLLECT_PAUSED_JOBS` to pause scheduled runs. `db-migrate.yml` applies migrations to production
+on push to `main` when migrations change (and on demand); `keepalive.yml` re-enables the
+scheduled workflows monthly. Operations: `docs/runbook.md`.
 
 | Job | Command | Schedule |
 |---|---|---|
@@ -176,7 +194,12 @@ Seeded by migration.
 `unit_price_min numeric null`, `unit_price_max numeric null`,
 `member_only bool`, `max_per_customer int null`,
 `valid_from timestamptz`, `valid_to timestamptz`, `first_seen_at`, `last_seen_at`,
-`raw_object_id fk`, `extra jsonb` (food waste: `stock`, `stock_unit`, `percent_discount`),
+`raw_object_id fk`, `extra jsonb` (owned by ingest; food waste: `stock`, `stock_unit`,
+`percent_discount`, `offer_ean`, `product_code`, `image`, `category` – the keys
+`api.food_waste_near` reads are snake_case; Rema: `is_advertised`, `is_weight_item`,
+`compare_unit`, `deposit`, `price_over_max_quantity`, `labels`),
+`classified_version text null`, `classified_fingerprint text null` (owned by `matching.persist`:
+matcher version and input fingerprint of the last classification; never written by ingest),
 `unique(source, source_item_id, valid_from, price)`. Ingest sets `last_seen_at = now()` on every
 upsert; `api.food_waste_near` only shows clearances seen by the latest finished food-waste run.
 Unit prices follow the PoC rule: `unit_price_min = price / size_max`, `unit_price_max = price / size_min`.
@@ -197,7 +220,7 @@ A listing with no recognized variant gets **no** rows (and may get a `review_ite
 
 **`review_item`** – queue for humans: `id`, `listing_id fk`, `reason text`
 (unrecognized_staple_word|unknown_key_attribute|ambiguous_offer), `status` (open|accepted|rejected|fixed),
-`created_at`, `resolved_at`, `unique(listing_id, reason)`.
+`created_at`, `resolved_at`, `note text null` (reviewer's note), `unique(listing_id, reason)`.
 
 **`deal`** – precomputed verdict input for one Netto offer variant (see §6):
 `listing_id fk`, `variant_index`, `matcher_version`, `class_key`, `netto_unit_price_worst numeric`,
@@ -213,9 +236,13 @@ Ported from the PoC and **must keep its conservatism**:
 * A competitor offer's unit price counts only if its price **applies to the variant**
   (all variants of that offer are the same class, or the unit-price spread ≤ 25 %).
 * Netto is evaluated at its **worst** (highest) unit price, references at their **best** (lowest).
-* Reference kinds: `offer` (current competitor offers), `regular` (Rema shelf price;
+* Reference kinds: `offer` (current or upcoming competitor offers: Tjek offers of other chains
+  and REMA 1000 campaign prices from the Rema catalogue), `regular` (Rema shelf price;
   later other chains), `history` (earlier Netto offers of the same class), `ean_reference`
   (Salling originalPrice for the same EAN, when known).
+* "Same class" is evaluated in SQL as equal `classification.class_key` with both rows exact,
+  which equals `comparability(a, b) == "same"` (`class_key` contains the type, every key
+  attribute and the processing state); a test pins this equivalence on real matcher output.
 * `deal.references` is a JSON array of
   `{kind, chain_id, listing_id, title, unit_price, unit, valid_from, valid_to}` – **all**
   same-class references, not only the best, so the web can filter by nearby chains.
@@ -235,7 +262,9 @@ shared fixtures in `fixtures/verdict_cases.json` at repo root):
 ## 7. Web contract (schema `api`, read-only)
 
 The web app may only read these views (created in Alembic migrations, `GRANT SELECT` to role
-`web_readonly`). Column changes are breaking changes for the web.
+`web_readonly`, a NOLOGIN group role). The web connects with a login role created
+`IN ROLE web_readonly` (production: `docs/setup.md` §1.3; locally `pnpm db:seed` creates
+`foodcatch_web`). Column changes are breaking changes for the web.
 
 * `api.stores` – `id, chain_id, chain_name, name, street, zip, city, lat, lon` (Tjek stores, all chains, plus Salling stores).
 * `api.current_netto_deals` – one row per (current or upcoming Netto offer listing × healthy classified variant)
@@ -269,16 +298,22 @@ chains with a store in `api.stores` within the chosen radius (haversine in SQL).
 | `HEALTHCHECKS_URL_<JOB>` | pipeline | optional ping URLs per job |
 | `SENTRY_DSN` | pipeline | optional |
 | `DB_SIZE_BUDGET_MB` | pipeline | default 1024 |
+| `OFF_BATCH_SIZE` | pipeline | default 500 – products looked up per `off-enrich` run |
 | `QUALITY_DROP_THRESHOLD` | pipeline | default 0.5 – record-count drop that marks a run `degraded` |
 | `LOG_LEVEL`, `LOG_FORMAT` | pipeline | `INFO`; `auto` (JSON in CI) \| `json` \| `console` |
 | `FOODCATCH_ENV_FILE` | pipeline | explicit `.env` path; empty = load none (tests) |
+| `GIT_SHA` / `GITHUB_SHA` | pipeline | commit recorded in `fetch_run.git_sha` (default: `git rev-parse HEAD`) |
 | `FOODCATCH_DEFAULT_LOCATION` | web | `lat,lon` default when no cookie |
+| `SEED_DATABASE_URL` | web (dev only) | database for `pnpm db:seed` (local hosts only) |
+
+The web app reads its variables from `web/.env.local`, not the repository-root `.env`.
 
 ## 9. Testing
 
 * Unit tests for matching use the gold set derived from Salling categories and hand-verified cases
   from the PoC review (`pipeline/tests/matching/`). The gold-set metrics are asserted with
   thresholds so regressions fail CI (precision on staples, zero wrong key attributes, false positives).
-* Source modules are tested with recorded (small, trimmed) fixtures and `respx`.
+* Source modules are tested with recorded (small, trimmed) fixtures and `respx`. Tests never
+  reach the network: a session-wide guard fails any non-loopback connection.
 * Ingest/deals are tested against a real Postgres (docker compose locally, service container in CI).
 * Web: Vitest for `src/lib` (incl. the shared verdict fixtures), typecheck, lint, `next build`.

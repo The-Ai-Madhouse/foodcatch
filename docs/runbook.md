@@ -181,7 +181,13 @@ FOODCATCH_ENV_FILE=../.env.production uv run foodcatch reprocess --source tjek -
   Listings that the fixed code no longer produces are **not** deleted; remove them by hand if the
   bug created wrong rows (find them by `raw_object_id` or `first_seen_at`).
 * Everything runs in **one transaction**. A long range downloads many objects from B2 and holds
-  the transaction open; pause the source's jobs first and prefer ranges of a few weeks.
+  the transaction open; pause the source's jobs first and split long replays into consecutive
+  ranges with `--until` (exclusive), each of which commits on its own:
+
+  ```bash
+  uv run foodcatch reprocess --source tjek --since 2026-11-01 --until 2026-11-15
+  uv run foodcatch reprocess --source tjek --since 2026-11-15
+  ```
 * Free B2 downloads are 3× the stored data per month (setup §9), which is plenty for occasional
   reprocessing.
 
@@ -191,25 +197,52 @@ variables, then reprocess `salling` with the same values in `.env.production`.
 ### 4.2 Reclassify after matcher changes
 
 Product recognition is versioned (`MATCHER_VERSION` in `pipeline/src/foodcatch/matching/`).
-After merging a matcher change that bumps the version:
+After merging a matcher change that bumps the version, nothing has to be done by hand:
 
-1. The next collect run classifies the listings it touches with the new version, but older
-   listings still only have classifications of the old version, and the `api` views show the
-   current version only.
-2. Reclassify everything once, then recompute deals:
+1. The first collect run with post-fetch hooks (`tjek-offers`, `rema-products`,
+   `salling-food-waste`) classifies **every** listing with the new version (listings remember
+   the version they were last classified with in `listing.classified_version`), so that run takes
+   longer than usual.
+2. In the same transaction it makes the new version the current `matcher_release`, prunes
+   classifications of all but the two most recent versions and recomputes the deals of every
+   reclassified listing. The run's `stats` show `matcher_promoted: 1` and the log has a
+   `matcher.promoted` warning. The `api` views switch to the new version when that run commits.
 
-   ```bash
-   FOODCATCH_ENV_FILE=../.env.production uv run foodcatch reclassify
-   ```
+To switch immediately instead of waiting for the next scheduled run (or after an override
+change, see §4.3), run in the production shell:
 
-   `reclassify` re-runs recognition for all listings with the current version and recomputes
-   deals (`foodcatch deals recompute` recomputes deals alone).
-3. Classifications of all but the two most recent matcher versions are pruned, so the previous
-   version stays available for comparison and rollback.
-4. Check the review queue: `uv run foodcatch review list`, and `api.review_queue_summary`.
+```bash
+FOODCATCH_ENV_FILE=../.env.production uv run foodcatch reclassify
+```
 
-Run it soon after the merge (outside the collect schedule; the early afternoon UTC is free
-except for 13:37), so the web never shows a mix of versions for long.
+`reclassify` re-runs recognition for all listings with the code's version, makes it current and
+recomputes all deals (`foodcatch deals recompute` recomputes deals alone). Run it outside the
+collect schedule (the early afternoon UTC is free except for 13:37). Rolling back the code to
+an older version works the same way: the older version becomes current again on the next run.
+
+Afterwards check the review queue (§4.3).
+
+### 4.3 Review queue
+
+Recognition queues doubtful listings in `review_item` (`api.review_queue_summary` counts the
+open ones; `/status` in the web app shows them):
+
+```bash
+uv run foodcatch review list                                  # open items, oldest first
+uv run foodcatch review list --reason unknown_key_attribute --limit 20
+uv run foodcatch review resolve 123 --status accepted --note "fat % only on the picture"
+uv run foodcatch review list --status accepted                # resolved items with notes
+```
+
+`--status` is `accepted` (the result is right as it is), `rejected` (the listing is not what the
+rule thought; add a `classification_override` with action `reject` so it stays out) or `fixed`
+(a rule or override now handles it). Resolved items are never reopened; open items whose reason
+disappears on re-classification are closed as `fixed` automatically.
+
+An override (`classification_override`: `source`, normalized title, `action` `reject` or
+`force` with a `forced_result` such as `{"type_id": "mælk", "attrs": {"mælketype": "letmælk",
+"øko": "nej", "laktosefri": "nej"}}`) takes effect for listings classified afterwards; run
+`foodcatch reclassify` to apply it to existing listings.
 
 ---
 
@@ -265,7 +298,7 @@ WHERE job = 'salling-food-waste' ORDER BY started_at DESC LIMIT 30;   -- growth 
 Levers, from least to most invasive:
 
 1. **Old classifications** are pruned automatically (two most recent matcher versions kept).
-   Make sure a reclassify after a version bump has run (§4.2).
+   A new matcher version prunes them when it becomes current (§4.2).
 2. **Shrink the food-waste region**: lower `REGION_RADIUS_KM` or remove a `REGION_CENTERS` entry.
    This affects new runs only. Clearance listings are the fastest-growing table.
 3. **Delete expired food-waste listings.** They are only shown while current, and they can be
@@ -347,12 +380,22 @@ schema is already current).
 
 1. Create a new Neon project ([setup](setup.md) §1), set the new `DATABASE_URL`.
 2. Restore the latest dump (§7.2), or, without a dump, run `db-migrate` for an empty schema.
-3. Replay raw data for the gap since the dump: `foodcatch reprocess --source … --since …`.
-   **Limitation:** `reprocess` finds raw objects through their `raw_object` rows in the database.
-   Objects stored in B2 after the dump have no row in the restored database and are not replayed
-   by the current CLI. Rebuilding the index from the bucket listing (keys are
-   `{source}/{endpoint}/{YYYY}/{MM}/{DD}/{fetch_run_id}/{seq}.json.gz`) needs a new command; until
-   then, regular dumps are what limits data loss.
+3. Rebuild the raw index for the gap since the dump, then replay it. `reprocess` finds raw
+   objects through their `raw_object` rows, and objects stored in B2 after the dump have none in
+   the restored database. `raw reindex` lists the bucket, parses each key
+   (`{source}/{endpoint}/{YYYY}/{MM}/{DD}/{fetch_run_id}/{seq}.json.gz`) and inserts the missing
+   rows (sha256 and size recomputed, the object's upload time as `fetched_at`, a placeholder
+   `fetch_run` with job `raw-reindex` for runs the database does not know):
+
+   ```bash
+   uv run foodcatch raw reindex --since 2026-11-01 --dry-run   # count only
+   uv run foodcatch raw reindex --since 2026-11-01
+   uv run foodcatch reprocess --source salling --since 2026-11-01   # then tjek, rema, openfoodfacts
+   ```
+
+   The order of sources does not matter (food-waste payloads carry their store). The original request parameters are not recoverable (`params` is
+   `{"reindexed": true}`); no ingest depends on them. Placeholder runs appear in
+   `api.pipeline_status` under the job `raw-reindex`.
 4. Recreate the web role and rerun every job once ([setup](setup.md) §7).
 
 ### 7.4 Raw store (B2)
@@ -373,9 +416,9 @@ A leaked key: delete it in B2 (**Application Keys**), create a new one, update t
 
 | When | Check |
 |---|---|
-| weekly | healthchecks.io all green; `api.review_queue_summary` (review open items: `foodcatch review list`) |
+| weekly | healthchecks.io all green; `api.review_queue_summary` (work through open items, §4.3) |
 | monthly | `foodcatch db stats` trend; B2 bucket size; Neon *Usage* (compute hours, storage); a database dump (§7.2); the `keepalive` run of the 1st succeeded |
-| after a matcher change | reclassify (§4.2) |
+| after a matcher change | the next collect run promotes the version (§4.2); check the review queue (§4.3) |
 | after renaming a job or changing a schedule | update `collect.yml` (cron **and** the `case` mapping), the healthchecks.io check and its secret name |
 
 ### Scheduled workflows disabled
@@ -400,3 +443,68 @@ gh workflow run keepalive.yml              # verify that it works
 | `S3_*` | new B2 application key, then delete the old one | `gh secret set S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` |
 | `SALLING_API_KEY` | Salling developer portal | `gh secret set SALLING_API_KEY` |
 | `HEALTHCHECKS_URL_*` | check → *Settings* → regenerate ping URL | `gh secret set HEALTHCHECKS_URL_<JOB>` |
+
+---
+
+## 9. Known limitations
+
+Accepted trade-offs and open points, so nobody mistakes them for bugs. Each is a candidate for
+later work.
+
+**Prices and deals**
+
+* *Member prices.* Tjek offers whose text marks a member price are stored with
+  `listing.member_only = true` (in doubt the parser marks them member-only), but the `api`
+  views do not expose the flag: a Netto member price can be shown as a deal, and a competitor's
+  member price counts as a reference (which only makes verdicts more conservative).
+* *Duplicate REMA 1000 references.* A Rema campaign is collected from Tjek (leaflet) and from
+  the Rema catalogue; when both carry it, a deal lists it twice. The cheapest reference and
+  hence the verdict are unaffected.
+* *Upcoming offers as references.* Competitor offers count from publication until they end,
+  including offers that start later than the Netto offer; this is deliberate (more references,
+  more conservative verdicts).
+* *History includes concurrent Netto offers.* `history` references are other Netto offers of
+  the class that started no later than the offer, including a concurrent offer of another
+  catalogue with the same price.
+* *EAN reference prices refresh with their listing.* A changed `product_reference_price` (a
+  Salling `originalPrice`) reaches deals when the same-class listing changes or on
+  `foodcatch deals recompute`; a change at a store outside the region, or a new net quantity
+  from Open Food Facts, waits for one of those. EAN references also need `product.net_quantity`,
+  which only Open Food Facts provides.
+* *Rema sizes are approximate.* The size is `price / compare price` (Rema rounds the compare
+  price); for weight items it is the typical package. A withdrawn Rema price period is closed at
+  the first run that no longer sees it, not at the start of its successor.
+
+**Data**
+
+* *Non-GTIN clearances.* Variable-weight food-waste items with in-store codes get no `product`
+  row (`api.food_waste_near.ean` is `NULL`); the code is kept in `listing.extra.product_code`.
+* *Stores are not linked across sources.* A physical Netto store exists once from Salling and
+  once from Tjek; per-chain store counts can count it twice (the UI only shows the nearest
+  distance per chain).
+* *Tjek pagination cap.* Tjek answers at most 1000 results per query (observed, not
+  documented). The fetchers fail loudly at the cap instead of truncating; a catalogue with more
+  offers needs a smarter split.
+* *Quality baseline.* A run is compared with the last **succeeded** run of its job, so a genuine
+  lasting drop keeps degrading until accepted (§3.2).
+
+**Operations**
+
+* *Matcher upgrade run.* The first run after a matcher version bump classifies every listing
+  (sequential scan of `listing`) before it promotes the version (§4.2); fine at current
+  volumes, an index on `listing.classified_version` can be added if it grows large.
+* *Raw-store writes are check-then-write on S3.* `S3RawStore.put` checks for an existing key
+  before writing; safe because keys contain the run id and a run has one writer.
+* *Workflow exclusion is best effort.* `collect` and `db-migrate` only wait for earlier runs of
+  each other (§5); follow the migration rules there.
+* *keepalive is unverified against GitHub's inactivity timer.* It re-enables workflows through
+  the API monthly (the approach of common keepalive actions); see "Scheduled workflows disabled"
+  above if it ever fails.
+* *External limits.* Free-tier numbers in [setup](setup.md) §9 (Neon storage and restore window,
+  B2, healthchecks.io, Sentry) were taken from the providers' pages in November 2026 and are not
+  checked automatically; set `DB_SIZE_BUDGET_MB` to the real Neon limit.
+* *Development seed.* `pnpm db:seed` (web) creates the cluster-wide login role `foodcatch_web`
+  (password `foodcatch_web`) on the local Postgres, and writes deal references itself instead
+  of running `deals/compute.py`.
+* *Web.* The price-history chart scrolls sideways on narrow screens (minimum width 540 px) and
+  starts at the oldest data.

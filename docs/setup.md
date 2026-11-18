@@ -83,12 +83,16 @@ console become members of `neon_superuser` and could read and write everything.
    following, with your generated password in place of the placeholder:
 
    ```sql
-   CREATE ROLE foodcatch_web LOGIN PASSWORD '<generated-password>';
-   GRANT web_readonly TO foodcatch_web;
+   CREATE ROLE foodcatch_web LOGIN PASSWORD '<generated-password>' IN ROLE web_readonly;
    -- Belt and braces: the role can never write and cannot run away with a query.
    ALTER ROLE foodcatch_web SET default_transaction_read_only = on;
    ALTER ROLE foodcatch_web SET statement_timeout = '15s';
    ```
+
+   The login role **must be created `IN ROLE web_readonly`** (a member of the migration's
+   NOLOGIN group role): every grant on schema `api` goes to `web_readonly`, so a login role
+   without that membership can connect but read nothing, and granting it rights directly would
+   bypass the migrations that keep the grants in step with the views.
 
 3. Build the web connection string from the owner string: replace user and password, and use
    the plain `postgresql://` scheme. You may use the pooled host (`-pooler`) here:
@@ -218,6 +222,7 @@ gh secret set SALLING_API_KEY
 | `COLLECT_PAUSED_JOBS` | `tjek-offers` | no | jobs whose scheduled runs are skipped (runbook) |
 | `QUALITY_DROP_THRESHOLD` | `0.5` | no (default 0.5) | record-count drop that marks a run degraded |
 | `DB_SIZE_BUDGET_MB` | `1024` | no (default 1024) | database budget for the 70 % warning |
+| `OFF_BATCH_SIZE` | `500` | no (default 500) | products looked up per `off-enrich` run |
 | `LOG_LEVEL` | `INFO` | no | pipeline log level |
 
 **`REGION_CENTERS` is not secret and appears in public logs.** Use a neighbourhood or city

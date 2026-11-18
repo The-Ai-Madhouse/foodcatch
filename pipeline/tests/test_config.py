@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -136,3 +137,11 @@ def test_invalid_threshold_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("QUALITY_DROP_THRESHOLD", "1.5")
     with pytest.raises(ValueError, match="quality_drop_threshold"):
         make_settings()
+
+
+def test_every_setting_is_documented_in_env_example() -> None:
+    example = (Path(__file__).parents[2] / ".env.example").read_text(encoding="utf-8")
+    documented = set(re.findall(r"^#?\s*([A-Z][A-Z0-9_]+)=", example, flags=re.MULTILINE))
+    internal = {"env_file_path", "git_sha"}  # set by the loader / CI, not by users
+    missing = {name.upper() for name in Settings.model_fields if name not in internal} - documented
+    assert not missing, f"document these in .env.example: {sorted(missing)}"
