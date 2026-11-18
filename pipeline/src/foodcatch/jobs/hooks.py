@@ -14,7 +14,11 @@ After a job body has ingested its payloads, :func:`run_post_fetch_hooks` calls e
    not read until someone ran ``reclassify`` by hand.
 2. :func:`compute_deals` - ``deals.compute.recompute_deals`` for ``state.listing_ids``: the
    listings ingest changed (a competitor price change needs new deals even when its
-   classification is unchanged) and those whose classification changed. ``deals.compute``
+   classification is unchanged) and those whose classification changed. After a promotion
+   (``stats["matcher_promoted"]``) every deal is recomputed instead, as ``foodcatch reclassify``
+   does: the promotion deleted every deal row of the previous release, and after a rollback to
+   an older version whose classification rows were kept, unchanged listings are not reported
+   as changed, so a scoped recompute would leave most offers without a deal. ``deals.compute``
    widens that to every Netto variant of the affected classes, so no ``Match`` objects need to
    be rebuilt here: deal references are same-class rows, i.e. equal ``class_key`` and
    ``is_exact``, which is ``matching.comparability(a, b) == "same"`` for matches rebuilt with
@@ -62,7 +66,10 @@ def classify_new_listings(conn: Connection, state: PipelineState) -> None:
 
 
 def compute_deals(conn: Connection, state: PipelineState) -> None:
-    """Recompute deals affected by the run's listings (skipped when nothing changed)."""
+    """Recompute deals affected by the run's listings; all deals after a release promotion."""
+    if state.stats.get("matcher_promoted"):
+        state.stats["deals"] += recompute_deals(conn)
+        return
     if not state.listing_ids:
         return
     state.stats["deals"] += recompute_deals(conn, listing_ids=state.listing_ids)

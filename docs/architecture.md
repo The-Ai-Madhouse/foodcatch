@@ -117,7 +117,7 @@ Every job is a CLI command, e.g. `foodcatch collect salling-food-waste`. A job r
    listing has now been classified with it, so it is made current and old classifications are
    pruned (the same as `foodcatch reclassify`).
 6. **Deals** – recomputes `deal` rows affected by the run: listings ingest changed and listings
-   whose classification changed (`jobs/hooks.py`).
+   whose classification changed (`jobs/hooks.py`); every deal when step 5 promoted a release.
 7. **Quality checks** – compares the job's quality metric (`records` by default) with the
    previous successful run of the same job; a drop of more than 50 % (configurable) marks the run
    `degraded` and exits non-zero. A job can also report `degraded` itself when it could not

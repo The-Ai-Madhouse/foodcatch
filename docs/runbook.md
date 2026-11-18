@@ -272,8 +272,10 @@ After merging a matcher change that bumps the version, nothing has to be done by
    the version they were last classified with in `listing.classified_version`), so that run takes
    longer than usual.
 2. In the same transaction it makes the new version the current `matcher_release`, prunes
-   classifications of all but the two most recent versions and recomputes the deals of every
-   reclassified listing. The run's `stats` show `matcher_promoted: 1` and the log has a
+   classifications of all but the two most recent versions and recomputes **all** deals (like
+   `reclassify`; a rollback to a kept older version reports few listings as changed, so a
+   scoped recompute would leave most offers without a deal). The run's `stats` show
+   `matcher_promoted: 1` and the log has a
    `matcher.promoted` warning. The `api` views switch to the new version when that run commits.
 
 To switch immediately instead of waiting for the next scheduled run (or after an override

@@ -14,10 +14,16 @@ from uuid import UUID
 from sqlalchemy import Connection, insert, select, update
 
 from foodcatch.db.tables import classification, deal, listing, matcher_release
+from foodcatch.deals.compute import recompute_deals
 from foodcatch.ingest import RawPayload
 from foodcatch.jobs.context import PipelineState
 from foodcatch.jobs.hooks import run_post_fetch_hooks
 from foodcatch.matching import MATCHER_VERSION, Match, classify, comparability
+from foodcatch.matching.persist import (
+    classify_pending,
+    prune_classifications,
+    set_current_release,
+)
 from foodcatch.matching.taxonomy import get_type
 
 NOW = datetime.now(UTC)
@@ -117,6 +123,27 @@ def test_first_run_after_a_matcher_upgrade_promotes_the_release(
     assert db_conn.execute(select(deal.c.listing_id)).scalars().all() == [netto]
     versions = set(db_conn.execute(select(classification.c.matcher_version)).scalars())
     assert versions == {MATCHER_VERSION}
+
+
+def test_rollback_to_an_older_matcher_version_recomputes_every_deal(
+    db_conn: Connection, raw_payload: Callable[..., RawPayload]
+) -> None:
+    """Regression (finding C7): V1 -> V2 -> V1 must leave the deal rows in place."""
+    netto, _, state = _scenario(db_conn, raw_payload)
+    run_post_fetch_hooks(db_conn, state)  # V1 = MATCHER_VERSION is current
+    newer = "2099.1.1"
+    classify_pending(db_conn, version=newer)
+    set_current_release(db_conn, newer)  # V2 deployed: its run deletes every V1 deal row
+    prune_classifications(db_conn)
+    recompute_deals(db_conn)
+    assert db_conn.execute(select(deal.c.matcher_version)).scalars().all() == [newer]
+
+    rollback = PipelineState()  # the first run after redeploying V1: nothing new was fetched
+    run_post_fetch_hooks(db_conn, rollback)
+
+    assert rollback.stats["matcher_promoted"] == 1
+    rows = db_conn.execute(select(deal.c.listing_id, deal.c.matcher_version)).all()
+    assert [tuple(r) for r in rows] == [(netto, MATCHER_VERSION)]
 
 
 def _rebuild(m: Match) -> Match:
