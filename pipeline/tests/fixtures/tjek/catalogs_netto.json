@@ -1,0 +1,75 @@
+[
+ {
+  "id": "Bswgx2rE",
+  "ern": "ern:catalog:Bswgx2rE",
+  "label": "Netto uge 48",
+  "background": "#FFFFFF",
+  "run_from": "2026-11-20T23:00:00+0000",
+  "run_till": "2026-11-27T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-18T06:00:00+0000",
+  "page_count": 41,
+  "offer_count": 224,
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "category_ids": [
+   "groceries_discount"
+  ],
+  "all_stores": true,
+  "incito_publication_id": null,
+  "types": [
+   "paged"
+  ],
+  "tags": [
+   "trade"
+  ]
+ },
+ {
+  "id": "40K-WXWp",
+  "ern": "ern:catalog:40K-WXWp",
+  "label": "Netto uge 47",
+  "background": "#FFFFFF",
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "page_count": 39,
+  "offer_count": 223,
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "category_ids": [
+   "groceries_discount"
+  ],
+  "all_stores": true,
+  "incito_publication_id": null,
+  "types": [
+   "paged"
+  ],
+  "tags": [
+   "trade"
+  ]
+ },
+ {
+  "id": "6G4sWjdC",
+  "ern": "ern:catalog:6G4sWjdC",
+  "label": "Netto Nonfood uge 47",
+  "background": "#FFFFFF",
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-12T08:00:00+0000",
+  "page_count": 14,
+  "offer_count": 78,
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "category_ids": [
+   "groceries_discount"
+  ],
+  "all_stores": true,
+  "incito_publication_id": null,
+  "types": [
+   "paged"
+  ],
+  "tags": []
+ }
+]
