@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   copenhagenParts,
+  displayEnd,
   formatDate,
   formatDateTime,
   formatDayDate,
@@ -91,6 +92,22 @@ describe("dates in Europe/Copenhagen", () => {
     expect(formatPeriod("2026-11-18T23:00:00Z", null)).toBe("fra tors. 19. nov.");
     expect(formatPeriod(null, "2026-11-25T22:59:59Z")).toBe("til ons. 25. nov.");
     expect(formatPeriod(null, null)).toBe("ukendt periode");
+  });
+
+  it("shows an exclusive end at Copenhagen midnight as the day before", () => {
+    // regression: a Rema campaign ending Saturday 21 Nov is stored as Sunday 00:00 Copenhagen
+    expect(formatPeriod("2026-11-15T23:00:00Z", "2026-11-21T23:00:00Z")).toBe(
+      "man. 16. nov. – lør. 21. nov.",
+    );
+    expect(formatPeriod(null, "2026-11-21T23:00:00Z")).toBe("til lør. 21. nov.");
+    // summer time: midnight is 22:00 UTC
+    expect(formatDate(displayEnd("2026-07-11T22:00:00Z"))).toBe("11. jul. 2026");
+    // a Tjek inclusive end and other times are unchanged
+    expect(displayEnd("2026-11-20T22:59:59Z").toISOString()).toBe("2026-11-20T22:59:59.000Z");
+    expect(displayEnd("2026-11-21T23:00:01Z").toISOString()).toBe("2026-11-21T23:00:01.000Z");
+    expect(formatPeriod("2026-11-13T23:00:00Z", "2026-11-20T22:59:59Z")).toBe(
+      "lør. 14. nov. – fre. 20. nov.",
+    );
   });
 
   it("rejects invalid dates", () => {

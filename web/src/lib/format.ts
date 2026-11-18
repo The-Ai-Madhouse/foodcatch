@@ -153,14 +153,32 @@ export function formatDateTime(value: Date | string): string {
   return `${formatDate(value)} kl.${NBSP}${pad2(p.hour)}.${pad2(p.minute)}`;
 }
 
-/** A validity period: `"tors. 20. nov. – ons. 26. nov."`, or open-ended `"fra tors. 20. nov."`. */
+/**
+ * The last moment of a validity period ending at `value`, for display.
+ *
+ * Rema periods are stored with an exclusive end at the next Copenhagen midnight (a campaign
+ * ending Saturday has `valid_to` = Sunday 00:00), Tjek periods with an inclusive end (22:59:59
+ * UTC). An end exactly at Copenhagen midnight is shown as the day before, so both read the same.
+ */
+export function displayEnd(value: Date | string): Date {
+  const date = toDate(value);
+  const p = copenhagenParts(date);
+  const atMidnight =
+    p.hour === 0 && p.minute === 0 && date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
+  return atMidnight ? new Date(date.getTime() - 1) : date;
+}
+
+/**
+ * A validity period: `"tors. 20. nov. – ons. 26. nov."`, or open-ended `"fra tors. 20. nov."`.
+ * The end is shown as its last day (see {@link displayEnd}).
+ */
 export function formatPeriod(
   from: Date | string | null | undefined,
   to: Date | string | null | undefined,
 ): string {
-  if (from && to) return `${formatDayDate(from)} – ${formatDayDate(to)}`;
+  if (from && to) return `${formatDayDate(from)} – ${formatDayDate(displayEnd(to))}`;
   if (from) return `fra ${formatDayDate(from)}`;
-  if (to) return `til ${formatDayDate(to)}`;
+  if (to) return `til ${formatDayDate(displayEnd(to))}`;
   return "ukendt periode";
 }
 

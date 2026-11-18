@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/PageHeader";
 import { PriceChart } from "@/components/PriceChart";
-import { formatDate, formatUnitPriceRange, unitLabel } from "@/lib/format";
+import { displayEnd, formatDate, formatUnitPriceRange, unitLabel } from "@/lib/format";
 import { KIND_LABELS, buildPriceChart } from "@/lib/history";
 import { classKeyFromSegment } from "@/lib/routes";
 import { getClassPriceHistory } from "@/server/queries";
@@ -64,7 +64,8 @@ export default async function ClassHistoryPage({ params }: PageProps<"/vare/[cla
               {newestFirst.map((r, i) => (
                 <tr key={`${r.listingId}-${i}`} className="border-t border-line">
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {formatDate(r.validFrom)} – {r.validTo ? formatDate(r.validTo) : "nu"}
+                    {formatDate(r.validFrom)} –{" "}
+                    {r.validTo ? formatDate(displayEnd(r.validTo)) : "nu"}
                   </td>
                   <td className="px-3 py-2">{r.chainName}</td>
                   <td className="px-3 py-2">{KIND_LABELS[r.kind] ?? r.kind}</td>
