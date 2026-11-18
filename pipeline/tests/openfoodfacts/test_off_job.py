@@ -154,3 +154,24 @@ def test_consecutive_failures_fail_the_run(run: Callable[[], RunResult], clean_d
     assert route.call_count == MAX_CONSECUTIVE_ERRORS * 5  # each lookup retried 5 times
     with clean_db.connect() as conn:
         assert conn.execute(select(fetch_run.c.status)).scalar_one() == "failed"
+
+
+def test_a_lookup_without_response_is_skipped(
+    run: Callable[[], RunResult], api: respx.MockRouter, clean_db: Engine
+) -> None:
+    """Regression (finding R4): a timeout on one EAN must not roll back the others."""
+    api.get(f"{BASE_URL}/product/{FRESH_EAN}.json", name="fresh").mock(
+        side_effect=httpx.ReadTimeout("slow")
+    )
+    with clean_db.begin() as conn:
+        conn.execute(insert(product).values(ean=FRESH_EAN))  # times out on every attempt
+        conn.execute(insert(product).values(ean=FOUND_EAN))
+
+    result = run()
+
+    assert result.status == "succeeded"
+    assert result.stats["off_errors"] == 1
+    assert result.stats["off_found"] == 1
+    rows = _products(clean_db)
+    assert rows[FRESH_EAN]["off_checked_at"] is None
+    assert rows[FOUND_EAN]["off_checked_at"] is not None

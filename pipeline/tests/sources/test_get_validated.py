@@ -5,7 +5,14 @@ import pytest
 import respx
 from pydantic import BaseModel
 
-from foodcatch.sources import SourceHTTPError, SourceSchemaError, get_validated, link_relations
+from foodcatch.sources import (
+    SourceError,
+    SourceHTTPError,
+    SourceNetworkError,
+    SourceSchemaError,
+    get_validated,
+    link_relations,
+)
 
 URL = "https://api.example.test/stores"
 
@@ -50,6 +57,16 @@ def test_http_error_hides_query(http_client: httpx.Client) -> None:
         get_validated(http_client, URL, endpoint="stores", model=Store, params={"token": "x"})
     assert info.value.status_code == 403
     assert "token" not in str(info.value)
+
+
+@respx.mock
+def test_network_error_is_a_source_error_without_query(http_client: httpx.Client) -> None:
+    respx.get(URL).mock(side_effect=httpx.ConnectError("down"))
+    with pytest.raises(SourceNetworkError) as info:
+        get_validated(http_client, URL, endpoint="stores", model=Store, params={"token": "x"})
+    assert isinstance(info.value, SourceError)
+    assert str(info.value) == f"stores: ConnectError for {URL}"
+    assert isinstance(info.value.__cause__, httpx.ConnectError)
 
 
 @respx.mock

@@ -5,9 +5,10 @@
   catalog that is current or starts within :data:`~foodcatch.sources.tjek.UPCOMING_DAYS` days.
 
 Every response goes through ``ctx.ingest`` (catalog lists included), so ``foodcatch reprocess``
-replays exactly what happened live. An HTTP error for one dealer or catalog is logged and
-counted (``dealer_errors`` / ``catalog_errors``) and the job continues with the next one; the
-record-count quality check flags a run that lost a large share of its data. A schema mismatch
+replays exactly what happened live. An HTTP or network error (after the client's retries) for
+one dealer or catalog is logged and counted (``dealer_errors`` / ``catalog_errors``) and the
+job continues with the next one; the record-count quality check flags a run that lost a large
+share of its data. A schema mismatch
 or an error for *every* dealer fails the run.
 
 Quality metric: ``records`` (stores resp. offers seen).
@@ -20,7 +21,7 @@ from sqlalchemy import Connection, select
 from foodcatch.db.tables import chain
 from foodcatch.jobs.context import JobContext
 from foodcatch.jobs.registry import register_job
-from foodcatch.sources import SourceError, SourceHTTPError
+from foodcatch.sources import SourceError, SourceHTTPError, SourceNetworkError
 from foodcatch.sources.tjek import (
     UPCOMING_DAYS,
     fetch_catalogs,
@@ -65,7 +66,7 @@ def collect_tjek_stores(ctx: JobContext) -> None:
         try:
             for page in iter_stores(ctx.http, [dealer_id]):
                 stores += ctx.ingest(page).records
-        except SourceHTTPError as exc:
+        except (SourceHTTPError, SourceNetworkError) as exc:
             failed += 1
             ctx.count("dealer_errors")
             ctx.log.error("tjek.dealer_failed", chain=chain_id, dealer_id=dealer_id, error=str(exc))
@@ -93,7 +94,7 @@ def collect_tjek_offers(ctx: JobContext) -> None:
     for chain_id, dealer_id in dealers:
         try:
             catalogs = fetch_catalogs(ctx.http, dealer_id)
-        except SourceHTTPError as exc:
+        except (SourceHTTPError, SourceNetworkError) as exc:
             failed += 1
             ctx.count("dealer_errors")
             ctx.log.error("tjek.dealer_failed", chain=chain_id, dealer_id=dealer_id, error=str(exc))
@@ -109,7 +110,7 @@ def collect_tjek_offers(ctx: JobContext) -> None:
             ctx.count("catalogs_fetched")
             try:
                 _collect_catalog(ctx, chain_id, catalog.id)
-            except SourceHTTPError as exc:
+            except (SourceHTTPError, SourceNetworkError) as exc:
                 ctx.count("catalog_errors")
                 ctx.log.error(
                     "tjek.catalog_failed", chain=chain_id, catalog_id=catalog.id, error=str(exc)

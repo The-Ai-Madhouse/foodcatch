@@ -119,6 +119,39 @@ def test_tjek_stores_job_fails_when_every_dealer_fails(
 
 
 @respx.mock
+def test_a_catalog_without_response_does_not_discard_the_others(
+    run: Callable[[str], RunResult], clean_db: Engine, load_fixture: Callable[[str], Any]
+) -> None:
+    """Regression (finding R4): a timeout on one catalog must not fail the whole run."""
+    day = timedelta(days=1)
+    catalogs = [
+        _catalog("ok", "Netto uge 47", -2 * day, 5 * day),
+        _catalog("slow", "Netto uge 48", 3 * day, 10 * day),
+    ]
+    offers = load_fixture("tjek/offers_netto.json")
+
+    def catalogs_for(request: httpx.Request) -> httpx.Response:
+        if request.url.params["dealer_ids"] == NETTO:
+            return httpx.Response(200, json=catalogs)
+        return httpx.Response(200, json=[])
+
+    def offers_for(request: httpx.Request) -> httpx.Response:
+        if request.url.params["catalog_ids"] == "slow":
+            raise httpx.ReadTimeout("slow", request=request)
+        return httpx.Response(200, json=offers)
+
+    respx.get(f"{BASE_URL}/catalogs").mock(side_effect=catalogs_for)
+    respx.get(f"{BASE_URL}/offers").mock(side_effect=offers_for)
+
+    result = run("tjek-offers")
+
+    assert result.status == "succeeded"
+    assert result.stats["catalog_errors"] == 1
+    with clean_db.connect() as conn:
+        assert conn.execute(select(func.count()).select_from(listing)).scalar_one() == len(offers)
+
+
+@respx.mock
 def test_tjek_offers_job(
     run: Callable[[str], RunResult], clean_db: Engine, load_fixture: Callable[[str], Any]
 ) -> None:

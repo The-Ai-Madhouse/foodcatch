@@ -26,7 +26,12 @@ from typing import Annotated, Final
 import httpx
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
 
-from foodcatch.sources import Fetched, SourceHTTPError, SourceSchemaError
+from foodcatch.sources import (
+    Fetched,
+    SourceHTTPError,
+    SourceSchemaError,
+    get_or_network_error,
+)
 
 BASE_URL = "https://world.openfoodfacts.org/api/v2"
 FIELDS = (
@@ -139,11 +144,14 @@ def fetch_product(client: httpx.Client, ean: str) -> Fetched[OffProductResponse]
     Raises:
         InvalidEanError: if ``ean`` is not 8-14 digits.
         SourceHTTPError: for HTTP errors other than the documented "not found" 404.
+        SourceNetworkError: if no response arrived (after the client's retries).
         SourceSchemaError: if the body is not a valid product response.
     """
     url = product_url(ean)
     fields = ",".join(FIELDS)
-    response = client.get(url, params={"fields": fields})
+    response = get_or_network_error(
+        client, url, endpoint=ENDPOINT_PRODUCT, params={"fields": fields}
+    )
     public_url = str(response.request.url.copy_with(query=None))
     if response.is_error and response.status_code != HTTP_NOT_FOUND:
         raise SourceHTTPError(response.status_code, public_url, response.text[:200])

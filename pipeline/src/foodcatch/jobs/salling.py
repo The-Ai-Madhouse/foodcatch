@@ -32,7 +32,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-import httpx
 from sqlalchemy import Connection, func, select, update
 
 from foodcatch.config import Settings
@@ -43,7 +42,7 @@ from foodcatch.ingest.salling import STORE_SOURCE, is_valid_clearance
 from foodcatch.jobs.context import JobContext
 from foodcatch.jobs.registry import register_job
 from foodcatch.jobs.salling_geo import GeoTiler, ReturnedStore, TargetStore
-from foodcatch.sources import Fetched, SourceHTTPError
+from foodcatch.sources import Fetched, SourceHTTPError, SourceNetworkError
 from foodcatch.sources.salling import (
     BRANDS,
     FoodWasteResponse,
@@ -200,8 +199,8 @@ class _FoodWasteRun:
             if exc.status_code in AUTH_STATUS_CODES:
                 raise
             error = str(exc)
-        except httpx.TransportError as exc:
-            error = repr(exc)
+        except SourceNetworkError as exc:
+            error = str(exc)
         self.failures += 1
         self.ctx.count("geo_calls_failed")
         self.ctx.log.warning("salling.geo_call_failed", target=target.id, error=error)

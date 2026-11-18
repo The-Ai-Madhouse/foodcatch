@@ -59,6 +59,26 @@ class SourceSchemaError(SourceError):
     """The response did not match the expected pydantic model."""
 
 
+class SourceNetworkError(SourceError):
+    """No response: a connection or timeout error that persisted through the client's retries.
+
+    Wraps :class:`httpx.TransportError` so jobs can tolerate one failing item (a catalog, an
+    EAN) the same way as an HTTP error. The message names the error type and the URL without
+    query string (never parameters or headers).
+    """
+
+
+def get_or_network_error(
+    client: httpx.Client, url: str, *, endpoint: str, **kwargs: Any
+) -> httpx.Response:
+    """``client.get(url, **kwargs)``, raising :class:`SourceNetworkError` for transport errors."""
+    try:
+        return client.get(url, **kwargs)
+    except httpx.TransportError as exc:
+        public_url = str(httpx.URL(url).copy_with(query=None))
+        raise SourceNetworkError(f"{endpoint}: {type(exc).__name__} for {public_url}") from exc
+
+
 @dataclass(frozen=True, slots=True)
 class Fetched[T]:
     """One validated API response.
@@ -104,10 +124,13 @@ def get_validated[T](
 
     Raises:
         SourceHTTPError: for 4xx/5xx responses (after the client's retries).
+        SourceNetworkError: if no response arrived (after the client's retries).
         SourceSchemaError: if the body is not valid JSON for ``model``.
     """
-    response = client.get(
+    response = get_or_network_error(
+        client,
         url,
+        endpoint=endpoint,
         params=dict(params) if params else None,
         headers=headers,
         extensions=retry_extensions(retry),
