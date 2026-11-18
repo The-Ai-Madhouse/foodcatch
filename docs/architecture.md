@@ -176,15 +176,17 @@ Seeded by migration.
 `unit_price_min numeric null`, `unit_price_max numeric null`,
 `member_only bool`, `max_per_customer int null`,
 `valid_from timestamptz`, `valid_to timestamptz`, `first_seen_at`, `last_seen_at`,
-`raw_object_id fk`, `extra jsonb`,
-`unique(source, source_item_id, valid_from, price)`.
+`raw_object_id fk`, `extra jsonb` (food waste: `stock`, `stock_unit`, `percent_discount`),
+`unique(source, source_item_id, valid_from, price)`. Ingest sets `last_seen_at = now()` on every
+upsert; `api.food_waste_near` only shows clearances seen by the latest finished food-waste run.
 Unit prices follow the PoC rule: `unit_price_min = price / size_max`, `unit_price_max = price / size_min`.
 
 **`matcher_release`** – `version text pk`, `created_at`, `is_current bool` (exactly one current).
 
 **`classification`** – result of recognition for one variant of a listing:
 `listing_id fk`, `matcher_version fk`, `variant_index smallint`, `type_id text`, `type_label text`,
-`group_name text`, `attrs jsonb`, `class_key text`, `is_exact bool`, `is_healthy bool`,
+`group_name text`, `attrs jsonb`, `class_key text`, `class_label text` (Danish label of the class,
+e.g. `Mælk, letmælk, økologisk`), `is_exact bool`, `is_healthy bool`,
 `offer_variants smallint`, `same_class_variants smallint`, `notes text[]`, `source_hint text`,
 `pk(listing_id, matcher_version, variant_index)`; index on `(matcher_version, class_key)`.
 A listing with no recognized variant gets **no** rows (and may get a `review_item`).
@@ -238,13 +240,14 @@ The web app may only read these views (created in Alembic migrations, `GRANT SEL
 * `api.stores` – `id, chain_id, chain_name, name, street, zip, city, lat, lon` (Tjek stores, all chains, plus Salling stores).
 * `api.current_netto_deals` – one row per (current or upcoming Netto offer listing × healthy classified variant)
   under the current matcher: `listing_id, variant_index, title, description, price, unit, unit_price_min,
-  unit_price_max, valid_from, valid_to, type_id, type_label, group_name, class_label, attrs, is_exact,
-  notes, price_applies, netto_unit_price_worst, netto_unit_price_best, references`.
+  unit_price_max, valid_from, valid_to, type_id, type_label, group_name, class_key, class_label, attrs,
+  is_exact, notes, price_applies, netto_unit_price_worst, netto_unit_price_best, references`
+  (`price_applies` etc. are null until the deal is computed; `references` is then `[]`).
 * `api.food_waste_near` – current clearances with healthy classification:
   `listing_id, store_id, chain_id, store_name, street, zip, city, lat, lon, title, ean, price, reference_price,
-  discount_pct, unit, unit_price, valid_to, stock, type_label, class_label, is_exact`.
-* `api.class_price_history` – `class_key, class_label, kind, chain_id, chain_name, title, unit_price_min,
-  unit_price_max, valid_from, valid_to` for all classified listings (all matcher-current).
+  discount_pct, unit, unit_price, valid_to, stock, stock_unit, type_label, class_label, is_exact`.
+* `api.class_price_history` – `class_key, class_label, kind, chain_id, chain_name, listing_id, title, unit,
+  unit_price_min, unit_price_max, valid_from, valid_to` for all classified listings (all matcher-current).
 * `api.pipeline_status` – latest run per job: `job, status, started_at, finished_at, stats, error`,
   plus `api.review_queue_summary` – `reason, open_count`.
 
@@ -266,6 +269,9 @@ chains with a store in `api.stores` within the chosen radius (haversine in SQL).
 | `HEALTHCHECKS_URL_<JOB>` | pipeline | optional ping URLs per job |
 | `SENTRY_DSN` | pipeline | optional |
 | `DB_SIZE_BUDGET_MB` | pipeline | default 1024 |
+| `QUALITY_DROP_THRESHOLD` | pipeline | default 0.5 – record-count drop that marks a run `degraded` |
+| `LOG_LEVEL`, `LOG_FORMAT` | pipeline | `INFO`; `auto` (JSON in CI) \| `json` \| `console` |
+| `FOODCATCH_ENV_FILE` | pipeline | explicit `.env` path; empty = load none (tests) |
 | `FOODCATCH_DEFAULT_LOCATION` | web | `lat,lon` default when no cookie |
 
 ## 9. Testing
