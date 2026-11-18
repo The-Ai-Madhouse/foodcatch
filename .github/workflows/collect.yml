@@ -110,7 +110,8 @@ jobs:
           fi
 
           # tjek-offers -> HEALTHCHECKS_URL_TJEK_OFFERS (same rule as foodcatch.config)
-          key="HEALTHCHECKS_URL_$(tr 'a-z-' 'A-Z_' <<< "$job")"
+          upper="${job^^}"
+          key="HEALTHCHECKS_URL_${upper//-/_}"
           {
             echo "job=$job"
             echo "healthchecks_key=$key"
@@ -205,6 +206,7 @@ jobs:
           # Optional; unset below when empty so the pipeline defaults apply.
           REGION_RADIUS_KM: ${{ vars.REGION_RADIUS_KM }}
           DB_SIZE_BUDGET_MB: ${{ vars.DB_SIZE_BUDGET_MB }}
+          OFF_BATCH_SIZE: ${{ vars.OFF_BATCH_SIZE }}
           QUALITY_DROP_THRESHOLD: ${{ inputs.accept_drop && '1' || vars.QUALITY_DROP_THRESHOLD }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
           LOG_FORMAT: json
@@ -228,7 +230,8 @@ jobs:
             for item in "${missing[@]}"; do echo "::error::Missing $item (docs/setup.md §4)."; done
             exit 1
           fi
-          for name in REGION_RADIUS_KM DB_SIZE_BUDGET_MB QUALITY_DROP_THRESHOLD LOG_LEVEL; do
+          for name in REGION_RADIUS_KM DB_SIZE_BUDGET_MB OFF_BATCH_SIZE QUALITY_DROP_THRESHOLD \
+            LOG_LEVEL; do
             [[ -n "${!name}" ]] || unset "$name"
           done
 
