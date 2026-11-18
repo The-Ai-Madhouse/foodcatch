@@ -19,6 +19,8 @@ from typing import Any, Literal
 import httpx
 from pydantic import TypeAdapter, ValidationError
 
+from foodcatch.http import RetryPolicy, retry_extensions
+
 type RawSource = Literal["salling", "tjek", "rema", "openfoodfacts"]
 RAW_SOURCES: tuple[RawSource, ...] = ("salling", "tjek", "rema", "openfoodfacts")
 
@@ -30,12 +32,27 @@ class SourceError(Exception):
 
 
 class SourceHTTPError(SourceError):
-    """The source answered with an HTTP error status (after retries)."""
+    """The source answered with an HTTP error status (after retries).
 
-    def __init__(self, status_code: int, url: str, detail: str = "") -> None:
+    Attributes:
+        status_code: the HTTP status.
+        url: the request URL without query string.
+        headers: the response headers (lower-case names, ``Set-Cookie`` removed), e.g. to read
+            ``Retry-After`` of a 429. Request headers (authorization) are never included.
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        url: str,
+        detail: str = "",
+        *,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
         super().__init__(f"HTTP {status_code} from {url}" + (f": {detail}" if detail else ""))
         self.status_code = status_code
         self.url = url
+        self.headers: Mapping[str, str] = dict(headers or {})
 
 
 class SourceSchemaError(SourceError):
@@ -72,6 +89,7 @@ def get_validated[T](
     model: type[T] | TypeAdapter[T],
     params: QueryParams | None = None,
     headers: Mapping[str, str] | None = None,
+    retry: RetryPolicy | None = None,
 ) -> Fetched[T]:
     """GET ``url`` and validate the JSON body against ``model``.
 
@@ -82,15 +100,26 @@ def get_validated[T](
         model: a pydantic model class, any type (e.g. ``list[Store]``) or a ``TypeAdapter``.
         params: query parameters; recorded with the payload, so never put secrets here.
         headers: per-request headers (e.g. authorization); not recorded.
+        retry: per-request retry policy (default: the client's, see :mod:`foodcatch.http`).
 
     Raises:
         SourceHTTPError: for 4xx/5xx responses (after the client's retries).
         SourceSchemaError: if the body is not valid JSON for ``model``.
     """
-    response = client.get(url, params=dict(params) if params else None, headers=headers)
+    response = client.get(
+        url,
+        params=dict(params) if params else None,
+        headers=headers,
+        extensions=retry_extensions(retry),
+    )
     public_url = str(response.request.url.copy_with(query=None))
     if response.is_error:
-        raise SourceHTTPError(response.status_code, public_url, response.text[:200])
+        raise SourceHTTPError(
+            response.status_code,
+            public_url,
+            response.text[:200],
+            headers=response_headers(response),
+        )
     adapter: TypeAdapter[T] = model if isinstance(model, TypeAdapter) else TypeAdapter(model)
     try:
         data = adapter.validate_json(response.content)

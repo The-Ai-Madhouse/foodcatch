@@ -10,6 +10,11 @@
 
 Callers never need their own retry loop. Source-specific headers (e.g. the Salling bearer token)
 are passed per request so they never end up in stored params.
+
+A single request can override the retry behaviour with a :class:`RetryPolicy` passed as the
+request extension :data:`RETRY_POLICY_EXTENSION` (see :func:`retry_extensions`), e.g.
+:data:`NO_RETRY` for a quota-limited API where a 429 must end the run instead of being slept out.
+Requests without the extension keep the client's defaults.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ import random
 import threading
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
@@ -47,6 +53,33 @@ HOST_RATES_PER_SECOND: Mapping[str, float] = {
 }
 RETRY_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 MAX_RETRY_AFTER_SECONDS = 120.0
+RETRY_POLICY_EXTENSION = "foodcatch.retry_policy"
+"""Request extension key carrying a per-request :class:`RetryPolicy`."""
+
+
+@dataclass(frozen=True, slots=True)
+class RetryPolicy:
+    """Retry behaviour for one request, overriding the client's defaults.
+
+    Attributes:
+        max_attempts: total attempts including the first (``None``: the client's default).
+            ``1`` disables retries of both retryable statuses and network errors.
+        retry_statuses: response statuses that are retried; any other status is returned at
+            once (e.g. leave out 429 to return a rate-limit answer without waiting).
+    """
+
+    max_attempts: int | None = None
+    retry_statuses: frozenset[int] = RETRY_STATUS_CODES
+
+
+NO_RETRY = RetryPolicy(max_attempts=1)
+"""Send exactly one request: the first response (or network error) is the result."""
+
+
+def retry_extensions(policy: RetryPolicy | None) -> dict[str, object]:
+    """Request ``extensions`` carrying ``policy`` (empty for the client's defaults)."""
+    return {} if policy is None else {RETRY_POLICY_EXTENSION: policy}
+
 
 type Sleep = Callable[[float], None]
 type Clock = Callable[[], float]
@@ -149,18 +182,21 @@ class RetryingTransport(httpx.BaseTransport):
             error=str(exc),
         )
 
-    def _send_once(self, request: httpx.Request) -> httpx.Response:
+    def _send_once(self, request: httpx.Request, retry_statuses: frozenset[int]) -> httpx.Response:
         self._throttle.wait(request.url.host)
         response = self._inner.handle_request(request)
-        if response.status_code in RETRY_STATUS_CODES:
+        if response.status_code in retry_statuses:
             response.read()
             response.close()
             raise RetryableStatusError(request, response)
         return response
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
+        policy = request.extensions.get(RETRY_POLICY_EXTENSION)
+        if not isinstance(policy, RetryPolicy):
+            policy = RetryPolicy()
         retrying = Retrying(
-            stop=stop_after_attempt(self._max_attempts),
+            stop=stop_after_attempt(policy.max_attempts or self._max_attempts),
             wait=self._wait_seconds,
             retry=retry_if_exception_type((RetryableStatusError, httpx.TransportError)),
             sleep=self._sleep,
@@ -168,7 +204,7 @@ class RetryingTransport(httpx.BaseTransport):
             reraise=True,
         )
         try:
-            return retrying(self._send_once, request)
+            return retrying(self._send_once, request, policy.retry_statuses)
         except RetryableStatusError as exc:
             # Out of attempts: hand the final response to the caller (raise_for_status decides).
             return exc.response

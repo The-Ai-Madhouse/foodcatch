@@ -8,7 +8,14 @@ import pytest
 import respx
 
 from foodcatch import USER_AGENT
-from foodcatch.http import HostThrottle, create_client, parse_retry_after
+from foodcatch.http import (
+    NO_RETRY,
+    HostThrottle,
+    RetryPolicy,
+    create_client,
+    parse_retry_after,
+    retry_extensions,
+)
 
 URL = "https://api.example.test/items"
 
@@ -141,3 +148,53 @@ def test_client_throttles_known_hosts(sleeps: list[float]) -> None:
     client.get("https://nominatim.openstreetmap.org/search")
     assert len(sleeps) == 1
     assert 0.9 < sleeps[0] <= 1.0
+
+
+# --------------------------------------------------------------------------- per-request policy
+
+
+@respx.mock
+def test_no_retry_policy_returns_429_at_once(client: httpx.Client, sleeps: list[float]) -> None:
+    route = respx.get(URL).mock(
+        return_value=httpx.Response(429, headers={"Retry-After": "3600"}, text="slow down")
+    )
+    response = client.get(URL, extensions=retry_extensions(NO_RETRY))
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "3600"
+    assert response.text == "slow down"
+    assert route.call_count == 1
+    assert sleeps == []  # never slept out
+
+
+@respx.mock
+def test_no_retry_policy_reraises_network_errors_at_once(client: httpx.Client) -> None:
+    route = respx.get(URL).mock(side_effect=httpx.ConnectError("down"))
+    with pytest.raises(httpx.ConnectError):
+        client.get(URL, extensions=retry_extensions(NO_RETRY))
+    assert route.call_count == 1
+
+
+@respx.mock
+def test_policy_can_retry_server_errors_but_not_429(
+    client: httpx.Client, sleeps: list[float]
+) -> None:
+    policy = RetryPolicy(retry_statuses=frozenset({500, 502, 503, 504}))
+    route = respx.get(URL).mock(
+        side_effect=[httpx.Response(503), httpx.Response(429), httpx.Response(200)]
+    )
+    response = client.get(URL, extensions=retry_extensions(policy))
+    assert response.status_code == 429
+    assert route.call_count == 2
+    assert len(sleeps) == 1
+
+
+@respx.mock
+def test_requests_without_policy_keep_the_defaults(
+    client: httpx.Client, sleeps: list[float]
+) -> None:
+    route = respx.get(URL).mock(
+        side_effect=[httpx.Response(429, headers={"Retry-After": "2"}), httpx.Response(200)]
+    )
+    assert client.get(URL, extensions=retry_extensions(None)).status_code == 200
+    assert route.call_count == 2
+    assert sleeps == [2.0]
