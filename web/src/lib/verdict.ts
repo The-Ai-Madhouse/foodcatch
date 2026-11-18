@@ -12,6 +12,10 @@
  * - `good_deal` – Netto's worst unit price <= the cheapest counted reference.
  * - `cheaper_elsewhere` – even Netto's best unit price > the cheapest counted reference.
  * - `undecided` – otherwise (Netto's pack sizes overlap the cheapest reference).
+ *
+ * The two comparisons use whole øre (half up, `toOre`): Rema publishes compare prices rounded to
+ * øre (10 kr / 300 g -> 33.33) while Tjek unit prices have four decimals (33.3333), so an
+ * identical price must not count as more expensive.
  */
 
 export const VERDICTS = [
@@ -71,6 +75,16 @@ export function referenceCounts(ref: Reference, nearbyChains: ReadonlySet<string
   return LOCATION_INDEPENDENT_KINDS.has(ref.kind) || nearbyChains.has(ref.chain_id);
 }
 
+/**
+ * `value` (kr.) in whole øre, rounded half up; mirrors `to_ore` in `verdict.py`.
+ *
+ * Unit prices have at most four decimals, so `value * 10000` is an integer up to float error;
+ * integer arithmetic from there makes both implementations round identically.
+ */
+export function toOre(value: number): number {
+  return Math.floor((Math.round(value * 10_000) + 50) / 100);
+}
+
 function none(verdict: Verdict): VerdictResult {
   return { verdict, cheapest_unit_price: null, reference_count: 0 };
 }
@@ -89,6 +103,10 @@ export function verdict(deal: DealInput, nearbyChains: Iterable<string>): Verdic
   const cheapest = Math.min(...counted.map((ref) => ref.unit_price));
   const best = deal.netto_unit_price_best ?? worst;
   const result: Verdict =
-    worst <= cheapest ? "good_deal" : best > cheapest ? "cheaper_elsewhere" : "undecided";
+    toOre(worst) <= toOre(cheapest)
+      ? "good_deal"
+      : toOre(best) > toOre(cheapest)
+        ? "cheaper_elsewhere"
+        : "undecided";
   return { verdict: result, cheapest_unit_price: cheapest, reference_count: counted.length };
 }

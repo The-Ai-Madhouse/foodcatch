@@ -75,6 +75,27 @@
                               {"kind": "regular", "chain_id": "rema1000", "unit_price": 96.19}]},
       "nearby_chains": ["superbrugsen", "rema1000"],
       "expected": {"verdict": "good_deal", "cheapest_unit_price": 87.5, "reference_count": 2}
+    },
+    {
+      "name": "prices are compared in whole øre: 10 kr / 300 g equals Rema's rounded compare price 33.33",
+      "deal": {"netto_unit_price_worst": 33.3333, "netto_unit_price_best": 33.3333, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "regular", "chain_id": "rema1000", "unit_price": 33.33}]},
+      "nearby_chains": ["rema1000"],
+      "expected": {"verdict": "good_deal", "cheapest_unit_price": 33.33, "reference_count": 1}
+    },
+    {
+      "name": "half an øre above the reference rounds up and is cheaper elsewhere",
+      "deal": {"netto_unit_price_worst": 33.335, "netto_unit_price_best": 33.335, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "regular", "chain_id": "rema1000", "unit_price": 33.33}]},
+      "nearby_chains": ["rema1000"],
+      "expected": {"verdict": "cheaper_elsewhere", "cheapest_unit_price": 33.33, "reference_count": 1}
+    },
+    {
+      "name": "a reference below Netto's best price by less than half an øre still overlaps",
+      "deal": {"netto_unit_price_worst": 40.0, "netto_unit_price_best": 33.3349, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "offer", "chain_id": "lidl", "unit_price": 33.33}]},
+      "nearby_chains": ["lidl"],
+      "expected": {"verdict": "undecided", "cheapest_unit_price": 33.33, "reference_count": 1}
     }
   ]
 }

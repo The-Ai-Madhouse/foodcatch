@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { type DealInput, type VerdictResult, referenceCounts, verdict } from "./verdict";
+import { type DealInput, type VerdictResult, referenceCounts, toOre, verdict } from "./verdict";
 
 interface VerdictCase {
   name: string;
@@ -75,5 +75,19 @@ describe("referenceCounts", () => {
     expect(
       referenceCounts({ kind: "ean_reference", chain_id: "foetex", unit_price: 1 }, nearby),
     ).toBe(true);
+  });
+});
+
+describe("toOre", () => {
+  it("rounds to whole øre, half up, like the pipeline", () => {
+    const cases: [number, number][] = [
+      [33.3333, 3333],
+      [33.335, 3334],
+      [33.3349, 3333],
+      [0.005, 1],
+      [49.9, 4990],
+      [87.5, 8750],
+    ];
+    for (const [value, ore] of cases) expect(toOre(value)).toBe(ore);
   });
 });

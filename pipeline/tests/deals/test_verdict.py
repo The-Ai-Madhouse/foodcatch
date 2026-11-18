@@ -16,6 +16,7 @@ from foodcatch.deals.verdict import (
     Reference,
     counted_references,
     parse_references,
+    to_ore,
     verdict,
 )
 
@@ -104,3 +105,11 @@ def test_counted_references_filter_by_location_except_history_and_ean() -> None:
     )
     deal = DealInput(10.0, 10.0, price_applies=True, is_exact=True, references=refs)
     assert [r.unit_price for r in counted_references(deal, ["rema1000"])] == [2.0, 3.0, 4.0]
+
+
+@pytest.mark.parametrize(
+    ("value", "ore"),
+    [(33.3333, 3333), (33.335, 3334), (33.3349, 3333), (0.005, 1), (49.9, 4990), (87.5, 8750)],
+)
+def test_to_ore_rounds_half_up_like_the_web(value: float, ore: int) -> None:
+    assert to_ore(value) == ore

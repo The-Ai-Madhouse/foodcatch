@@ -284,6 +284,9 @@ shared fixtures in `fixtures/verdict_cases.json` at repo root):
 * `cheaper_elsewhere` – `netto_unit_price_best > min(reference.unit_price)`.
 * `undecided` – otherwise (Netto's pack sizes overlap the cheapest reference).
 
+Both comparisons are made in whole øre (half up): Rema's compare prices are rounded to øre while
+Tjek unit prices have four decimals, so an identical price must not count as more expensive.
+
 ## 7. Web contract (schema `api`, read-only)
 
 The web app may only read these views (created in Alembic migrations, `GRANT SELECT` to role

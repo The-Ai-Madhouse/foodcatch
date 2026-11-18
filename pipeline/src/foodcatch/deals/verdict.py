@@ -12,6 +12,10 @@ load them in tests with the ``shared_fixture`` pytest fixture). Rules, in order:
 * ``cheaper_elsewhere`` - ``netto_unit_price_best > min(reference unit_price)``.
 * ``undecided`` - otherwise.
 
+The two comparisons use whole øre (half up, :func:`to_ore`): Rema publishes compare prices
+rounded to øre (10 kr / 300 g -> 33.33) while Tjek unit prices have four decimals (33.3333), so
+an identical price must not count as more expensive.
+
 ``cheapest_unit_price`` / ``reference_count`` describe the references that counted (``None`` /
 0 for the first four verdicts).
 """
@@ -97,6 +101,15 @@ def counted_references(deal: DealInput, nearby_chains: Collection[str]) -> list[
     ]
 
 
+def to_ore(value: float) -> int:
+    """``value`` (kr.) in whole øre, rounded half up; mirrors ``toOre`` in ``verdict.ts``.
+
+    Unit prices have at most four decimals, so ``value * 10_000`` is an integer up to float
+    error; integer arithmetic from there makes both implementations round identically.
+    """
+    return (round(value * 10_000) + 50) // 100
+
+
 def _result(v: Verdict, cheapest: float | None = None, count: int = 0) -> VerdictResult:
     return VerdictResult(verdict=v, cheapest_unit_price=cheapest, reference_count=count)
 
@@ -119,9 +132,9 @@ def verdict(deal: DealInput, nearby_chains: Collection[str]) -> VerdictResult:
         return _result("no_reference")
     cheapest = min(r.unit_price for r in counted)
     best = worst if deal.netto_unit_price_best is None else deal.netto_unit_price_best
-    if worst <= cheapest:
+    if to_ore(worst) <= to_ore(cheapest):
         v: Verdict = "good_deal"
-    elif best > cheapest:
+    elif to_ore(best) > to_ore(cheapest):
         v = "cheaper_elsewhere"
     else:
         v = "undecided"
