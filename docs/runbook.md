@@ -18,7 +18,7 @@ daily job the same day.
 | healthchecks.io email "down" | healthchecks.io | a job failed, degraded, or did not report within its grace time |
 | failed workflow email | GitHub (to whoever last changed the cron in `collect.yml`) | the workflow failed, including setup failures before the pipeline started |
 | run summary | Actions → `collect` → run → *Summary* | `succeeded`, `degraded (…)` or `failed (exit N)` |
-| logs | Actions → run → job `<job>` → step *Collect* | JSON lines: `job.started`, `http.retry`, `job.degraded`, `job.failed` (with traceback) |
+| logs | Actions → run → job `<job>` → step *Collect* | JSON lines: `job.started`, `http.retry`, `job.degraded`, `job.failed` (with traceback); Salling food waste: `salling.geo_call`, `salling.quota_exhausted`, `salling.food_waste_collected` |
 | run history | `api.pipeline_status` (Neon SQL editor), or `/status` in the web app | latest run per job with `stats` and `error` |
 | all runs | `SELECT job, status, started_at, stats, error FROM fetch_run ORDER BY started_at DESC LIMIT 50;` | |
 | stack traces | Sentry (if `SENTRY_DSN` is set) | grouped exceptions per release (commit SHA) |
@@ -69,7 +69,7 @@ open for its whole duration.
 |---|---|---|
 | `Missing secret …` / `Missing variable …` (before `foodcatch` starts) | configuration not set or renamed | set it ([setup](setup.md) §4) |
 | `SourceHTTPError: HTTP 401/403 from https://api.sallinggroup.com/…` | Salling key revoked, expired or out of scope | create a new key, `gh secret set SALLING_API_KEY` |
-| `HTTP 429` after retries | rate limit hit despite throttling | rerun later; if it repeats, lower the host rate in `foodcatch/http.py` (`HOST_RATES_PER_SECOND`) |
+| `HTTP 429` after retries | rate limit hit despite throttling | rerun later; if it repeats, lower the host rate in `foodcatch/http.py` (`HOST_RATES_PER_SECOND`). Salling: see §3.5 (the quota is shared by both Salling jobs) |
 | `HTTP 5xx` after 5 attempts, or `ConnectError` / timeouts | source outage | rerun later; nothing to fix if the next scheduled run succeeds |
 | `SourceSchemaError: <endpoint>: response … does not match the expected schema` | **the API changed** (common for unofficial sources) | see §2.1 |
 | `TjekPaginationLimitError` | a Tjek query reached the 1,000-result cap | narrow the query in `sources/tjek.py` (e.g. by region with `r_lat`/`r_lng`/`r_radius`) |
@@ -108,8 +108,10 @@ Then:
 ## 3. A job is degraded
 
 `degraded` means the run **succeeded and its data was committed**, but its quality metric
-(`records` by default) dropped by more than `QUALITY_DROP_THRESHOLD` (default 50 %) compared
-with the **previous succeeded run** of the same job. The run exits with code 3, the workflow is
+(`records` by default; `region_clearances` for `salling-food-waste`) dropped by more than
+`QUALITY_DROP_THRESHOLD` (default 50 %) compared with the **previous succeeded run** of the same
+job, or the job reported itself incomplete (`salling-food-waste`: the region was not fully
+covered, §3.5). The run exits with code 3, the workflow is
 marked failed and healthchecks.io gets `/fail`. The reason is in `fetch_run.error`, and
 `stats.quality` has the numbers.
 
@@ -118,7 +120,7 @@ marked failed and healthchecks.io gets `/fail`. The reason is in `fetch_run.erro
 | Job | Normal reasons for a drop | Suspicious reasons |
 |---|---|---|
 | `tjek-offers` | holiday weeks, a chain publishing late, fewer upcoming catalogs on the day | several chains with `dealer_errors`/`catalog_errors` in `stats`; offers parsed but skipped |
-| `salling-food-waste` | Sunday or holiday (fewer clearances); the 13:37 run compared with 05:37 | many HTTP errors in the logs; stores missing |
+| `salling-food-waste` | Sunday or holiday (fewer clearances in the region); the 13:37 run compared with 05:37; `region not fully covered` because the quota ran out (§3.5) | `geo_calls_failed` in `stats`; `region_stores_covered` far below `region_stores` on a run without `quota_exhausted` |
 | `rema-products`, `*-stores` | assortment or store-list changes (small) | anything above 10 % |
 | `off-enrich` | few new EANs that day (expected to vary a lot) | – |
 
@@ -139,7 +141,8 @@ gh workflow run collect.yml -f job=<job> -f accept_drop=true
 ```
 
 This sets `QUALITY_DROP_THRESHOLD=1` for that run only. It succeeds and becomes the new
-baseline.
+baseline. It does not override a run that reported itself incomplete (`salling-food-waste`
+whose region was not fully covered, §3.5).
 
 ### 3.3 If the drop is a bug
 
@@ -159,6 +162,71 @@ gh variable delete COLLECT_PAUSED_JOBS   # resume
 Paused jobs skip only their scheduled runs; `gh workflow run` still runs them. Pause the
 matching healthchecks.io check too (**Pause** on the check), or it reports the missing pings.
 Remember that every skipped day of a daily job is lost data.
+
+To see what is paused: `gh variable get COLLECT_PAUSED_JOBS`. To resume one job while others
+stay paused, set the variable to the remaining names; delete it when nothing is paused. Resume
+the healthchecks.io check at the same time.
+
+### 3.5 Salling food waste: request budget and quota
+
+The Salling key gets HTTP 429 for a long period after about 60 requests
+([data sources](data-sources.md#salling-group), [ADR 0005](decisions/0005-salling-geo-tiling.md)).
+`salling-food-waste` makes at most `SALLING_FOOD_WASTE_MAX_CALLS` requests per run (default 25),
+covers the region first and the rest of Denmark in rotation, and stops at the first 429 without
+retrying. Read a run's `stats`:
+
+| Stat | Meaning |
+|---|---|
+| `salling_calls` / `call_budget` | requests made / allowed in this run |
+| `region_stores`, `region_stores_covered` | region stores known / covered (equal on a good run) |
+| `national_stores`, `national_stores_covered` | stores outside the region / covered by this run (rotation) |
+| `stores_inferred_absent` | known stores counted as covered although absent from the answers (unknown to the food-waste service) |
+| `region_clearances` | the quality metric |
+| `quota_exhausted` | a 429 stopped the run (the log line `salling.quota_exhausted` has `retry_after`) |
+| `budget_exhausted` | the budget ran out before every store was covered (normal: the rotation continues next run) |
+| `geo_calls_failed` | requests that failed for other reasons (each target is retried once; 3 failures stop the run) |
+
+**Tuning the budget.** Set the repository variable (or `.env` locally):
+
+```bash
+gh variable set SALLING_FOOD_WASTE_MAX_CALLS --body 25
+```
+
+* Raise it if runs end with `budget_exhausted` before the region is covered (the region grew), or
+  to cover the country faster - but only once you know the quota: two runs a day plus the weekly
+  `salling-stores` (~9 requests, Monday 03:17) must stay below it. The first `quota_exhausted`
+  run tells you the 429's `Retry-After`; if it shows an hourly window, the runs 8 hours apart can
+  each use close to the full quota.
+* Lower it if runs hit `quota_exhausted`, or shrink the region (`REGION_RADIUS_KM`) - the
+  default region needs about 23 requests (simulated: 15 km ~16, 20 km ~19, 25 km ~21).
+* What the budget buys (simulated): with 25 the region takes ~23 requests and the rest of
+  Denmark is fully covered about every 10 days; with 35, about every 2 days.
+* A manual `gh workflow run collect.yml -f job=salling-food-waste` spends the same quota as a
+  scheduled run: do not dispatch it shortly before 05:37, 13:37 or a Monday `salling-stores`.
+
+**Resuming the job after the redesign** (one time; it was paused while the per-store version
+burned the quota):
+
+1. Merge the change. The push runs `db-migrate`, which adds `store.food_waste_checked_at`
+   (migration 0003); check that it succeeded (`gh run list --workflow db-migrate.yml --limit 1`).
+   The new job fails on a database without that column.
+2. Remove `salling-food-waste` from `COLLECT_PAUSED_JOBS` (§3.4):
+
+   ```bash
+   gh variable get COLLECT_PAUSED_JOBS                 # what is paused now
+   gh variable delete COLLECT_PAUSED_JOBS              # if it was the only paused job
+   gh variable set COLLECT_PAUSED_JOBS --body "<rest>" # otherwise: the remaining names
+   ```
+
+3. Resume its healthchecks.io check. Optionally run it once by hand, at least an hour after the
+   last Salling request (`gh workflow run collect.yml -f job=salling-food-waste`), and read its
+   `stats` as above. The first run has no `region_clearances` baseline, so it cannot degrade on
+   the quality check.
+
+**After a 429** nothing has to be done: the next scheduled run starts with the region again,
+and the rotation continues where it stopped (`store.food_waste_checked_at`). If every run hits
+429, pause the job (§3.4), wait for the quota to recover (at least an hour), lower the budget and
+resume.
 
 ---
 
@@ -317,9 +385,9 @@ Levers, from least to most invasive:
 5. **Move up**: a paid Neon plan, or Postgres on a small VPS. Only `DATABASE_URL` changes
    ([ADR 0001](decisions/0001-free-hosting-stack.md)).
 
-`raw_object` grows by one row per API response (on the order of 1,500 rows a day, mostly
-food-waste requests). Its rows are small and
-required for reprocessing, so keep them.
+`raw_object` grows by one row per API response (Salling food waste adds at most
+2 × `SALLING_FOOD_WASTE_MAX_CALLS` rows a day). Its rows are small and required for
+reprocessing, so keep them.
 
 ---
 
@@ -453,11 +521,20 @@ later work.
 
 **Collection**
 
-* *Salling food-waste is paused.* The Salling API allows only about 60 requests before it
-  answers 429 for a long period, so the per-store `salling-food-waste` job cannot cover the
-  ~721 stores. It is listed in the repository variable `COLLECT_PAUSED_JOBS` until the job is
-  redesigned around the geo query (see [data sources](data-sources.md#salling-group)). Do not
-  dispatch it manually in the meantime: it burns the quota and the run will fail.
+* *Salling quota.* The Salling key allows about 60 requests before a long 429 period; its exact
+  window is unknown (§3.5). `salling-food-waste` stays within `SALLING_FOOD_WASTE_MAX_CALLS`
+  and covers Denmark outside the region only in rotation (about every 10 days with the defaults),
+  so EAN reference prices from there are days old. If the job was paused while it was
+  redesigned, resume it: remove `salling-food-waste` from `COLLECT_PAUSED_JOBS` (§3.4) and
+  resume its healthchecks.io check.
+* *A degraded food-waste run hides uncovered region stores.* `api.food_waste_near` shows
+  clearances seen by the latest finished run; region stores a quota-stopped run did not reach
+  disappear until the next complete run.
+* *Absent-store inference.* A known store absent from a geo answer although nearer than the
+  farthest returned store of its brand counts as covered (Salling lists stores without
+  clearances too, so such a store is unknown to the food-waste service). If Salling ever ranks
+  stores differently, a store could be skipped for a run; `stores_inferred_absent` shows how often
+  the rule applies.
 
 **Prices and deals**
 

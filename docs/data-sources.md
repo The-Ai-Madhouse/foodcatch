@@ -7,7 +7,7 @@ it cannot validate (see the [runbook](runbook.md)).
 
 | Source | Status | Key | Jobs | Throttle used |
 |---|---|---|---|---|
-| [Salling Group](#salling-group) | official developer API | yes (`SALLING_API_KEY`) | `salling-stores`, `salling-food-waste` | 4 req/s |
+| [Salling Group](#salling-group) | official developer API | yes (`SALLING_API_KEY`) | `salling-stores`, `salling-food-waste` | 0.9 req/s, ≤ 25 requests per food-waste run |
 | [Tjek / eTilbudsavis](#tjek--etilbudsavis) | unofficial | no | `tjek-stores`, `tjek-offers` | 4 req/s |
 | [Rema 1000](#rema-1000) | unofficial | no | `rema-products` | 4 req/s |
 | [Open Food Facts](#open-food-facts) | official, open data (ODbL) | no | `off-enrich` | 1.5 req/s |
@@ -20,6 +20,8 @@ Common rules for every request (architecture §3):
   running web app, and the result is cached.
 * The shared HTTP client (`pipeline/src/foodcatch/http.py`) throttles per host, retries network
   errors, HTTP 429 and 5xx with exponential backoff and honours `Retry-After` (capped at 120 s).
+  A request can override this with a per-request retry policy; the Salling food-waste job sends
+  its requests without retries (see [Salling](#salling-group)).
 * Every response is stored unchanged (gzip) in the raw store before it is parsed
   ([ADR 0002](decisions/0002-raw-first-pipeline.md)), so nothing has to be fetched twice.
 * Development and tests use small recorded fixtures (`pipeline/tests/fixtures/`), never a crawl.
@@ -37,20 +39,30 @@ is sent as a header only and never recorded in raw-object parameters or logs.
 | Endpoint | Purpose |
 |---|---|
 | `GET /v2/stores?brand=netto\|foetex\|bilka&country=dk&per_page=…&page=…` | paged (the `Link` header announces `rel="next"`; `x-total-count` the total). Stores: `id` (UUID), `name`, `brand`, `address{street, zip, city, country, extra}`, `coordinates` **`[lon, lat]`**, `hours[…]`, `attributes{…}` |
-| `GET /v1/food-waste/{storeId}` | clearances of one store: `{store, clearances: [{offer, product}]}` |
+| `GET /v1/food-waste/?geo=lat,lon&radius=KM` | `salling-food-waste`: clearances of the ~16–19 stores nearest to the point, **regardless of the radius** (≤ 100; we send 100): a JSON list of `{store, clearances: [{offer, product}]}`. Raw endpoint `food-waste-geo`, params `{geo, radius}` |
+| `GET /v1/food-waste/{storeId}` | clearances of one store, same object. No longer fetched; raw objects of this endpoint (`food-waste`) from before ADR 0005 still reprocess |
 
 **Rate limit (observed 2026-11-18, undocumented):** every response carries `Retry-After: 1`,
 and after about **60 requests** the key gets HTTP 429 for a long period (more than 37 minutes
-in our test, so the window is probably an hour). Iterating `/v1/food-waste/{storeId}` over all
-~721 stores is therefore impossible within the quota, and the `salling-food-waste` job is
-**paused** in production (`COLLECT_PAUSED_JOBS`) until it is redesigned to use the geo query
-below (one call returns the clearances of ~17 stores, so ~45–60 calls cover Denmark).
+in our test; the window and the real `Retry-After` of the 429 are not known yet - the job now
+logs it, see below). Asking ~721 stores one by one is impossible within that quota. Therefore
+([ADR 0005](decisions/0005-salling-geo-tiling.md)):
 
-Not used (yet):
+* The client throttles `api.sallinggroup.com` to 0.9 requests/s.
+* `salling-food-waste` **tiles Denmark with geo queries**: region stores (`REGION_CENTERS`,
+  `REGION_RADIUS_KM`) first in every run, then the rest of the country in rotation, least
+  recently covered first. Simulated on the real store list with 16 stores per answer, covering
+  every Salling store once takes about 65 queries, the default region (30 km around Copenhagen,
+  ~256 stores) about 23.
+* A run makes at most **`SALLING_FOOD_WASTE_MAX_CALLS`** requests (default 25). Two runs a day
+  plus the weekly `salling-stores` job (~9 pages) stay under 60 requests a day.
+* Its requests are sent **without retries**. The first 429 stops the run's fetching; the
+  `salling.quota_exhausted` log line has the 429's `Retry-After` value, and the run's stats
+  have `quota_exhausted: true`. `salling-stores` keeps the client's normal retries.
 
-* `GET /v1/food-waste/?geo=lat,lon&radius=KM` (radius ≤ 100) and `?zip=NNNN`: return only the
-  ~17 nearest stores per call. The planned redesign tiles Denmark with geo queries until every
-  known store has been covered.
+Not used:
+
+* `?zip=NNNN` on the food-waste endpoint: also returns only nearby stores.
 * `GET /v1/leaflet-offers`: answers 403 for our key (its scope does not include production
   access). Netto's leaflet offers come from Tjek instead.
 
@@ -69,9 +81,16 @@ Not used (yet):
   than for leaflet headings.
 * `product.categories` (`{da, en}`) may be missing. Category paths can contain repeated
   segments (`"A>B>C>A>B>D"`); the leaf is the last segment.
-* Rate limits are undocumented. We throttle to about 4 requests/s, honour 429 + `Retry-After`
-  and retry 5xx with backoff. A food-waste run makes one request per Salling store (several
-  hundred), twice a day.
+* A geo response lists the nearest stores of all brands, **including stores without
+  clearances** (`clearances: []`), nearest first; each `store` also has `distance_km` (from the
+  query point; not used). Recorded 2026-11-18 at central Copenhagen: 16 stores within 1.4 km,
+  none of our known stores nearer than the farthest one missing
+  (fixture `pipeline/tests/fixtures/salling/food_waste_geo_copenhagen.json`, trimmed). A known
+  store absent although nearer than the farthest returned store of its brand (unknown to the
+  food-waste service) is counted as covered, so it is not queried again in the same run.
+* Geo responses overlap. Ingest is idempotent, so a store in two responses of one run is simply
+  ingested twice; ingest counters (`records`, `clearances`, ...) count it twice, the job's
+  `stores_*` and `region_*` stats count it once.
 
 ---
 
