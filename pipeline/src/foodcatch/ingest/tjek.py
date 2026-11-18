@@ -6,7 +6,10 @@ Dispatch on ``payload.endpoint``:
   ``chain.tjek_dealer_id``. Stores outside Denmark and of untracked dealers are skipped.
 * ``catalogs`` - nothing to store beyond the raw object (catalog ids are recorded on listings).
 * ``offers`` - upsert ``listing`` (source ``tjek``, kind ``offer``, ``catalog_id``) on
-  ``(source, source_item_id, valid_from, price)``, normalized by :func:`parse_offer`.
+  ``(source, source_item_id, valid_from, price)``, normalized by :func:`parse_offer`. When Tjek
+  re-publishes an offer id with a new price or start, the earlier versions of that id are
+  closed (``valid_to`` = the payload's fetch time, or their start if they never started), so
+  only the latest version stays current (:func:`ingest_offers`).
 * ``dealers`` - nothing to store (dealer ids are seeded on ``chain``).
 
 Offer normalization (ported from ``poc/foodcatch_poc.py::parse_tjek_offer``):
@@ -28,13 +31,23 @@ import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Final, Literal
 from uuid import UUID
 
 from pydantic import TypeAdapter, ValidationError
-from sqlalchemy import Boolean, Connection, func, literal_column, or_, select, tuple_, update
+from sqlalchemy import (
+    Boolean,
+    Connection,
+    func,
+    literal_column,
+    not_,
+    or_,
+    select,
+    tuple_,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from foodcatch.config import Settings
@@ -344,18 +357,45 @@ def _listing_row(offer: ParsedOffer, chain_id: str, raw_object_id: UUID) -> dict
     }
 
 
+def _close_superseded(
+    conn: Connection, keys: Sequence[tuple[str, datetime, Decimal]], at: datetime
+) -> set[UUID]:
+    """Close open versions of the page's offer ids that are not in the page.
+
+    Tjek re-publishes an offer id with a corrected price or start date; the natural key then
+    yields a second listing while the earlier one would stay current until its own end. Such
+    an earlier version gets ``valid_to = at`` (or ``valid_from`` if it never started), like a
+    superseded Rema price period. Closing twice changes nothing, so a replay is idempotent.
+    """
+    closed_at = func.greatest(listing.c.valid_from, at)
+    stmt = (
+        update(listing)
+        .where(
+            listing.c.source == SOURCE,
+            listing.c.source_item_id.in_(sorted({item_id for item_id, _, _ in keys})),
+            not_(tuple_(listing.c.source_item_id, listing.c.valid_from, listing.c.price).in_(keys)),
+            or_(listing.c.valid_to.is_(None), listing.c.valid_to > closed_at),
+        )
+        .values(valid_to=closed_at)
+        .returning(listing.c.id)
+    )
+    return set(conn.execute(stmt).scalars())
+
+
 def ingest_offers(
     conn: Connection,
     offers: Iterable[TjekOffer],
     *,
     dealer_chains: Mapping[str, str],
     raw_object_id: UUID,
+    fetched_at: datetime,
 ) -> IngestResult:
-    """Upsert offers as ``listing`` rows and report inserted or changed listing ids.
+    """Upsert offers as ``listing`` rows and report inserted, changed or closed listing ids.
 
-    Two statements per page: an upsert that only rewrites rows whose content differs (so its
-    ``RETURNING`` yields exactly the inserted/changed listings), then a touch of
-    ``last_seen_at``/``raw_object_id`` on every listing of the page.
+    Three statements per page: an upsert that only rewrites rows whose content differs (so its
+    ``RETURNING`` yields exactly the inserted/changed listings), a touch of
+    ``last_seen_at``/``raw_object_id`` on every listing of the page, and the closing of earlier
+    versions of the page's offer ids (:func:`_close_superseded`, at ``fetched_at``).
     """
     result = IngestResult()
     rows: dict[tuple[str, datetime, Decimal], dict[str, Any]] = {}
@@ -402,6 +442,9 @@ def ingest_offers(
         )
         .values(last_seen_at=func.now(), raw_object_id=raw_object_id)
     )
+    closed = _close_superseded(conn, list(rows), fetched_at.astimezone(UTC))
+    result.listing_ids.update(closed)
+    result.counts["offers_closed"] += len(closed)
     return result
 
 
@@ -418,6 +461,7 @@ def ingest_payload(conn: Connection, payload: RawPayload, *, settings: Settings)
             _validate(OFFER_PAGE, payload),
             dealer_chains=_dealer_chains(conn),
             raw_object_id=payload.raw_object_id,
+            fetched_at=payload.fetched_at,
         )
     if payload.endpoint == ENDPOINT_STORES:
         stores = _validate(STORE_PAGE, payload)

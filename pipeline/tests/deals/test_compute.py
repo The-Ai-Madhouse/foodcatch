@@ -371,6 +371,25 @@ def test_republished_competitor_offer_counts_once_with_latest_price(sc: Scenario
     assert sc.ref_listings(netto) == {("offer", new)}
 
 
+def test_republished_netto_offer_only_latest_version_gets_a_deal(sc: Scenario) -> None:
+    """Regression (finding C1): a corrected Netto price must replace the mistaken one."""
+    mistaken = sc.offer(PORK_8_12, unit_price=12.5, source_item_id="n-1")
+    sc.offer(PORK_8_12, chain="lidl", unit_price=80.0)
+    recompute_deals(sc.conn)
+    assert (mistaken, 0) in sc.deals()
+
+    sc.conn.execute(update(listing).where(listing.c.id == mistaken).values(last_seen_at=NOW - DAY))
+    corrected = sc.offer(PORK_8_12, unit_price=87.5, source_item_id="n-1")
+
+    recompute_deals(sc.conn, listing_ids={corrected})
+
+    assert set(sc.deals()) == {(corrected, 0)}
+    later = sc.offer(PORK_8_12, unit_price=90.0, valid_from=NOW + 6 * DAY, valid_to=NOW + 13 * DAY)
+    recompute_deals(sc.conn)
+    history = {r["listing_id"] for r in sc.refs(later) if r["kind"] == "history"}
+    assert str(mistaken) not in history
+
+
 def test_rema_regular_price_is_the_current_latest_one(sc: Scenario) -> None:
     netto = sc.offer(PORK_8_12, unit_price=33.33)
     rema = {"chain": "rema1000", "source": "rema", "source_item_id": "rema-42"}
@@ -441,7 +460,9 @@ def test_history_contains_earlier_netto_offers_only(sc: Scenario) -> None:
         PORK_8_12, unit_price=35.0, valid_from=NOW + 2 * DAY, valid_to=NOW + 9 * DAY
     )
     # the same Tjek offer re-published with a new price is not its own history
-    sc.offer(PORK_8_12, unit_price=34.0, source_item_id="n-now", valid_from=NOW - 2 * DAY)
+    republished = sc.offer(
+        PORK_8_12, unit_price=34.0, source_item_id="n-now", valid_from=NOW - 2 * DAY
+    )
     # an earlier multi-product Netto offer whose price does not apply
     mixed = sc.listing(unit_price=20.0, unit_price_max=40.0, valid_from=NOW - 60 * DAY)
     sc.classify(mixed, PORK_8_12, MØRBRAD)
@@ -450,6 +471,7 @@ def test_history_contains_earlier_netto_offers_only(sc: Scenario) -> None:
 
     assert sc.ref_listings(current) == {("history", expired)}
     assert sc.ref_listings(upcoming) >= {("history", expired), ("history", current)}
+    assert republished not in {listing_id for listing_id, _ in sc.deals()}  # superseded
     history = sc.refs(current)[0]
     assert history["chain_id"] == "netto"
     assert history["unit_price"] == 31.0

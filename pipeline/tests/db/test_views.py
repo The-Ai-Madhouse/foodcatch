@@ -84,6 +84,39 @@ def test_current_netto_deals_and_history(
     assert db_conn.execute(text("SELECT count(*) FROM api.current_netto_deals")).scalar() == 0
 
 
+def test_current_netto_deals_shows_only_the_latest_version_of_an_offer(
+    db_conn: Connection, raw_payload: Callable[..., RawPayload]
+) -> None:
+    """Regression (finding C1): a re-published offer id is shown once, at its latest price."""
+    payload = raw_payload("tjek", "offers", [])
+    ids = {}
+    for price, seen in ((5, NOW - timedelta(days=1)), (35, NOW)):
+        ids[price] = uuid4()
+        db_conn.execute(
+            insert(listing).values(
+                id=ids[price],
+                source="tjek",
+                source_item_id="o1",
+                chain_id="netto",
+                kind="offer",
+                title="Hakket oksekød 8-12%",
+                price=price,
+                unit="kg",
+                unit_price_min=price / 0.4,
+                unit_price_max=price / 0.4,
+                valid_from=NOW - timedelta(days=1),
+                valid_to=NOW + timedelta(days=3),
+                last_seen_at=seen,
+                raw_object_id=payload.raw_object_id,
+            )
+        )
+        _classify(db_conn, ids[price])
+
+    rows = db_conn.execute(text("SELECT listing_id FROM api.current_netto_deals")).all()
+
+    assert [r.listing_id for r in rows] == [ids[35]]
+
+
 def test_food_waste_near_shows_only_items_seen_in_latest_run(
     db_conn: Connection, raw_payload: Callable[..., RawPayload]
 ) -> None:

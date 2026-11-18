@@ -545,6 +545,10 @@ later work.
 * *Duplicate REMA 1000 references.* A Rema campaign is collected from Tjek (leaflet) and from
   the Rema catalogue; when both carry it, a deal lists it twice. The cheapest reference and
   hence the verdict are unaffected.
+* *Withdrawn Tjek offers stay current.* A Tjek offer re-published with a new price or start
+  replaces its earlier version at once, but an offer Tjek removes from a catalogue without a
+  replacement stays current until its own end date (the jobs do not yet close offers of a fully
+  fetched catalogue that a run no longer saw).
 * *Upcoming offers as references.* Competitor offers count from publication until they end,
   including offers that start later than the Netto offer; this is deliberate (more references,
   more conservative verdicts).

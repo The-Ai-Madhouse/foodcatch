@@ -218,6 +218,10 @@ Tjek ids for the same physical store are not linked in v1.)
 matcher version and input fingerprint of the last classification; never written by ingest),
 `unique(source, source_item_id, valid_from, price)`. Ingest sets `last_seen_at = now()` on every
 upsert; `api.food_waste_near` only shows clearances seen by the latest finished food-waste run.
+A new price or start for an existing `source_item_id` is a new listing: the Rema and Tjek ingests
+then close the superseded open versions (`valid_to` = the payload's fetch time), and deals and
+`api.current_netto_deals` only use the latest version (highest `last_seen_at, valid_from`) of a
+Tjek offer id.
 Unit prices follow the PoC rule: `unit_price_min = price / size_max`, `unit_price_max = price / size_min`.
 
 **`matcher_release`** – `version text pk`, `created_at`, `is_current bool` (exactly one current).
@@ -283,8 +287,8 @@ The web app may only read these views (created in Alembic migrations, `GRANT SEL
 `foodcatch_web`). Column changes are breaking changes for the web.
 
 * `api.stores` – `id, chain_id, chain_name, name, street, zip, city, lat, lon` (Tjek stores, all chains, plus Salling stores).
-* `api.current_netto_deals` – one row per (current or upcoming Netto offer listing × healthy classified variant)
-  under the current matcher: `listing_id, variant_index, title, description, price, unit, unit_price_min,
+* `api.current_netto_deals` – one row per (current or upcoming Netto offer listing, latest version of its
+  Tjek offer id × healthy classified variant) under the current matcher: `listing_id, variant_index, title, description, price, unit, unit_price_min,
   unit_price_max, valid_from, valid_to, type_id, type_label, group_name, class_key, class_label, attrs,
   is_exact, notes, price_applies, netto_unit_price_worst, netto_unit_price_best, references`
   (`price_applies` etc. are null until the deal is computed; `references` is then `[]`).

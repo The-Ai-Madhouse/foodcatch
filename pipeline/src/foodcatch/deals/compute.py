@@ -3,7 +3,8 @@
 :func:`recompute_deals` maintains the ``deal`` table: one row per *Netto variant*, i.e. per
 healthy ``classification`` row (current matcher release) of a current or upcoming Netto offer
 listing (``source='tjek'``, ``chain_id='netto'``, ``kind='offer'``, ``valid_to`` null or in the
-future - the same rows ``api.current_netto_deals`` shows). Each row holds:
+future, the latest version of its Tjek offer id - the same rows ``api.current_netto_deals``
+shows). Each row holds:
 
 * ``netto_unit_price_worst`` = ``unit_price_max`` (fallback ``unit_price_min``) and
   ``netto_unit_price_best`` = ``unit_price_min`` (fallback ``unit_price_max``);
@@ -41,7 +42,8 @@ Reference kinds (references are always quoted at their *best*, i.e. lowest, unit
         latest price per Rema product.
     ``history``
         Other Netto offers of the class that started no later than this offer (any validity,
-        a different Tjek offer id, price applies), one per listing.
+        a different Tjek offer id, price applies, the latest version of that offer id - a
+        superseded mistaken price is no history), one per listing.
     ``ean_reference``
         A Netto Tjek offer carries no EAN, so EAN shelf prices are tied to it through the class:
         an *exact, homogeneous* listing of the same class that has an EAN (``product_id``, in
@@ -64,7 +66,8 @@ Incremental scope
 
 Staleness
     Every call deletes deal rows that no longer describe a current Netto variant: rows of
-    other matcher releases, of expired listings, and of variants that are no longer healthy.
+    other matcher releases, of expired or superseded listings (an earlier version of a
+    re-published Tjek offer id), and of variants that are no longer healthy.
 
 Efficiency (Neon free tier)
     Everything is three set-based statements: the release lookup, one ``DELETE`` and one
@@ -120,6 +123,23 @@ def _current(listing: str) -> str:
 def _netto_offer(listing: str) -> str:
     """SQL predicate: ``listing`` is a Netto offer from Tjek."""
     return f"{listing}.source = 'tjek' AND {listing}.kind = 'offer' AND {listing}.chain_id = :netto"
+
+
+def _latest_version(listing: str) -> str:
+    """SQL predicate: ``listing`` is the latest version of its Tjek offer id.
+
+    Tjek ingest closes earlier versions when an offer id is re-published with a new price or
+    start; this guard also covers versions closed later in the same transaction and rows
+    stored before that rule existed. Latest = highest ``(last_seen_at, valid_from)``, the
+    order :data:`_OFFER_REFS` uses for competitor offers (``api.current_netto_deals`` too).
+    """
+    return f"""NOT EXISTS (
+            SELECT 1 FROM listing nv
+            WHERE nv.source = {listing}.source
+              AND nv.source_item_id = {listing}.source_item_id
+              AND nv.id <> {listing}.id
+              AND (nv.last_seen_at, nv.valid_from)
+                  > ({listing}.last_seen_at, {listing}.valid_from))"""
 
 
 _SCOPE_ALL = "true"
@@ -185,7 +205,7 @@ _REGULAR_REFS = _listing_refs(
 _HISTORY_REFS = _listing_refs(
     "history",
     f"{_netto_offer('rl')} AND rl.source_item_id <> t.source_item_id"
-    " AND rl.valid_from <= t.valid_from",
+    f" AND rl.valid_from <= t.valid_from AND {_latest_version('rl')}",
     distinct_on="rl.id",
     order_by="rl.last_seen_at DESC",
 )
@@ -221,6 +241,7 @@ WITH target AS MATERIALIZED (
       AND c.is_healthy
       AND {netto_offer}
       AND {current}
+      AND {latest}
       AND {scope}
 ),
 refs AS (
@@ -281,7 +302,8 @@ WHERE d.matcher_version <> :version
          AND c.variant_index = d.variant_index
          AND c.is_healthy
          AND {_netto_offer("l")}
-         AND {_current("l")})
+         AND {_current("l")}
+         AND {_latest_version("l")})
 """
 
 
@@ -298,6 +320,7 @@ def _upsert_sql(*, scoped: bool) -> str:
         price_applies=_price_applies("c", "l"),
         netto_offer=_netto_offer("l"),
         current=_current("l"),
+        latest=_latest_version("l"),
         scope=_SCOPE_LISTINGS if scoped else _SCOPE_ALL,
         offer_refs=_OFFER_REFS,
         regular_refs=_REGULAR_REFS,

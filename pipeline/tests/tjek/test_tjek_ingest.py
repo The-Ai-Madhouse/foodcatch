@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -231,6 +232,42 @@ def test_new_price_is_a_new_listing(
         select(listing.c.price).where(listing.c.source_item_id == offer["id"]).order_by("price")
     ).scalars()
     assert list(prices) == [D("18.00"), D("20.00")]
+
+
+def test_republished_offer_closes_its_earlier_version(
+    db_conn: Connection, raw_payload: RawPayloadFactory, settings: Settings, load_fixture: Any
+) -> None:
+    """Regression: a corrected price must not leave the old version current (finding C1/R1)."""
+    now = datetime.now(UTC).replace(microsecond=0)
+    offer = {
+        **load_fixture("tjek/offers_netto.json")[0],
+        "run_from": (now - timedelta(days=1)).isoformat(),
+        "run_till": (now + timedelta(days=5)).isoformat(),
+    }
+    first = ingest_payload(db_conn, raw_payload("tjek", "offers", [offer]), settings=settings)
+    (old_id,) = first.listing_ids
+    corrected = {**offer, "pricing": {**offer["pricing"], "price": 25}}
+    payload = raw_payload("tjek", "offers", [corrected])
+
+    result = ingest_payload(db_conn, payload, settings=settings)
+
+    assert result.counts["offers_closed"] == 1
+    assert old_id in result.listing_ids  # so the hooks drop its deal row
+    rows = {
+        r.price: r
+        for r in db_conn.execute(
+            select(listing.c.price, listing.c.valid_from, listing.c.valid_to).where(
+                listing.c.source_item_id == offer["id"]
+            )
+        )
+    }
+    old, new = rows[D("20.00")], rows[D("25.00")]
+    assert old.valid_to == max(old.valid_from, payload.fetched_at)
+    assert new.valid_to == now + timedelta(days=5)
+
+    again = ingest_payload(db_conn, raw_payload("tjek", "offers", [corrected]), settings=settings)
+    assert again.counts["offers_closed"] == 0
+    assert not again.listing_ids
 
 
 def test_duplicate_offers_in_one_page_are_merged(
