@@ -5,7 +5,7 @@ Exit codes: 0 success, 1 failure, 2 usage error, 3 job finished ``degraded``.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 import typer
@@ -79,6 +79,14 @@ def _main(
 def _fail(message: str, code: int = EXIT_FAILED) -> typer.Exit:
     typer.secho(message, err=True, fg=typer.colors.RED)
     return typer.Exit(code)
+
+
+_LATEST_STATE_SOURCES: frozenset[str] = frozenset({"rema", "tjek"})
+"""Sources whose ingest closes superseded rows: a replay must end at the present."""
+
+
+def _today_utc() -> date:
+    return datetime.now(UTC).date()
 
 
 def _day(value: datetime | None) -> date | None:
@@ -192,6 +200,15 @@ def reprocess_cmd(
         f"Reprocessed {result.objects} raw objects: {result.records} records, "
         f"{result.listings} listings."
     )
+    until_day = _day(until)
+    if source in _LATEST_STATE_SOURCES and until_day is not None and until_day <= _today_utc():
+        typer.secho(
+            f"Warning: this replay of {source} ended before today, so the prices it covered are "
+            "now the latest ones. Finish with a range without --until before resuming the jobs "
+            "(docs/runbook.md §4.1).",
+            err=True,
+            fg=typer.colors.YELLOW,
+        )
 
 
 @app.command("reclassify")

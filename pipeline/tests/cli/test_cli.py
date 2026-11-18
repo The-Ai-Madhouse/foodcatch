@@ -185,6 +185,18 @@ def test_reprocess_runs(clean_db: Engine) -> None:
     assert "Reprocessed 0 raw objects" in result.output
 
 
+def test_reprocess_warns_when_a_stateful_replay_ends_in_the_past(clean_db: Engine) -> None:
+    """Regression (finding R2): a past-only replay rolls Rema/Tjek prices back; say so."""
+    past = runner.invoke(app, ["reprocess", "--source", "rema", "--until", "2026-11-08"])
+    assert past.exit_code == 0, past.output
+    assert "ended before today" in past.output
+
+    to_now = runner.invoke(app, ["reprocess", "--source", "rema", "--since", "2026-11-08"])
+    assert "ended before today" not in to_now.output
+    salling = runner.invoke(app, ["reprocess", "--source", "salling", "--until", "2026-11-08"])
+    assert "ended before today" not in salling.output
+
+
 # ------------------------------------------------------------------------- raw reindex
 def test_raw_reindex_then_reprocess_restores_a_lost_database(
     clean_db: Engine, cli_raw_store: LocalRawStore, rema_page: dict[str, Any]

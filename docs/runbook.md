@@ -259,6 +259,11 @@ FOODCATCH_ENV_FILE=../.env.production uv run foodcatch reprocess --source tjek -
   uv run foodcatch reprocess --source tjek --since 2026-11-01 --until 2026-11-15
   uv run foodcatch reprocess --source tjek --since 2026-11-15
   ```
+
+  **For `rema` and `tjek` the last range must reach the present** (no `--until`), and the jobs
+  stay paused until it has run: their ingest closes superseded prices as of each payload, so a
+  replay that stops in the past leaves that window's prices as the current ones (the CLI warns).
+  The next range or live run restores the latest state.
 * Free B2 downloads are 3× the stored data per month (setup §9), which is plenty for occasional
   reprocessing.
 
