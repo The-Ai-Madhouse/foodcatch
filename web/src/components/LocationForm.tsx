@@ -25,8 +25,7 @@ export function LocationForm({
     <div className="rounded-xl border border-line bg-surface p-4">
       <p className="text-sm text-ink-2">
         Viser butikker inden for <strong className="text-ink">{radiusKm} km</strong> af{" "}
-        <strong className="text-ink">{label}</strong>
-        {isDefault ? " (standardplacering)" : ""}.
+        {isDefault ? "standardplaceringen" : <strong className="text-ink">{label}</strong>}.
       </p>
       <form action={formAction} className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
