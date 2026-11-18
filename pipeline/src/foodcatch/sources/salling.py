@@ -1,10 +1,16 @@
 """Salling Group developer API (official; owned by the Salling module).
 
 Base URL :data:`BASE_URL`; every request sends ``Authorization: Bearer <SALLING_API_KEY>`` via
-:func:`auth_headers` as a per-request header (never in recorded params). Rate limits are
-undocumented: the shared client throttles to 4 requests/s and retries 429/5xx.
+:func:`auth_headers` as a per-request header (never in recorded params).
 
-Endpoints used (raw-store endpoint names in :data:`ENDPOINT_STORES` / :data:`ENDPOINT_FOOD_WASTE`):
+Rate limit (undocumented, observed 2026-11-18): every response carries ``Retry-After: 1`` and
+after about 60 requests the key gets HTTP 429 for a long period (more than 37 minutes). The
+shared client throttles this host to just under one request per second; fetchers take an optional
+:class:`~foodcatch.http.RetryPolicy` so a quota-limited job can turn retries off
+(:data:`~foodcatch.http.NO_RETRY`) and stop at the first 429.
+
+Endpoints used (raw-store endpoint names in :data:`ENDPOINT_STORES`, :data:`ENDPOINT_FOOD_WASTE`
+and :data:`ENDPOINT_FOOD_WASTE_GEO`):
 
 * ``GET /v2/stores?brand=netto|foetex|bilka&country=dk&per_page=..&page=..`` -> a JSON list of
   stores (``id`` uuid, ``name``, ``brand``, ``address{street, zip, city, country, extra}``,
@@ -20,6 +26,11 @@ Endpoints used (raw-store endpoint names in :data:`ENDPOINT_STORES` / :data:`END
   (``each`` or ``kg``). ``product``: categories{da, en} (may be ``{}``), description
   (abbreviated upper-case name), ean (the real GTIN - or a short in-store code for
   variable-weight goods), image (may be null).
+* ``GET /v1/food-waste/?geo=lat,lon&radius=KM`` (radius at most 100) -> a JSON list of the
+  same objects (``[{store, clearances}]``) for the ~16-19 stores nearest to the point,
+  regardless of the radius. This is what the ``salling-food-waste`` job uses: one call covers
+  a cluster of stores (:func:`fetch_food_waste_near`). The per-store endpoint above is kept for
+  reprocessing older raw objects and manual checks.
 * ``/v1/leaflet-offers`` is forbidden for our key - do not use.
 """
 
@@ -34,6 +45,7 @@ import httpx
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from foodcatch.http import RetryPolicy
 from foodcatch.sources import Fetched, SourceHTTPError, get_validated, link_relations
 
 BASE_URL = "https://api.sallinggroup.com"
@@ -41,8 +53,14 @@ BRANDS: tuple[str, ...] = ("netto", "foetex", "bilka")
 COUNTRY = "dk"
 ENDPOINT_STORES = "stores"
 ENDPOINT_FOOD_WASTE = "food-waste"
+ENDPOINT_FOOD_WASTE_GEO = "food-waste-geo"
 STORES_PATH = "/v2/stores"
 FOOD_WASTE_PATH = "/v1/food-waste/{store_id}"
+FOOD_WASTE_GEO_PATH = "/v1/food-waste/"
+GEO_MAX_RADIUS_KM = 100
+"""Largest radius the geo query accepts; the answer is the nearest stores regardless."""
+GEO_DECIMALS = 6
+"""Decimals of the query coordinates (about 0.1 m)."""
 DEFAULT_PER_PAGE = 100
 MAX_STORE_PAGES = 100
 """Safety stop for pagination (Netto DK has ~600 stores, i.e. 6 pages of 100)."""
@@ -154,7 +172,7 @@ class Clearance(_Model):
 
 
 class FoodWasteResponse(_Model):
-    """Response of ``GET /v1/food-waste/{storeId}``."""
+    """Response of ``GET /v1/food-waste/{storeId}`` (one element of a geo response)."""
 
     store: SallingStore
     clearances: list[Clearance] = Field(default_factory=list[Clearance])
@@ -166,7 +184,12 @@ def is_past_last_page(exc: SourceHTTPError) -> bool:
 
 
 def iter_stores(
-    client: httpx.Client, api_key: str, *, brand: str, per_page: int = DEFAULT_PER_PAGE
+    client: httpx.Client,
+    api_key: str,
+    *,
+    brand: str,
+    per_page: int = DEFAULT_PER_PAGE,
+    retry: RetryPolicy | None = None,
 ) -> Iterator[Fetched[list[SallingStore]]]:
     """Yield every page of Danish stores of ``brand`` (one :class:`Fetched` per HTTP response).
 
@@ -175,6 +198,7 @@ def iter_stores(
     the store count is an exact multiple of ``per_page`` the extra request is answered with
     HTTP 400 "last page", which also ends the iteration (:func:`is_past_last_page`). A page
     repeating the previous one and :data:`MAX_STORE_PAGES` stop the iteration as safety nets.
+    ``retry`` overrides the client's retry policy for every page.
 
     Raises:
         SourceHTTPError: for HTTP errors (after the shared client's retries).
@@ -190,6 +214,7 @@ def iter_stores(
                 model=list[SallingStore],
                 params={"brand": brand, "country": COUNTRY, "per_page": per_page, "page": page},
                 headers=auth_headers(api_key),
+                retry=retry,
             )
         except SourceHTTPError as exc:
             if page > 1 and is_past_last_page(exc):
@@ -232,11 +257,49 @@ def fetch_food_waste(
     return dataclasses.replace(fetched, params={"store_id": store_id})
 
 
+def fetch_food_waste_near(
+    client: httpx.Client,
+    api_key: str,
+    *,
+    lat: float,
+    lon: float,
+    radius_km: int = GEO_MAX_RADIUS_KM,
+    retry: RetryPolicy | None = None,
+) -> Fetched[list[FoodWasteResponse]]:
+    """Fetch the clearances of the stores nearest to ``(lat, lon)`` (one request).
+
+    Salling answers with the ~16-19 nearest stores whatever ``radius_km`` is, each as a
+    :class:`FoodWasteResponse`. Callers must not assume a fixed count. The query is recorded as
+    ``params = {"geo": "lat,lon", "radius": km}``.
+
+    Raises:
+        SourceHTTPError: for HTTP errors (``headers`` carries e.g. ``retry-after`` of a 429).
+        SourceSchemaError: if the body does not match ``list[FoodWasteResponse]``.
+        ValueError: for coordinates out of range or a radius outside 1..100 km.
+    """
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        raise ValueError(f"coordinates out of range: {lat}, {lon}")
+    if not 1 <= radius_km <= GEO_MAX_RADIUS_KM:
+        raise ValueError(f"radius must be 1..{GEO_MAX_RADIUS_KM} km, got {radius_km}")
+    geo = f"{lat:.{GEO_DECIMALS}f},{lon:.{GEO_DECIMALS}f}"
+    return get_validated(
+        client,
+        BASE_URL + FOOD_WASTE_GEO_PATH,
+        endpoint=ENDPOINT_FOOD_WASTE_GEO,
+        model=list[FoodWasteResponse],
+        params={"geo": geo, "radius": radius_km},
+        headers=auth_headers(api_key),
+        retry=retry,
+    )
+
+
 __all__ = [
     "BASE_URL",
     "BRANDS",
     "ENDPOINT_FOOD_WASTE",
+    "ENDPOINT_FOOD_WASTE_GEO",
     "ENDPOINT_STORES",
+    "GEO_MAX_RADIUS_KM",
     "Clearance",
     "ClearanceOffer",
     "ClearanceProduct",
@@ -246,6 +309,7 @@ __all__ = [
     "SallingStore",
     "auth_headers",
     "fetch_food_waste",
+    "fetch_food_waste_near",
     "is_past_last_page",
     "iter_stores",
 ]

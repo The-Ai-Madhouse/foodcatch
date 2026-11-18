@@ -124,8 +124,9 @@ jobs:
     needs: resolve
     if: needs.resolve.outputs.skip != 'true'
     runs-on: ubuntu-24.04
-    # The longest job (salling-food-waste: ~1,000 throttled requests) takes well under 15
-    # minutes; the margin covers Retry-After back-off. A hung run must not block its group.
+    # Every job takes well under 15 minutes (salling-food-waste makes at most
+    # SALLING_FOOD_WASTE_MAX_CALLS requests); the margin covers Retry-After back-off of the
+    # other sources. A hung run must not block its group.
     timeout-minutes: 45
     permissions:
       contents: read
@@ -207,6 +208,7 @@ jobs:
           REGION_RADIUS_KM: ${{ vars.REGION_RADIUS_KM }}
           DB_SIZE_BUDGET_MB: ${{ vars.DB_SIZE_BUDGET_MB }}
           OFF_BATCH_SIZE: ${{ vars.OFF_BATCH_SIZE }}
+          SALLING_FOOD_WASTE_MAX_CALLS: ${{ vars.SALLING_FOOD_WASTE_MAX_CALLS }}
           QUALITY_DROP_THRESHOLD: ${{ inputs.accept_drop && '1' || vars.QUALITY_DROP_THRESHOLD }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
           LOG_FORMAT: json
@@ -231,7 +233,7 @@ jobs:
             exit 1
           fi
           for name in REGION_RADIUS_KM DB_SIZE_BUDGET_MB OFF_BATCH_SIZE QUALITY_DROP_THRESHOLD \
-            LOG_LEVEL; do
+            SALLING_FOOD_WASTE_MAX_CALLS LOG_LEVEL; do
             [[ -n "${!name}" ]] || unset "$name"
           done
 
@@ -239,7 +241,7 @@ jobs:
           status=$?
           case "$status" in
             0) result="succeeded" ;;
-            3) result="degraded (record count dropped; see docs/runbook.md)" ;;
+            3) result="degraded (quality check failed or run incomplete; see docs/runbook.md §3)" ;;
             *) result="failed (exit $status)" ;;
           esac
           echo "Job \`$JOB\`: **$result**" >> "$GITHUB_STEP_SUMMARY"

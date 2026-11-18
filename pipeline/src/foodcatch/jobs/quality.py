@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 from uuid import UUID
 
@@ -77,6 +77,14 @@ def check_record_drop(
             f"{metric} dropped {drop:.0%} ({prev:g} -> {cur:g}); threshold {threshold:.0%}",
         )
     return QualityResult("succeeded", metric, cur, prev)
+
+
+def with_job_reasons(result: QualityResult, reasons: Sequence[str]) -> QualityResult:
+    """``result`` marked ``degraded`` when the job reported ``reasons`` (messages joined)."""
+    if not reasons:
+        return result
+    message = "; ".join([*reasons, *([result.message] if result.message else [])])
+    return replace(result, status="degraded", message=message)
 
 
 def database_size_bytes(conn: Connection) -> int:

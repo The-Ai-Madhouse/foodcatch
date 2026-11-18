@@ -1,0 +1,163 @@
+[
+ {
+  "clearances": [
+   {
+    "offer": {
+     "currency": "DKK",
+     "discount": 34,
+     "ean": "5712580589954",
+     "endTime": "2027-01-13T22:59:59.000Z",
+     "lastUpdate": "2026-11-17T15:57:18.000Z",
+     "newPrice": 71,
+     "originalPrice": 105,
+     "percentDiscount": 32.38,
+     "startTime": "2026-11-15T06:29:45.000Z",
+     "stock": 1,
+     "stockUnit": "each"
+    },
+    "product": {
+     "categories": {
+      "da": "Mejeri & køl>Mejeri>Ost>Skæreost",
+      "en": "Dairy And Cold Storage>Dairy>Cheese>Cheese For Slicing"
+     },
+     "description": "SKÆREOST 45+ MAMMEN",
+     "ean": "5703985054925",
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/d9924555-692e-41d2-9fb4-a4230f9e8b20"
+    }
+   },
+   {
+    "offer": {
+     "currency": "DKK",
+     "discount": 8.75,
+     "ean": "5712580591797",
+     "endTime": "2026-11-19T22:59:59.000Z",
+     "lastUpdate": "2026-11-17T16:00:32.000Z",
+     "newPrice": 16,
+     "originalPrice": 24.75,
+     "percentDiscount": 35.35,
+     "startTime": "2026-11-17T16:00:10.000Z",
+     "stock": 1,
+     "stockUnit": "each"
+    },
+    "product": {
+     "categories": {
+      "da": "Brød & kager>Lyst & groft brød>Toastbrød",
+      "en": "Bread And Cakes>Light Breads Dark Breads>Toast Breads"
+     },
+     "description": "FROKOSTSTYKKER PÅGEN",
+     "ean": "7311070017670",
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/7856efd6c0fdede4e30de1d5f96335c9"
+    }
+   }
+  ],
+  "store": {
+   "address": {
+    "city": "København K",
+    "country": "DK",
+    "extra": null,
+    "street": "Vestergade 39",
+    "zip": "1456"
+   },
+   "brand": "netto",
+   "coordinates": [
+    12.5687791,
+    55.6767469
+   ],
+   "distance_km": 0.08,
+   "id": "0e6f15e1-797f-4933-8f60-352c9a789bc5",
+   "name": "Netto Rådhuspladsen",
+   "type": "Point"
+  }
+ },
+ {
+  "clearances": [
+   {
+    "offer": {
+     "currency": "DKK",
+     "discount": 3.95,
+     "ean": "5712580798318",
+     "endTime": "2026-11-29T22:59:59.000Z",
+     "lastUpdate": "2026-11-18T13:08:18.000Z",
+     "newPrice": 6,
+     "originalPrice": 9.95,
+     "percentDiscount": 39.7,
+     "startTime": "2026-11-18T13:07:05.000Z",
+     "stock": 4,
+     "stockUnit": "each"
+    },
+    "product": {
+     "categories": {
+      "da": "Mejeri & køl>Pålæg>Kødpålæg>Spegepølse",
+      "en": "Dairy And Cold Storage>Lunch Meats>Meat>Salami"
+     },
+     "description": "ØKO STJERNEHAPS 3-STJERNET",
+     "ean": "57408002",
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/417ee2ba-da4d-4fec-82fa-9e49cc94a7a8"
+    }
+   },
+   {
+    "offer": {
+     "currency": "DKK",
+     "discount": 3.95,
+     "ean": "5712580796185",
+     "endTime": "2026-11-19T22:59:59.000Z",
+     "lastUpdate": "2026-11-17T15:08:20.000Z",
+     "newPrice": 10,
+     "originalPrice": 13.95,
+     "percentDiscount": 28.32,
+     "startTime": "2026-11-16T06:26:51.000Z",
+     "stock": 1,
+     "stockUnit": "each"
+    },
+    "product": {
+     "categories": {
+      "da": "Mejeri & køl>Mejeri>Mælk>Skummetmælk",
+      "en": "Dairy And Cold Storage>Dairy>Milk>Nonfat Milk"
+     },
+     "description": "ØKO SKUMMETMÆLK ARLA",
+     "ean": "5700426293929",
+     "image": "https://digitalassets.sallinggroup.com/image/upload/e_trim/c_limit,e_sharpen:80,f_auto,q_auto,w_400,h_400/25463f94-1267-4d58-82e7-25c0d3aaa358"
+    }
+   }
+  ],
+  "store": {
+   "address": {
+    "city": "København V",
+    "country": "DK",
+    "extra": null,
+    "street": "Vesterbrogade 1d",
+    "zip": "1620"
+   },
+   "brand": "foetex",
+   "coordinates": [
+    12.5673392131,
+    55.6753331037
+   ],
+   "distance_km": 0.1,
+   "id": "ffd50c4f-1bd1-474a-bd84-175154f693fb",
+   "name": "føtex City Industriens Hus",
+   "type": "Point"
+  }
+ },
+ {
+  "clearances": [],
+  "store": {
+   "address": {
+    "city": "København K",
+    "country": "DK",
+    "extra": null,
+    "street": "Nørre Voldgade 15",
+    "zip": "1358"
+   },
+   "brand": "netto",
+   "coordinates": [
+    12.57101,
+    55.68352
+   ],
+   "distance_km": 0.84,
+   "id": "fe947b29-8024-41d0-95e4-acab1fa6a477",
+   "name": "Netto Nørrevold Kbh",
+   "type": "Point"
+  }
+ }
+]

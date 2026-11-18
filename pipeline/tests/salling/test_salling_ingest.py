@@ -485,3 +485,104 @@ def test_listing_ids_are_uuids(
     body = load_fixture("salling/food_waste_netto_oesterbro.json")
     result = _ingest(db_conn, raw_payload, "food-waste", body, settings)
     assert all(isinstance(i, UUID) for i in result.listing_ids)
+
+
+# --------------------------------------------------------------------------- geo responses
+
+
+def _geo_body(load_fixture: Fixture) -> list[Any]:
+    """A geo response built from the per-store fixtures (same objects, as a list)."""
+    return [
+        load_fixture(f"salling/{name}.json")
+        for name in (
+            "food_waste_netto_oesterbro",
+            "food_waste_netto_hvidovre",
+            "food_waste_bilka_tilst",
+        )
+    ]
+
+
+def test_ingest_food_waste_geo_ingests_each_store_like_a_store_response(
+    db_conn: Connection, raw_payload: RawPayloadFactory, load_fixture: Fixture, settings: Settings
+) -> None:
+    geo = _ingest(db_conn, raw_payload, "food-waste-geo", _geo_body(load_fixture), settings, at=T0)
+
+    assert geo.records == 4 + 6 + 5
+    assert geo.counts["clearances_in_region"] == 10
+    assert geo.counts["clearances_outside_region"] == 5
+    assert len(geo.listing_ids) == 10
+    assert _count(db_conn, store) == 3
+    assert _count(db_conn, product) == 6 + 2 + 3
+    assert _count(db_conn, product_reference_price) == 11
+    geo_listings = _listings(db_conn)
+
+    # The same stores ingested one by one at the same time change nothing: same rows, same keys.
+    for body in _geo_body(load_fixture):
+        single = _ingest(db_conn, raw_payload, "food-waste", body, settings, at=T0)
+        assert single.listing_ids == set()
+        assert single.counts.get("listings_new", 0) == 0
+        assert single.counts.get("reference_prices_new", 0) == 0
+    per_store = _listings(db_conn)
+    assert per_store.keys() == geo_listings.keys()
+    for title, row in per_store.items():
+        assert {k: v for k, v in row.items() if k not in {"raw_object_id", "last_seen_at"}} == {
+            k: v
+            for k, v in geo_listings[title].items()
+            if k not in {"raw_object_id", "last_seen_at"}
+        }
+
+
+def test_ingest_food_waste_geo_is_idempotent(
+    db_conn: Connection, raw_payload: RawPayloadFactory, load_fixture: Fixture, settings: Settings
+) -> None:
+    body = _geo_body(load_fixture)
+    _ingest(db_conn, raw_payload, "food-waste-geo", body, settings, at=T0)
+    again = _ingest(db_conn, raw_payload, "food-waste-geo", body, settings, at=T0)
+
+    assert again.listing_ids == set()
+    assert again.counts["listings_unchanged"] == 10
+    assert again.counts.get("reference_prices_new", 0) == 0
+    assert _count(db_conn, listing, listing.c.source == LISTING_SOURCE) == 10
+    assert _prices(db_conn, A38_EAN) == [("netto", Decimal("20.25"), T0, T0, 1)]
+
+
+def test_ingest_recorded_geo_response(
+    db_conn: Connection, raw_payload: RawPayloadFactory, load_fixture: Fixture, settings: Settings
+) -> None:
+    body = load_fixture("salling/food_waste_geo_copenhagen.json")
+    result = _ingest(db_conn, raw_payload, "food-waste-geo", body, settings)
+
+    assert result.counts["stores"] == 3  # incl. the store without clearances
+    assert result.records == 4
+    assert result.counts["clearances_in_region"] == 4
+    assert len(result.listing_ids) == 4
+    chains = dict(db_conn.execute(select(store.c.name, store.c.chain_id)).all())
+    assert chains == {
+        "Netto Rådhuspladsen": "netto",
+        "føtex City Industriens Hus": "foetex",
+        "Netto Nørrevold Kbh": "netto",
+    }
+    assert {row["chain_id"] for row in _listings(db_conn).values()} == {"netto", "foetex"}
+
+
+def test_ingest_food_waste_geo_ingests_a_repeated_store_once(
+    db_conn: Connection, raw_payload: RawPayloadFactory, load_fixture: Fixture, settings: Settings
+) -> None:
+    hvidovre = load_fixture("salling/food_waste_netto_hvidovre.json")
+    result = _ingest(db_conn, raw_payload, "food-waste-geo", [hvidovre, hvidovre], settings)
+
+    assert result.records == 6
+    assert result.counts["stores_duplicated"] == 1
+    assert result.counts["listings_new"] == 6
+
+
+def test_ingest_food_waste_geo_empty_and_schema_mismatch(
+    db_conn: Connection, raw_payload: RawPayloadFactory, settings: Settings
+) -> None:
+    empty = _ingest(db_conn, raw_payload, "food-waste-geo", [], settings)
+    assert empty.records == 0
+    assert empty.listing_ids == set()
+
+    payload = raw_payload("salling", "food-waste-geo", {"store": {}, "clearances": []})
+    with pytest.raises(SourceSchemaError):
+        ingest_payload(db_conn, payload, settings=settings)

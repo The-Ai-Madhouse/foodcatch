@@ -6,7 +6,8 @@
 2. calls the job body with a :class:`~foodcatch.jobs.context.JobContext` inside one transaction,
    followed by the post-fetch hooks (classify, deals) if the job enables them;
 3. commits, then compares the quality metric with the previous successful run
-   (drop > ``QUALITY_DROP_THRESHOLD`` -> ``degraded``) and checks the database size budget;
+   (drop > ``QUALITY_DROP_THRESHOLD`` -> ``degraded``; a job may also report ``degraded`` itself
+   via :meth:`~foodcatch.jobs.context.JobContext.degrade`) and checks the database size budget;
 4. finishes the run (``succeeded`` / ``degraded`` / ``failed`` with stats and error) and pings
    healthchecks (success, or ``/fail`` for degraded and failed runs).
 
@@ -40,6 +41,7 @@ from foodcatch.jobs.quality import (
     check_record_drop,
     database_size_bytes,
     previous_successful_stats,
+    with_job_reasons,
 )
 from foodcatch.jobs.registry import get_job
 from foodcatch.logging import get_logger
@@ -171,11 +173,14 @@ def run_job(
                     run_post_fetch_hooks(conn, state, hooks)
             stats: dict[str, Any] = dict(state.stats)
             with engine.connect() as conn:
-                quality = check_record_drop(
-                    previous_successful_stats(conn, spec.name, run_id),
-                    stats,
-                    spec.quality_metric,
-                    settings.quality_drop_threshold,
+                quality = with_job_reasons(
+                    check_record_drop(
+                        previous_successful_stats(conn, spec.name, run_id),
+                        stats,
+                        spec.quality_metric,
+                        settings.quality_drop_threshold,
+                    ),
+                    state.degraded_reasons,
                 )
                 db_bytes = database_size_bytes(conn)
         except BaseException as exc:
