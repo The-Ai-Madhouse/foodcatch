@@ -6,6 +6,7 @@ import {
   explainStatus,
   filterDeals,
   groupDeals,
+  memberPriceLabel,
   parseDealFilter,
   parseReferences,
   referenceViews,
@@ -38,6 +39,7 @@ function row(overrides: Partial<DealRow> = {}): DealRow {
       { kind: "offer", chain_id: "superbrugsen", unit_price: 39 },
       { kind: "regular", chain_id: "rema1000", unit_price: 49.9 },
     ],
+    memberOnly: false,
     ...overrides,
   };
 }
@@ -67,8 +69,16 @@ describe("parseReferences", () => {
         unit: "kg",
         valid_from: "2026-11-15T00:00:00Z",
         valid_to: null,
+        member_only: false,
       },
     ]);
+  });
+
+  it("keeps the member-price flag of a reference", () => {
+    const [ref] = parseReferences([
+      { kind: "offer", chain_id: "superbrugsen", unit_price: 35, member_only: true },
+    ]);
+    expect(ref?.member_only).toBe(true);
   });
 
   it("drops malformed references", () => {
@@ -220,5 +230,33 @@ describe("referenceViews", () => {
       ["netto", true, true],
       ["rema1000", true, false],
     ]);
+  });
+});
+
+describe("member prices", () => {
+  it("a marked Netto member price can be a good deal and says so", () => {
+    const [deal] = evaluateDeals([row({ memberOnly: true })], ["superbrugsen", "rema1000"]);
+    expect(deal?.status).toBe("good_deal");
+    expect(deal && explainStatus(deal)).toContain("medlemspris og gælder kun med Netto+");
+  });
+
+  it("a competitor member price counts and the plain explanation has no member note", () => {
+    const [deal] = evaluateDeals(
+      [
+        row({
+          references: [{ kind: "offer", chain_id: "kvickly", unit_price: 30, member_only: true }],
+        }),
+      ],
+      ["kvickly"],
+    );
+    expect(deal?.status).toBe("cheaper_elsewhere");
+    expect(deal && explainStatus(deal)).not.toContain("medlemspris");
+  });
+
+  it("labels the membership per chain", () => {
+    expect(memberPriceLabel("netto")).toBe("Medlemspris (Netto+)");
+    expect(memberPriceLabel("superbrugsen")).toBe("Medlemspris (Coop-medlem)");
+    expect(memberPriceLabel("365discount")).toBe("Medlemspris (Coop-medlem)");
+    expect(memberPriceLabel("lidl")).toBe("Medlemspris");
   });
 });

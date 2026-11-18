@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { MemberPriceBadge } from "@/components/Badge";
 import { PageHeader } from "@/components/PageHeader";
 import { PriceChart } from "@/components/PriceChart";
 import { displayEnd, formatDate, formatUnitPriceRange, unitLabel } from "@/lib/format";
+import { memberPriceLabel } from "@/lib/deals";
 import { KIND_LABELS, buildPriceChart } from "@/lib/history";
 import { classKeyFromSegment } from "@/lib/routes";
 import { getClassPriceHistory } from "@/server/queries";
@@ -69,7 +71,15 @@ export default async function ClassHistoryPage({ params }: PageProps<"/vare/[cla
                   </td>
                   <td className="px-3 py-2">{r.chainName}</td>
                   <td className="px-3 py-2">{KIND_LABELS[r.kind] ?? r.kind}</td>
-                  <td className="px-3 py-2">{r.title}</td>
+                  <td className="px-3 py-2">
+                    {r.title}
+                    {r.memberOnly ? (
+                      <MemberPriceBadge
+                        label={memberPriceLabel(r.chainId)}
+                        className="ml-1.5 align-middle"
+                      />
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap tabular">
                     {formatUnitPriceRange(r.unitPriceMin, r.unitPriceMax, r.unit) ??
                       `ukendt pr. ${unitLabel(r.unit)}`}

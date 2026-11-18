@@ -62,7 +62,7 @@ passed. It inserts:
 - stores of eleven chains around Rådhuspladsen – some within 2 km, some between 2 and 5 km, so
   changing the radius changes verdicts (e.g. MENY's cheaper minced beef at 3.1 km);
 - one week of Netto offers covering every verdict: _Godt køb_ (hakket grisekød 8-12 % at
-  33,33 kr./kg, frilandsæg, letmælk, Danbo, smør), _Uafklaret_ (hakket oksekød 14-18 %),
+  33,33 kr./kg, frilandsæg, letmælk as a _Medlemspris (Netto+)_, Danbo, smør), _Uafklaret_ (hakket oksekød 14-18 %),
   _Billigere andetsteds_, _Ingen sammenligning_, _Ukendt egenskab_, _Flere varer i tilbuddet_,
   _Ingen kilopris_ and an upcoming offer that is not computed yet;
 - competitor offers, REMA 1000 shelf prices and earlier Netto offers (price history);

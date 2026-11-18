@@ -606,11 +606,35 @@ def test_references_have_the_contract_shape_and_are_sorted(sc: Scenario) -> None
         "unit",
         "valid_from",
         "valid_to",
+        "member_only",
     }
+    assert refs[0]["member_only"] is False
     assert datetime.fromisoformat(refs[0]["valid_from"]) <= NOW
     assert refs[0]["valid_to"].endswith("Z")
     parsed = parse_references(refs)
     assert parsed[0].chain_id == "lidl"
+
+
+def test_competitor_member_price_is_a_reference_marked_as_such(sc: Scenario) -> None:
+    netto = sc.offer(PORK_8_12, unit_price=40.0)
+    coop = sc.offer(PORK_8_12, chain="superbrugsen", unit_price=35.0)
+    sc.conn.execute(update(listing).where(listing.c.id == coop).values(member_only=True))
+    sc.offer(PORK_8_12, chain="lidl", unit_price=45.0)
+
+    recompute_deals(sc.conn)
+
+    refs = sc.refs(netto)
+    assert [(r["chain_id"], r["member_only"]) for r in refs] == [
+        ("superbrugsen", True),
+        ("lidl", False),
+    ]
+    parsed = parse_references(refs)
+    assert parsed[0].member_only is True
+    result = verdict(
+        DealInput(40.0, 40.0, price_applies=True, is_exact=True, references=parsed),
+        {"superbrugsen", "lidl"},
+    )
+    assert (result.verdict, result.cheapest_unit_price) == ("cheaper_elsewhere", 35.0)
 
 
 # ------------------------------------------------------------- lifecycle and scope

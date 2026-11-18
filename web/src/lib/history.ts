@@ -26,6 +26,8 @@ export interface PriceHistoryRow {
    * kilo price range mostly belongs to another product (same rule as the deals, §6).
    */
   priceApplies: boolean;
+  /** Only members get this price (e.g. Netto+, Coop members). */
+  memberOnly: boolean;
 }
 
 export type SeriesKey = "netto_offer" | "other_offer" | "regular";

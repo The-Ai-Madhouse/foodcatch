@@ -161,6 +161,36 @@ def test_class_price_history_marks_prices_of_other_products(
     assert dict(rows) == expected
 
 
+def test_member_only_is_exposed_for_deals_and_history(
+    db_conn: Connection, raw_payload: Callable[..., RawPayload]
+) -> None:
+    payload = raw_payload("tjek", "offers", [])
+    listing_id = uuid4()
+    db_conn.execute(
+        insert(listing).values(
+            id=listing_id,
+            source="tjek",
+            source_item_id="netto-plus",
+            chain_id="netto",
+            kind="offer",
+            title="Hakket oksekød 8-12%",
+            price=40,
+            unit="kg",
+            unit_price_min=80,
+            unit_price_max=80,
+            member_only=True,
+            valid_from=NOW - timedelta(days=1),
+            valid_to=NOW + timedelta(days=3),
+            raw_object_id=payload.raw_object_id,
+        )
+    )
+    _classify(db_conn, listing_id)
+
+    for view in ("current_netto_deals", "class_price_history"):
+        row = db_conn.execute(text(f"SELECT listing_id, member_only FROM api.{view}")).one()
+        assert tuple(row) == (listing_id, True)
+
+
 def test_food_waste_near_shows_only_items_seen_in_latest_run(
     db_conn: Connection, raw_payload: Callable[..., RawPayload]
 ) -> None:

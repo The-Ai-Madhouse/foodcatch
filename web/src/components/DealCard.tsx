@@ -5,6 +5,7 @@ import {
   REFERENCE_KIND_LABELS,
   STATUS_META,
   explainStatus,
+  memberPriceLabel,
   referenceViews,
   type EvaluatedDeal,
 } from "@/lib/deals";
@@ -16,7 +17,7 @@ import {
   unitLabel,
 } from "@/lib/format";
 import { classPath } from "@/lib/routes";
-import { Badge } from "./Badge";
+import { Badge, MemberPriceBadge } from "./Badge";
 
 /** One Netto offer variant with its verdict, explanation and expandable reference list. */
 export function DealCard({
@@ -53,7 +54,11 @@ export function DealCard({
             </Link>
           </p>
         </div>
-        <Badge tone={meta.tone}>{meta.label}</Badge>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* Required: member prices may only be "Godt køb" when marked (lib/deals.ts). */}
+          {deal.memberOnly ? <MemberPriceBadge label={memberPriceLabel("netto")} /> : null}
+          <Badge tone={meta.tone}>{meta.label}</Badge>
+        </div>
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
@@ -115,6 +120,12 @@ export function DealCard({
                   >
                     <td className="px-3 py-2">
                       <span className="font-medium">{chainName(ref.chain_id)}</span>
+                      {ref.member_only ? (
+                        <MemberPriceBadge
+                          label={memberPriceLabel(ref.chain_id)}
+                          className="ml-1.5 align-middle"
+                        />
+                      ) : null}
                       {ref.title ? (
                         <span className="block text-xs text-ink-3">{ref.title}</span>
                       ) : null}

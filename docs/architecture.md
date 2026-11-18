@@ -269,8 +269,11 @@ Ported from the PoC and **must keep its conservatism**:
   which equals `comparability(a, b) == "same"` (`class_key` contains the type, every key
   attribute and the processing state); a test pins this equivalence on real matcher output.
 * `deal.references` is a JSON array of
-  `{kind, chain_id, listing_id, title, unit_price, unit, valid_from, valid_to}` – **all**
-  same-class references, not only the best, so the web can filter by nearby chains.
+  `{kind, chain_id, listing_id, title, unit_price, unit, valid_from, valid_to, member_only}` –
+  **all** same-class references, not only the best, so the web can filter by nearby chains.
+* Member prices (`listing.member_only`: Netto+, Coop members, ...): a competitor's member price
+  counts as a reference like any other (only more conservative); a Netto member price is shown
+  with a "Medlemspris" badge and may only be a `good_deal` when shown as such (below).
 
 Verdict (computed in the web from `deal` + the set of chains near the user, by the pure function
 `web/src/lib/verdict.ts`, mirrored by `pipeline/src/foodcatch/deals/verdict.py` and tested on
@@ -280,7 +283,8 @@ shared fixtures in `fixtures/verdict_cases.json` at repo root):
 * `ambiguous_offer` – `price_applies = false`.
 * `not_exact` – the variant has unknown key attributes.
 * `no_reference` – no same-class reference from a nearby chain (history counts regardless of distance).
-* `good_deal` – `netto_unit_price_worst <= min(reference.unit_price)`.
+* `good_deal` – `netto_unit_price_worst <= min(reference.unit_price)`; for a member-only Netto
+  price only when the caller marks it as a member price (`member_price_marked`), else `undecided`.
 * `cheaper_elsewhere` – `netto_unit_price_best > min(reference.unit_price)`.
 * `undecided` – otherwise (Netto's pack sizes overlap the cheapest reference).
 
@@ -299,13 +303,13 @@ CREATEDB or write access to pipeline tables). Column changes are breaking change
 * `api.current_netto_deals` – one row per (current or upcoming Netto offer listing, latest version of its
   Tjek offer id × healthy classified variant) under the current matcher: `listing_id, variant_index, title, description, price, unit, unit_price_min,
   unit_price_max, valid_from, valid_to, type_id, type_label, group_name, class_key, class_label, attrs,
-  is_exact, notes, price_applies, netto_unit_price_worst, netto_unit_price_best, references`
+  is_exact, notes, price_applies, netto_unit_price_worst, netto_unit_price_best, references, member_only`
   (`price_applies` etc. are null until the deal is computed; `references` is then `[]`).
 * `api.food_waste_near` – current clearances with healthy classification:
   `listing_id, store_id, chain_id, store_name, street, zip, city, lat, lon, title, ean, price, reference_price,
   discount_pct, unit, unit_price, valid_to, stock, stock_unit, type_label, class_label, is_exact`.
 * `api.class_price_history` – `class_key, class_label, kind, chain_id, chain_name, listing_id, title, unit,
-  unit_price_min, unit_price_max, valid_from, valid_to, price_applies` for all classified listings (all
+  unit_price_min, unit_price_max, valid_from, valid_to, price_applies, member_only` for all classified listings (all
   matcher-current). `price_applies` is the §6 rule (homogeneous offer, unknown range or spread ≤ 25 %);
   the web leaves rows where it is false out of the chart and marks them in the table.
 * `api.pipeline_status` – latest run per job: `job, status, started_at, finished_at, stats, error`,

@@ -10,8 +10,12 @@ shows). Each row holds:
   ``netto_unit_price_best`` = ``unit_price_min`` (fallback ``unit_price_max``);
 * ``price_applies`` - the offer's unit price applies to this variant (see *Price applies*);
 * ``references`` - **all** same-class reference prices, as a JSON array of
-  ``{kind, chain_id, listing_id, title, unit_price, unit, valid_from, valid_to}`` sorted by
-  ``unit_price``. Only exact variants with a known unit get references; others store ``[]``.
+  ``{kind, chain_id, listing_id, title, unit_price, unit, valid_from, valid_to, member_only}``
+  sorted by ``unit_price``. Only exact variants with a known unit get references; others store
+  ``[]``. ``member_only`` is the reference listing's flag (a member price, e.g. Coop or Netto+;
+  always false for ``ean_reference``). Member prices count like any other reference: a price
+  that only members get is lower than or equal to everyone's price, so counting it makes
+  verdicts more conservative.
 
 Same class
     A reference is the *same product* only when its classification (current release) has the
@@ -185,7 +189,8 @@ _SAME_CLASS_JOIN = """
 
 _LISTING_REF_COLUMNS = (
     "t.listing_id, t.variant_index, {kind} AS kind, rl.chain_id, rl.id AS ref_listing_id,"
-    " rl.title, rl.unit_price_min AS unit_price, rl.unit, rl.valid_from, rl.valid_to"
+    " rl.title, rl.unit_price_min AS unit_price, rl.unit, rl.valid_from, rl.valid_to,"
+    " rl.member_only"
 )
 
 
@@ -231,7 +236,8 @@ _EAN_REFS = """(
                t.listing_id, t.variant_index, 'ean_reference' AS kind, prp.chain_id,
                rl.id AS ref_listing_id, COALESCE(p.name, rl.title) AS title,
                round(prp.price / p.net_quantity, 4) AS unit_price, p.net_unit AS unit,
-               prp.first_seen_at AS valid_from, prp.last_seen_at AS valid_to
+               prp.first_seen_at AS valid_from, prp.last_seen_at AS valid_to,
+               false AS member_only
         FROM target t
         JOIN classification rc
           ON rc.matcher_version = :version AND rc.class_key = t.class_key AND rc.is_exact
@@ -279,7 +285,8 @@ ref_arrays AS (
                jsonb_build_object(
                    'kind', r.kind, 'chain_id', r.chain_id, 'listing_id', r.ref_listing_id,
                    'title', r.title, 'unit_price', r.unit_price, 'unit', r.unit,
-                   'valid_from', {valid_from}, 'valid_to', {valid_to})
+                   'valid_from', {valid_from}, 'valid_to', {valid_to},
+                   'member_only', r.member_only)
                ORDER BY r.unit_price, r.kind, r.chain_id, r.ref_listing_id
            ) AS refs
     FROM refs r

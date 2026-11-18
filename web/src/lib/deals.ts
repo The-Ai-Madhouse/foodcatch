@@ -39,6 +39,8 @@ export interface DealRow {
   nettoUnitPriceWorst: number | null;
   nettoUnitPriceBest: number | null;
   references: Reference[];
+  /** Only members get this price (Netto+); shown with a "Medlemspris" badge. */
+  memberOnly: boolean;
 }
 
 /** A deal's state as shown to the user: a verdict, or `pending` before the deal is computed. */
@@ -147,6 +149,7 @@ export function parseReferences(json: unknown): Reference[] {
       unit: optionalString(r.unit),
       valid_from: optionalString(r.valid_from),
       valid_to: optionalString(r.valid_to),
+      member_only: r.member_only === true,
     });
   }
   return refs;
@@ -161,7 +164,30 @@ export function toDealInput(row: DealRow): DealInput | null {
     price_applies: row.priceApplies,
     is_exact: row.isExact,
     references: row.references,
+    member_only: row.memberOnly,
   };
+}
+
+/**
+ * Every member-only Netto deal is shown as a member price: `DealCard` puts the
+ * {@link memberPriceLabel} badge on it and {@link explainStatus} says so. That is the condition
+ * under which the verdict may call a member price a good deal (architecture §6).
+ */
+const MEMBER_PRICES_ARE_MARKED = true;
+
+const COOP_CHAINS: ReadonlySet<string> = new Set(["superbrugsen", "kvickly", "365discount"]);
+
+/** The membership a chain's member prices need, in Danish (`Netto+`, `Coop-medlem`). */
+export function membershipName(chainId: string): string | null {
+  if (chainId === "netto") return "Netto+";
+  if (COOP_CHAINS.has(chainId)) return "Coop-medlem";
+  return null;
+}
+
+/** Badge text for a member price: `"Medlemspris (Netto+)"`, or `"Medlemspris"`. */
+export function memberPriceLabel(chainId: string): string {
+  const membership = membershipName(chainId);
+  return membership ? `Medlemspris (${membership})` : "Medlemspris";
 }
 
 /** Evaluate every row for the chains near the user. */
@@ -172,7 +198,9 @@ export function evaluateDeals(
   const nearby = new Set(nearbyChains);
   return rows.map((row) => {
     const input = toDealInput(row);
-    const result = input ? verdict(input, nearby) : null;
+    const result = input
+      ? verdict(input, nearby, { memberPriceMarked: MEMBER_PRICES_ARE_MARKED })
+      : null;
     return { ...row, result, status: result ? result.verdict : "pending" };
   });
 }
@@ -244,8 +272,14 @@ export function unitPriceWord(unit: string | null | undefined): string {
   return "kilopris";
 }
 
-/** One Danish sentence explaining a deal's status. */
+/** Danish explanation of a deal's status, plus a note when only members get the price. */
 export function explainStatus(deal: EvaluatedDeal): string {
+  const text = explainVerdict(deal);
+  if (!deal.memberOnly) return text;
+  return `${text} Prisen er en medlemspris og gælder kun med ${membershipName("netto")}.`;
+}
+
+function explainVerdict(deal: EvaluatedDeal): string {
   const word = unitPriceWord(deal.unit);
   const { result } = deal;
   const worst = deal.nettoUnitPriceWorst;

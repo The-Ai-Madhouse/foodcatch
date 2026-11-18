@@ -96,6 +96,40 @@
                "references": [{"kind": "offer", "chain_id": "lidl", "unit_price": 33.33}]},
       "nearby_chains": ["lidl"],
       "expected": {"verdict": "undecided", "cheapest_unit_price": 33.33, "reference_count": 1}
+    },
+    {
+      "name": "a Netto member price shown as a member price can be a good deal",
+      "deal": {"netto_unit_price_worst": 30.0, "netto_unit_price_best": 30.0, "price_applies": true, "is_exact": true,
+               "member_only": true,
+               "references": [{"kind": "offer", "chain_id": "lidl", "unit_price": 35.0}]},
+      "nearby_chains": ["lidl"],
+      "member_price_marked": true,
+      "expected": {"verdict": "good_deal", "cheapest_unit_price": 35.0, "reference_count": 1}
+    },
+    {
+      "name": "a Netto member price that is not shown as one is never a good deal",
+      "deal": {"netto_unit_price_worst": 30.0, "netto_unit_price_best": 30.0, "price_applies": true, "is_exact": true,
+               "member_only": true,
+               "references": [{"kind": "offer", "chain_id": "lidl", "unit_price": 35.0}]},
+      "nearby_chains": ["lidl"],
+      "expected": {"verdict": "undecided", "cheapest_unit_price": 35.0, "reference_count": 1}
+    },
+    {
+      "name": "a Netto member price above the cheapest reference stays cheaper elsewhere",
+      "deal": {"netto_unit_price_worst": 40.0, "netto_unit_price_best": 40.0, "price_applies": true, "is_exact": true,
+               "member_only": true,
+               "references": [{"kind": "offer", "chain_id": "lidl", "unit_price": 35.0}]},
+      "nearby_chains": ["lidl"],
+      "expected": {"verdict": "cheaper_elsewhere", "cheapest_unit_price": 35.0, "reference_count": 1}
+    },
+    {
+      "name": "a competitor's member price counts as a reference",
+      "deal": {"netto_unit_price_worst": 40.0, "netto_unit_price_best": 40.0, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "offer", "chain_id": "superbrugsen", "unit_price": 35.0, "member_only": true},
+                              {"kind": "regular", "chain_id": "rema1000", "unit_price": 45.0, "member_only": false}]},
+      "nearby_chains": ["superbrugsen", "rema1000"],
+      "member_price_marked": true,
+      "expected": {"verdict": "cheaper_elsewhere", "cheapest_unit_price": 35.0, "reference_count": 2}
     }
   ]
 }

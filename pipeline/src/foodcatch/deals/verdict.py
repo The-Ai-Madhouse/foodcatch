@@ -16,6 +16,11 @@ The two comparisons use whole øre (half up, :func:`to_ore`): Rema publishes com
 rounded to øre (10 kr / 300 g -> 33.33) while Tjek unit prices have four decimals (33.3333), so
 an identical price must not count as more expensive.
 
+Member prices: a Netto offer that only members get (``member_only``, e.g. Netto+) is a
+``good_deal`` only when the caller shows it as a member price (``member_price_marked``);
+otherwise a would-be ``good_deal`` is ``undecided`` (everyone else pays more). Competitor
+member prices count as references like any other price (more conservative).
+
 ``cheapest_unit_price`` / ``reference_count`` describe the references that counted (``None`` /
 0 for the first four verdicts).
 """
@@ -55,6 +60,7 @@ class Reference:
     unit: str | None = None
     valid_from: datetime | None = None
     valid_to: datetime | None = None
+    member_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +72,7 @@ class DealInput:
     price_applies: bool
     is_exact: bool
     references: Sequence[Reference] = field(default_factory=tuple[Reference, ...])
+    member_only: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,11 +121,14 @@ def _result(v: Verdict, cheapest: float | None = None, count: int = 0) -> Verdic
     return VerdictResult(verdict=v, cheapest_unit_price=cheapest, reference_count=count)
 
 
-def verdict(deal: DealInput, nearby_chains: Collection[str]) -> VerdictResult:
+def verdict(
+    deal: DealInput, nearby_chains: Collection[str], *, member_price_marked: bool = False
+) -> VerdictResult:
     """Compute the verdict for ``deal`` given the chains with a store near the user.
 
     Netto is judged at its worst (highest) unit price against the cheapest counted reference;
-    a missing ``netto_unit_price_best`` falls back to the worst price.
+    a missing ``netto_unit_price_best`` falls back to the worst price. ``member_price_marked``
+    states that the caller shows a member-only Netto price as such (see the module docstring).
     """
     worst = deal.netto_unit_price_worst
     if worst is None:
@@ -133,7 +143,7 @@ def verdict(deal: DealInput, nearby_chains: Collection[str]) -> VerdictResult:
     cheapest = min(r.unit_price for r in counted)
     best = worst if deal.netto_unit_price_best is None else deal.netto_unit_price_best
     if to_ore(worst) <= to_ore(cheapest):
-        v: Verdict = "good_deal"
+        v: Verdict = "undecided" if deal.member_only and not member_price_marked else "good_deal"
     elif to_ore(best) > to_ore(cheapest):
         v = "cheaper_elsewhere"
     else:

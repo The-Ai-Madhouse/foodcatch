@@ -553,10 +553,12 @@ later work.
 
 **Prices and deals**
 
-* *Member prices.* Tjek offers whose text marks a member price are stored with
-  `listing.member_only = true` (in doubt the parser marks them member-only), but the `api`
-  views do not expose the flag: a Netto member price can be shown as a deal, and a competitor's
-  member price counts as a reference (which only makes verdicts more conservative).
+* *Member prices are detected from the offer text.* Tjek offers whose text marks a member price
+  (Netto+, Coop members, ...) are stored with `listing.member_only = true`; in doubt the parser
+  marks them member-only. The web shows a "Medlemspris" badge on such Netto deals and references,
+  and a Netto member price is "Godt køb" only because the page marks it. A member price whose
+  text does not say so is treated as everyone's price. The membership is named per chain
+  (Netto+, Coop-medlem), not read from the offer.
 * *Duplicate REMA 1000 references.* A Rema campaign is collected from Tjek (leaflet) and from
   the Rema catalogue; when both carry it, a deal lists it twice. The cheapest reference and
   hence the verdict are unaffected.

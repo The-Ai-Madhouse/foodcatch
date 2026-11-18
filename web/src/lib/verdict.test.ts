@@ -6,6 +6,7 @@ interface VerdictCase {
   name: string;
   deal: DealInput;
   nearby_chains: string[];
+  member_price_marked?: boolean;
   expected: VerdictResult;
 }
 
@@ -19,7 +20,8 @@ describe("verdict (shared fixtures)", () => {
   });
 
   it.each(cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
-    expect(verdict(c.deal, c.nearby_chains)).toEqual(c.expected);
+    const options = { memberPriceMarked: c.member_price_marked ?? false };
+    expect(verdict(c.deal, c.nearby_chains, options)).toEqual(c.expected);
   });
 });
 

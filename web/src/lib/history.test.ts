@@ -27,6 +27,7 @@ function row(overrides: Partial<PriceHistoryRow> = {}): PriceHistoryRow {
     validFrom: "2026-11-15T23:00:00Z",
     validTo: "2026-11-22T22:59:59Z",
     priceApplies: true,
+    memberOnly: false,
     ...overrides,
   };
 }

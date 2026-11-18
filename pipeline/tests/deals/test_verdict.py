@@ -32,12 +32,17 @@ def _deal_input(raw: dict[str, Any]) -> DealInput:
         price_applies=raw["price_applies"],
         is_exact=raw["is_exact"],
         references=parse_references(raw["references"]),
+        member_only=raw.get("member_only", False),
     )
 
 
 @pytest.mark.parametrize("case", _CASES, ids=[c["name"] for c in _CASES])
 def test_shared_verdict_case(case: dict[str, Any]) -> None:
-    result = verdict(_deal_input(case["deal"]), case["nearby_chains"])
+    result = verdict(
+        _deal_input(case["deal"]),
+        case["nearby_chains"],
+        member_price_marked=case.get("member_price_marked", False),
+    )
     expected = case["expected"]
     assert result.verdict == expected["verdict"]
     assert result.cheapest_unit_price == expected["cheapest_unit_price"]

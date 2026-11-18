@@ -123,6 +123,7 @@ interface DealSqlRow {
   nettoUnitPriceWorst: number | null;
   nettoUnitPriceBest: number | null;
   references: unknown;
+  memberOnly: boolean;
 }
 
 /** Current and upcoming Netto offers of healthy staples (one row per recognized variant). */
@@ -139,7 +140,7 @@ export async function getCurrentNettoDeals(): Promise<DealRow[]> {
            price_applies AS "priceApplies",
            netto_unit_price_worst::float8 AS "nettoUnitPriceWorst",
            netto_unit_price_best::float8 AS "nettoUnitPriceBest",
-           "references"
+           "references", member_only AS "memberOnly"
     FROM api.current_netto_deals
     ORDER BY valid_from, title, variant_index
   `;
@@ -165,6 +166,7 @@ export async function getCurrentNettoDeals(): Promise<DealRow[]> {
     nettoUnitPriceWorst: r.nettoUnitPriceWorst,
     nettoUnitPriceBest: r.nettoUnitPriceBest,
     references: parseReferences(r.references),
+    memberOnly: r.memberOnly,
   }));
 }
 
@@ -208,7 +210,8 @@ export async function getClassPriceHistory(classKey: string): Promise<PriceHisto
     SELECT class_key AS "classKey", class_label AS "classLabel", kind, chain_id AS "chainId",
            chain_name AS "chainName", listing_id AS "listingId", title, unit,
            unit_price_min::float8 AS "unitPriceMin", unit_price_max::float8 AS "unitPriceMax",
-           valid_from AS "validFrom", valid_to AS "validTo", price_applies AS "priceApplies"
+           valid_from AS "validFrom", valid_to AS "validTo", price_applies AS "priceApplies",
+           member_only AS "memberOnly"
     FROM api.class_price_history
     WHERE class_key = ${classKey}
     ORDER BY valid_from, chain_name, title

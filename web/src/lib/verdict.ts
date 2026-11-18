@@ -16,6 +16,11 @@
  * The two comparisons use whole øre (half up, `toOre`): Rema publishes compare prices rounded to
  * øre (10 kr / 300 g -> 33.33) while Tjek unit prices have four decimals (33.3333), so an
  * identical price must not count as more expensive.
+ *
+ * Member prices: a Netto offer that only members get (`member_only`, e.g. Netto+) is a
+ * `good_deal` only when the caller shows it as a member price (`memberPriceMarked`); otherwise a
+ * would-be `good_deal` is `undecided` (everyone else pays more). Competitor member prices count
+ * as references like any other price (more conservative).
  */
 
 export const VERDICTS = [
@@ -50,6 +55,8 @@ export interface Reference {
   unit?: string | null;
   valid_from?: string | null;
   valid_to?: string | null;
+  /** Only members get this price (e.g. Coop members); counts like any other reference. */
+  member_only?: boolean;
 }
 
 /** The verdict-relevant part of an `api.current_netto_deals` row. */
@@ -59,6 +66,13 @@ export interface DealInput {
   price_applies: boolean;
   is_exact: boolean;
   references: readonly Reference[];
+  /** Only members get Netto's price (e.g. Netto+); default false. */
+  member_only?: boolean;
+}
+
+export interface VerdictOptions {
+  /** The caller shows a member-only Netto price as a member price (required for `good_deal`). */
+  memberPriceMarked?: boolean;
 }
 
 /** Verdict plus the facts behind it. */
@@ -90,7 +104,11 @@ function none(verdict: Verdict): VerdictResult {
 }
 
 /** Compute the verdict for `deal` given the chains that have a store near the user. */
-export function verdict(deal: DealInput, nearbyChains: Iterable<string>): VerdictResult {
+export function verdict(
+  deal: DealInput,
+  nearbyChains: Iterable<string>,
+  { memberPriceMarked = false }: VerdictOptions = {},
+): VerdictResult {
   const worst = deal.netto_unit_price_worst;
   if (worst == null) return none("no_price");
   if (!deal.price_applies) return none("ambiguous_offer");
@@ -104,7 +122,9 @@ export function verdict(deal: DealInput, nearbyChains: Iterable<string>): Verdic
   const best = deal.netto_unit_price_best ?? worst;
   const result: Verdict =
     toOre(worst) <= toOre(cheapest)
-      ? "good_deal"
+      ? deal.member_only && !memberPriceMarked
+        ? "undecided"
+        : "good_deal"
       : toOre(best) > toOre(cheapest)
         ? "cheaper_elsewhere"
         : "undecided";
