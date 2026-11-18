@@ -383,6 +383,9 @@ your laptop and reads production data through the read-only role.
    pnpm dev        # http://localhost:3000
    ```
 
+   The server listens on the loopback interface only (`-H 127.0.0.1` in `web/package.json`), so
+   nobody else on your network can use it to query production data or wake the Neon compute.
+
 3. Neon suspends the database after 5 minutes without queries. The first page load after a pause
    takes a moment longer while it wakes up.
 

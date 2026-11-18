@@ -49,7 +49,7 @@ pnpm db:seed
 #    WEB_DATABASE_URL=postgres://foodcatch_web:foodcatch_web@localhost:5432/foodcatch_web_dev
 #    FOODCATCH_DEFAULT_LOCATION=55.6761,12.5683
 
-pnpm dev            # http://localhost:3000
+pnpm dev            # http://localhost:3000 (listens on 127.0.0.1 only, like `pnpm start`)
 ```
 
 ### Seed data
