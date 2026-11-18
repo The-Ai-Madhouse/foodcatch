@@ -1,0 +1,92 @@
+[
+ {
+  "id": "Q4IBc3",
+  "ern": "ern:dealer:Q4IBc3",
+  "graph_id": null,
+  "name": "10-4 Byggecenter & Tømmerhandel",
+  "website": "https://www.10-4.dk/",
+  "description": "10-4 er det moderne fællesnavn for en traditionel tømmerhandel, som startede i 1947, da Henry Kjeldsen åbnede sin første forretning i Ringkøbing.",
+  "description_markdown": "",
+  "logo": "https://image-transformer-api.tjek.com/?u=s3%3A%2F%2Fsgn-prd-assets%2Fuploads%2Fbusinesses%2FQ4IBc3%2F0Ev8U3EztZ1fBqC9Qpw6A&w=300&s=7254e30288f183ab8494c54235013a28",
+  "color": "ffdb00",
+  "pageflip": {
+   "logo": "https://image-transformer-api.tjek.com/?u=s3%3A%2F%2Fsgn-prd-assets%2Fuploads%2Fbusinesses%2FQ4IBc3%2FESzavuOJd7HNyYdZcXmgw&w=300&s=407f173b4707282ce4d9ad03b9a80c62",
+   "color": "ffdb00"
+  },
+  "category_ids": [],
+  "country": {
+   "id": "DK",
+   "unsubscribe_print_url": null
+  },
+  "markets": [
+   {
+    "slug": "10-4-Byggecenter-Tommerhandel",
+    "country_code": "DK"
+   }
+  ],
+  "favorite_count": 0,
+  "facebook_page_id": null,
+  "youtube_user_id": null,
+  "twitter_handle": null
+ },
+ {
+  "id": "25f5mL",
+  "ern": "ern:dealer:25f5mL",
+  "graph_id": null,
+  "name": "3",
+  "website": "http://3.dk/",
+  "description": "3 tilbyder danskerne mobiltelefoni og mobilt bredbånd. Kombinationen af 3’s 3G-netværk og lynhurtige 4G /LTE-netværk, sikrer danskerne adgang til fremtidens netværk - i dag.",
+  "description_markdown": "",
+  "logo": "https://image-transformer-api.tjek.com/?u=s3%3A%2F%2Fsgn-prd-assets%2Fuploads%2FKk-4j5e7lGJMaPosTodUK&w=300&s=56028aadeb0084d9aa76e23baae88b17",
+  "color": "000000",
+  "pageflip": {
+   "logo": "https://image-transformer-api.tjek.com/?u=s3%3A%2F%2Fsgn-prd-assets%2Fuploads%2FOB-0nOOdsH2kVX-uJKHEF&w=300&s=9c360005730ed82fca8f9e0d0c438bdd",
+   "color": "000000"
+  },
+  "category_ids": [],
+  "country": {
+   "id": "DK",
+   "unsubscribe_print_url": null
+  },
+  "markets": [
+   {
+    "slug": "3",
+    "country_code": "DK"
+   }
+  ],
+  "favorite_count": 0,
+  "facebook_page_id": null,
+  "youtube_user_id": null,
+  "twitter_handle": null
+ },
+ {
+  "id": "DWZE1w",
+  "ern": "ern:dealer:DWZE1w",
+  "graph_id": null,
+  "name": "365discount",
+  "website": "https://365discount.coop.dk",
+  "description": "365discount er Danmarks nyeste discountkæde med allerede over 220 butikker landet over. Find de bedste tilbud fra deres nyeste tilbudsavis lige her.",
+  "description_markdown": "",
+  "logo": "https://image-transformer-api.tjek.com/?u=s3%3A%2F%2Fsgn-prd-assets%2Fuploads%2FDWZE1w%2F_LRneGSszytxRwHkQRjyg&w=300&s=6cd4a1208e0bd7da9265f597f3ad04a1",
+  "color": "01AA46",
+  "pageflip": {
+   "logo": "https://image-transformer-api.tjek.com/?u=s3%3A%2F%2Fsgn-prd-assets%2Fuploads%2FDWZE1w%2F_ztxNUImAAvU3nJ2fIaGj&w=300&s=9ead7edf09ece3415584418b434593fd",
+   "color": "01AA46"
+  },
+  "category_ids": [],
+  "country": {
+   "id": "DK",
+   "unsubscribe_print_url": null
+  },
+  "markets": [
+   {
+    "slug": "365discount",
+    "country_code": "DK"
+   }
+  ],
+  "favorite_count": 0,
+  "facebook_page_id": null,
+  "youtube_user_id": null,
+  "twitter_handle": null
+ }
+]

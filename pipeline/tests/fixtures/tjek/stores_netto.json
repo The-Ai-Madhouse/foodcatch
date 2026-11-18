@@ -1,0 +1,90 @@
+[
+ {
+  "id": "86d7kOL",
+  "ern": "ern:store:86d7kOL",
+  "graph_id": "86d7kOL",
+  "street": "Smedelundsgade 19-21",
+  "city": "Holbæk",
+  "zip_code": "4300",
+  "country": {
+   "id": "DK",
+   "unsubscribe_print_url": null
+  },
+  "name": "Netto Smedelundsgade",
+  "latitude": 55.7151231,
+  "longitude": 11.7161688,
+  "dealer_id": "9ba51",
+  "self_checkout": null,
+  "contact": null,
+  "category_ids": [],
+  "facebook_page_id": null,
+  "youtube_user_id": null,
+  "twitter_handle": null
+ },
+ {
+  "id": "37d6HJm",
+  "ern": "ern:store:37d6HJm",
+  "graph_id": "37d6HJm",
+  "street": "Roskildevej 150",
+  "city": "Ringsted",
+  "zip_code": "4100",
+  "country": {
+   "id": "DK",
+   "unsubscribe_print_url": null
+  },
+  "name": "Netto Benløse",
+  "latitude": 55.4592789,
+  "longitude": 11.7980181,
+  "dealer_id": "9ba51",
+  "self_checkout": null,
+  "contact": null,
+  "category_ids": [],
+  "facebook_page_id": null,
+  "youtube_user_id": null,
+  "twitter_handle": null
+ },
+ {
+  "id": "30derMz",
+  "ern": "ern:store:30derMz",
+  "graph_id": "30derMz",
+  "street": "Rantzausgade 21-23",
+  "city": "København N",
+  "zip_code": "2200",
+  "country": {
+   "id": "DK",
+   "unsubscribe_print_url": null
+  },
+  "name": "Netto Rantzausgade",
+  "latitude": 55.6860572,
+  "longitude": 12.5505931,
+  "dealer_id": "9ba51",
+  "self_checkout": null,
+  "contact": null,
+  "category_ids": [],
+  "facebook_page_id": null,
+  "youtube_user_id": null,
+  "twitter_handle": null
+ },
+ {
+  "id": "befaYJm",
+  "ern": "ern:store:befaYJm",
+  "graph_id": "befaYJm",
+  "street": "Rundhøj Torvet 5",
+  "city": "Højbjerg",
+  "zip_code": "8270",
+  "country": {
+   "id": "DK",
+   "unsubscribe_print_url": null
+  },
+  "name": "Netto Rundhøj Torv Højbjerg",
+  "latitude": 56.1197353,
+  "longitude": 10.1811323,
+  "dealer_id": "9ba51",
+  "self_checkout": null,
+  "contact": null,
+  "category_ids": [],
+  "facebook_page_id": null,
+  "youtube_user_id": null,
+  "twitter_handle": null
+ }
+]

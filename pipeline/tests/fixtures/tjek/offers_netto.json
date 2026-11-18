@@ -1,0 +1,482 @@
+[
+ {
+  "id": "qwTjdWcAYW7bm7c0sxkF4",
+  "ern": "ern:offer:qwTjdWcAYW7bm7c0sxkF4",
+  "heading": "Dava danske frilandsæg",
+  "description": "8 stk. Str. M/L. Pr. stk. 2,50",
+  "catalog_page": 4,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 20,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "pcs",
+    "si": {
+     "symbol": "pcs",
+     "factor": 1
+    }
+   },
+   "size": {
+    "from": 8,
+    "to": 8
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "pyuF3FVONEex9gEDcKpv0",
+  "ern": "ern:offer:pyuF3FVONEex9gEDcKpv0",
+  "heading": "Dansk kyllingefilet, -inderfilet eller -lårfilet",
+  "description": "900-1000 g. 100% kylling. Pr. kg max. 76,67",
+  "catalog_page": 9,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 69,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "g",
+    "si": {
+     "symbol": "kg",
+     "factor": 0.001
+    }
+   },
+   "size": {
+    "from": 900,
+    "to": 1000
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "j4XqdFYiHjljPkc_F0LKW",
+  "ern": "ern:offer:j4XqdFYiHjljPkc_F0LKW",
+  "heading": "Bakersfield æbleskiver",
+  "description": "560 g. Ca. 20 stk. Pr. kg 10,71 Max. 6 stk. pr. kunde pr. dag til denne pris",
+  "catalog_page": 1,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 6,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "g",
+    "si": {
+     "symbol": "kg",
+     "factor": 0.001
+    }
+   },
+   "size": {
+    "from": 560,
+    "to": 560
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": 6
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "Uk_bN-Hw1HZI1vpuHnimy",
+  "ern": "ern:offer:Uk_bN-Hw1HZI1vpuHnimy",
+  "heading": "Hakket oksekød 8-12%",
+  "description": "400 g. Pr. kg 87,50",
+  "catalog_page": 9,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 35,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "g",
+    "si": {
+     "symbol": "kg",
+     "factor": 0.001
+    }
+   },
+   "size": {
+    "from": 400,
+    "to": 400
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "PpCpOx8TpHkiKC4PEMr7U",
+  "ern": "ern:offer:PpCpOx8TpHkiKC4PEMr7U",
+  "heading": "Libero comfort eller up&go bleer",
+  "description": "27-37 stk. Str. 4-6.\nPr. stk. max. 2,04",
+  "catalog_page": 24,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 55,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "pcs",
+    "si": {
+     "symbol": "pcs",
+     "factor": 1
+    }
+   },
+   "size": {
+    "from": 1,
+    "to": 1
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "7qGv_TbAvxkE14OAPOR3W",
+  "ern": "ern:offer:7qGv_TbAvxkE14OAPOR3W",
+  "heading": "Netto sild",
+  "description": "250-530 g. Pr. kg max. 96,00 + PRIS 20: Pr. kg max. 80,00 Gælder kun med Netto+ appen",
+  "catalog_page": 12,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 24,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "g",
+    "si": {
+     "symbol": "kg",
+     "factor": 0.001
+    }
+   },
+   "size": {
+    "from": 250,
+    "to": 530
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "3WybkQoMTw8Xl2MndnZhw",
+  "ern": "ern:offer:3WybkQoMTw8Xl2MndnZhw",
+  "heading": "Coca-Cola, Fanta eller Squash sodavand",
+  "description": "24 x 33 cl. + pant.\nPr. liter 9,97\nMax. 6 rammer pr. variant pr. kunde pr. dag til denne pris\nPRISEN GÆLDER KUN VED KØB AF HELE FORPAKNINGER",
+  "catalog_page": 3,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 79,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "cl",
+    "si": {
+     "symbol": "l",
+     "factor": 0.01
+    }
+   },
+   "size": {
+    "from": 33,
+    "to": 33
+   },
+   "pieces": {
+    "from": 24,
+    "to": 24,
+    "min": null,
+    "max": 6
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "p1E_rUkWijRUdCn5177P7",
+  "ern": "ern:offer:p1E_rUkWijRUdCn5177P7",
+  "heading": "ØGO økologisk flæskesteg",
+  "description": "Uden ben.\nPr. kg 99,90\nPR. 1/2 KG",
+  "catalog_page": 10,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 49.95,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "kg",
+    "si": {
+     "symbol": "kg",
+     "factor": 1
+    }
+   },
+   "size": {
+    "from": 0.5,
+    "to": 0.5
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "s5ehhEDWvGkXUuC86EOXj",
+  "ern": "ern:offer:s5ehhEDWvGkXUuC86EOXj",
+  "heading": "K-Salat bearnaisesauce",
+  "description": "325 g. Pr. kg 30,68 Normalpris 21,95 Max. 6 stk. pr. kunde pr. dag til 9,97",
+  "catalog_page": 17,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 9.97,
+   "pre_price": 21.950000000000003,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "g",
+    "si": {
+     "symbol": "kg",
+     "factor": 0.001
+    }
+   },
+   "size": {
+    "from": 325,
+    "to": 325
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": 6
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "C6n7pp8_CU-FipuooLjvp",
+  "ern": "ern:offer:C6n7pp8_CU-FipuooLjvp",
+  "heading": "Danske gulerødder",
+  "description": "1 kg. Danmark.",
+  "catalog_page": 6,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 5,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "kg",
+    "si": {
+     "symbol": "kg",
+     "factor": 1
+    }
+   },
+   "size": {
+    "from": 1,
+    "to": 1
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "6mYi0QN8ntrl1qKBb0N-b",
+  "ern": "ern:offer:6mYi0QN8ntrl1qKBb0N-b",
+  "heading": "Heineken eller Royal",
+  "description": "18 x 33 cl. + pant. Pr. liter 13,30. Max. 6 rammer pr. variant pr. kunde pr. dag til denne pris. PRISEN GÆLDER KUN VED KØB AF HELE FORPAKNINGER",
+  "catalog_page": 22,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 79,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "cl",
+    "si": {
+     "symbol": "l",
+     "factor": 0.01
+    }
+   },
+   "size": {
+    "from": 33,
+    "to": 33
+   },
+   "pieces": {
+    "from": 18,
+    "to": 18,
+    "min": null,
+    "max": 6
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ },
+ {
+  "id": "RFCinoluG0Y5BFmC-5ZMG",
+  "ern": "ern:offer:RFCinoluG0Y5BFmC-5ZMG",
+  "heading": "Falengreen topping",
+  "description": "150 g.\nPr. kg 66,67\n+ PRIS 8.-\nPr. kg 53,33\nGælder kun med Netto+ appen",
+  "catalog_page": 11,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 10,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "g",
+    "si": {
+     "symbol": "kg",
+     "factor": 0.001
+    }
+   },
+   "size": {
+    "from": 150,
+    "to": 150
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-13T23:00:00+0000",
+  "run_till": "2026-11-20T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-11T06:00:00+0000",
+  "dealer_id": "9ba51",
+  "store_id": null,
+  "catalog_id": "40K-WXWp",
+  "category_ids": []
+ }
+]

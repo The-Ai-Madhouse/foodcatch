@@ -1,0 +1,322 @@
+[
+ {
+  "id": "JCZlye8-gQ_GOCK4fh8ex",
+  "ern": "ern:offer:JCZlye8-gQ_GOCK4fh8ex",
+  "heading": "Änglamark økologiske æg",
+  "description": "Str. M/L. 10 stk. Stk.-pris 3,20. 1 bakke.",
+  "catalog_page": 28,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 32,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "pcs",
+    "si": {
+     "symbol": "pcs",
+     "factor": 1
+    }
+   },
+   "size": {
+    "from": 10,
+    "to": 10
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-12T23:00:00+0000",
+  "run_till": "2026-11-19T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-10T23:01:00+0000",
+  "dealer_id": "0b1e8",
+  "store_id": null,
+  "catalog_id": "WeaUpc6h",
+  "category_ids": []
+ },
+ {
+  "id": "rHNNiy_P1gCF8011a81Qf",
+  "ern": "ern:offer:rHNNiy_P1gCF8011a81Qf",
+  "heading": "Blossa Gløgg",
+  "description": "Sverige. 2 liter. Literpris 49,50. 1 boks. Begrænset parti. Før-pris 109,95.",
+  "catalog_page": 13,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 99,
+   "pre_price": 109.95,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "l",
+    "si": {
+     "symbol": "l",
+     "factor": 1
+    }
+   },
+   "size": {
+    "from": 2,
+    "to": 2
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-12T23:00:00+0000",
+  "run_till": "2026-11-19T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-10T23:01:00+0000",
+  "dealer_id": "0b1e8",
+  "store_id": null,
+  "catalog_id": "WeaUpc6h",
+  "category_ids": []
+ },
+ {
+  "id": "RcXEvHZcW_2dhzSNObgDh",
+  "ern": "ern:offer:RcXEvHZcW_2dhzSNObgDh",
+  "heading": "Heineken eller Royal øl",
+  "description": "Sælges i hele forpakninger 18-pak 20-pak 18-20 x 33 cl. Literpris maks. 14,98 + pant. 1 pakke.",
+  "catalog_page": 25,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 89,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "cl",
+    "si": {
+     "symbol": "l",
+     "factor": 0.01
+    }
+   },
+   "size": {
+    "from": 33,
+    "to": 33
+   },
+   "pieces": {
+    "from": 18,
+    "to": 20,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-12T23:00:00+0000",
+  "run_till": "2026-11-19T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-10T23:01:00+0000",
+  "dealer_id": "0b1e8",
+  "store_id": null,
+  "catalog_id": "WeaUpc6h",
+  "category_ids": []
+ },
+ {
+  "id": "eTqWIdeNJh0dzGhhY65wb",
+  "ern": "ern:offer:eTqWIdeNJh0dzGhhY65wb",
+  "heading": "Estepa Ekstra jomfruolivenolie",
+  "description": "500 ml. Literpris 238,00. 1 flaske.\nMedlemsrabat 30,95\nPris ikke-medlem 149,95\nEstepa Ekstra jomfruolivenolie fra Andalusien med en elegant, harmonisk smag og friske, frugtige nuancer. Olien er kåret som verdens bedste i kategorien Medium Green Fruitiness ved Mario Solinas Quality Award 2026.",
+  "catalog_page": 10,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 149.95,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "ml",
+    "si": {
+     "symbol": "l",
+     "factor": 0.001
+    }
+   },
+   "size": {
+    "from": 500,
+    "to": 500
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-10-31T23:00:00+0000",
+  "run_till": "2026-11-30T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-10T23:01:00+0000",
+  "dealer_id": "0b1e8",
+  "store_id": null,
+  "catalog_id": "WeaUpc6h",
+  "category_ids": []
+ },
+ {
+  "id": "HFVWpYTME8EMA3uhLcUJN",
+  "ern": "ern:offer:HFVWpYTME8EMA3uhLcUJN",
+  "heading": "Dansk hvidkål",
+  "description": "Danmark, Kl. I. Stk.-pris 15,00. 1 stk.",
+  "catalog_page": 24,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 15,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "pcs",
+    "si": {
+     "symbol": "pcs",
+     "factor": 1
+    }
+   },
+   "size": {
+    "from": 1,
+    "to": 1
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-12T23:00:00+0000",
+  "run_till": "2026-11-19T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-10T23:01:00+0000",
+  "dealer_id": "0b1e8",
+  "store_id": null,
+  "catalog_id": "WeaUpc6h",
+  "category_ids": []
+ },
+ {
+  "id": "5i5tNBmoC9ZGuI0AOyEsu",
+  "ern": "ern:offer:5i5tNBmoC9ZGuI0AOyEsu",
+  "heading": "Pakkemarked",
+  "description": "Flere varianter. 200-1500 g. Kg-pris maks. 275,00.\n2 pakker",
+  "catalog_page": 20,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 110,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "g",
+    "si": {
+     "symbol": "kg",
+     "factor": 0.001
+    }
+   },
+   "size": {
+    "from": 200,
+    "to": 1500
+   },
+   "pieces": {
+    "from": 2,
+    "to": 2,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-12T23:00:00+0000",
+  "run_till": "2026-11-19T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-10T23:01:00+0000",
+  "dealer_id": "0b1e8",
+  "store_id": null,
+  "catalog_id": "WeaUpc6h",
+  "category_ids": []
+ },
+ {
+  "id": "TeGEDI8Lqt0tJvwO5c91C",
+  "ern": "ern:offer:TeGEDI8Lqt0tJvwO5c91C",
+  "heading": "Pavonero Primitivo di Manduria",
+  "description": "Apulien, Italien. 6 x 75 cl. Literpris 62,00.\nFør-pris 119,95 pr. fl.\nLangt under halv pris",
+  "catalog_page": 32,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 279,
+   "pre_price": 719.7,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "cl",
+    "si": {
+     "symbol": "l",
+     "factor": 0.01
+    }
+   },
+   "size": {
+    "from": 75,
+    "to": 75
+   },
+   "pieces": {
+    "from": 6,
+    "to": 6,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-12T23:00:00+0000",
+  "run_till": "2026-11-19T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-10T23:01:00+0000",
+  "dealer_id": "0b1e8",
+  "store_id": null,
+  "catalog_id": "WeaUpc6h",
+  "category_ids": []
+ },
+ {
+  "id": "R2EwFs5lThCRMujkMV2j3",
+  "ern": "ern:offer:R2EwFs5lThCRMujkMV2j3",
+  "heading": "Thise økologisk vesterhavsost",
+  "description": "Flere varianter. Min. 225 g. Stk.-pris maks. 200,00. 1 stk.",
+  "catalog_page": 4,
+  "catalog_view_id": null,
+  "pricing": {
+   "price": 45,
+   "pre_price": null,
+   "currency": "DKK"
+  },
+  "quantity": {
+   "unit": {
+    "symbol": "g",
+    "si": {
+     "symbol": "kg",
+     "factor": 0.001
+    }
+   },
+   "size": {
+    "from": 225,
+    "to": 225
+   },
+   "pieces": {
+    "from": 1,
+    "to": 1,
+    "min": null,
+    "max": null
+   }
+  },
+  "run_from": "2026-11-12T23:00:00+0000",
+  "run_till": "2026-11-19T22:59:59+0000",
+  "display_run_till": true,
+  "publish": "2026-11-10T23:01:00+0000",
+  "dealer_id": "0b1e8",
+  "store_id": null,
+  "catalog_id": "WeaUpc6h",
+  "category_ids": []
+ }
+]
