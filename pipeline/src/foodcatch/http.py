@@ -37,7 +37,9 @@ log = get_logger(__name__)
 DEFAULT_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 DEFAULT_RATE_PER_SECOND = 4.0
 HOST_RATES_PER_SECOND: Mapping[str, float] = {
-    "api.sallinggroup.com": 4.0,
+    # Salling sends "Retry-After: 1" on successful responses and answers faster callers with
+    # 429 + long penalties (observed 2026-11-18), so stay just under one request per second.
+    "api.sallinggroup.com": 0.9,
     "squid-api.tjek.com": 4.0,
     "cphapp.rema1000.dk": 4.0,
     "world.openfoodfacts.org": 1.5,  # documented limit: 100 product reads/minute
