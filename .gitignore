@@ -34,3 +34,7 @@ coverage/
 
 # Claude Code local state (agent worktrees etc.)
 .claude/
+
+# Playwright
+web/test-results/
+web/playwright-report/
