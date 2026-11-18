@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import httpx
@@ -209,6 +209,76 @@ def test_healthchecks_pings(run: Runner, behaviour: type[Behaviour]) -> None:
         run(healthchecks=Healthchecks(PING))
     assert fail.call_count == 1
     assert b"source exploded" in fail.calls.last.request.content
+
+
+class _FailingEngine:
+    """An engine whose ``begin()`` fails, e.g. Neon unreachable or a rotated password."""
+
+    def __init__(self, engine: Engine, *, fail_from_call: int) -> None:
+        self._engine = engine
+        self._calls = 0
+        self._fail_from_call = fail_from_call
+
+    def begin(self) -> Any:
+        self._calls += 1
+        if self._calls >= self._fail_from_call:
+            raise ConnectionError("database unreachable")
+        return self._engine.begin()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._engine, name)
+
+
+@respx.mock
+def test_fail_ping_when_the_run_cannot_be_recorded(
+    run: Runner, behaviour: type[Behaviour], clean_db: Engine
+) -> None:
+    """Regression (finding R5): a database failure at the start still pings /fail."""
+    start = respx.post(f"{PING}/start").mock(return_value=httpx.Response(200))
+    fail = respx.post(f"{PING}/fail").mock(return_value=httpx.Response(200))
+    run.engine = cast(Engine, _FailingEngine(clean_db, fail_from_call=1))
+
+    with pytest.raises(ConnectionError):
+        run(healthchecks=Healthchecks(PING))
+
+    assert start.call_count == 0
+    assert fail.call_count == 1
+    assert b"database unreachable" in fail.calls.last.request.content
+
+
+@respx.mock
+def test_fail_ping_when_the_failed_run_cannot_be_recorded(
+    run: Runner, behaviour: type[Behaviour], clean_db: Engine
+) -> None:
+    """Regression (finding R5): the database gone by the end must not swallow the ping."""
+    respx.post(f"{PING}/start").mock(return_value=httpx.Response(200))
+    fail = respx.post(f"{PING}/fail").mock(return_value=httpx.Response(200))
+    behaviour.fail = True
+    behaviour.raw_bodies = ()  # storing raw objects uses the engine too
+    # begin() #1 records the run; #2 would mark it failed
+    run.engine = cast(Engine, _FailingEngine(clean_db, fail_from_call=2))
+
+    with pytest.raises(RuntimeError, match="source exploded"):  # the original error
+        run(healthchecks=Healthchecks(PING))
+
+    assert fail.call_count == 1
+    assert b"source exploded" in fail.calls.last.request.content
+
+
+@respx.mock
+def test_fail_ping_when_the_result_cannot_be_recorded(
+    run: Runner, behaviour: type[Behaviour], clean_db: Engine
+) -> None:
+    respx.post(f"{PING}/start").mock(return_value=httpx.Response(200))
+    ok = respx.post(PING).mock(return_value=httpx.Response(200))
+    fail = respx.post(f"{PING}/fail").mock(return_value=httpx.Response(200))
+    run.engine = cast(Engine, _FailingEngine(clean_db, fail_from_call=2))
+
+    with pytest.raises(ConnectionError):
+        run(healthchecks=Healthchecks(PING))
+
+    assert ok.call_count == 0
+    assert fail.call_count == 1
 
 
 def test_store_raw_refuses_secret_params(

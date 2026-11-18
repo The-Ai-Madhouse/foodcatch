@@ -11,9 +11,14 @@
 4. finishes the run (``succeeded`` / ``degraded`` / ``failed`` with stats and error) and pings
    healthchecks (success, or ``/fail`` for degraded and failed runs).
 
-A failure rolls back the main transaction (raw objects already stored stay recorded), marks the
-run ``failed`` and re-raises. A degraded run keeps its data and is reported to the caller, which
-exits non-zero.
+A failure rolls back the main transaction (raw objects already stored stay recorded), pings
+healthchecks ``/fail``, marks the run ``failed`` and re-raises. A degraded run keeps its data and
+is reported to the caller, which exits non-zero.
+
+The ``/fail`` ping is sent before any database bookkeeping and also when the bookkeeping itself
+fails (database unreachable at the start, or gone by the end), so healthchecks.io alerts at once
+instead of after the check's grace period. A failure to record the failed run is logged
+(``job.finish_failed``) without masking the original error.
 """
 
 from __future__ import annotations
@@ -106,6 +111,20 @@ def _finish(
         )
 
 
+def _finish_failed(
+    engine: Engine,
+    run_id: UUID,
+    stats: dict[str, Any],
+    error: str,
+    log: FilteringBoundLogger,
+) -> None:
+    """Mark the run ``failed``; a database error here is logged, never raised."""
+    try:
+        _finish(engine, run_id, "failed", stats, error)
+    except Exception as exc:  # noqa: BLE001 - must never mask the job's own error
+        log.error("job.finish_failed", error=_format_error(exc))
+
+
 def run_job(
     name: str,
     *,
@@ -139,18 +158,24 @@ def run_job(
     hc = healthchecks or Healthchecks.for_job(settings, name, run_id=str(run_id))
     state = PipelineState()
     try:
-        with engine.begin() as conn:
-            started_at: datetime = conn.execute(
-                insert(fetch_run)
-                .values(
-                    id=run_id,
-                    job=spec.name,
-                    source=spec.source,
-                    status="running",
-                    git_sha=settings.git_sha or detect_git_sha(),
-                )
-                .returning(fetch_run.c.started_at)
-            ).scalar_one()
+        try:
+            with engine.begin() as conn:
+                started_at: datetime = conn.execute(
+                    insert(fetch_run)
+                    .values(
+                        id=run_id,
+                        job=spec.name,
+                        source=spec.source,
+                        status="running",
+                        git_sha=settings.git_sha or detect_git_sha(),
+                    )
+                    .returning(fetch_run.c.started_at)
+                ).scalar_one()
+        except BaseException as exc:
+            error = _format_error(exc)
+            log.error("job.start_failed", error=error, exc_info=True)
+            hc.fail(f"could not record the run: {error}")
+            raise
         hc.start()
         log.info("job.started", source=spec.source)
         try:
@@ -186,11 +211,17 @@ def run_job(
         except BaseException as exc:
             stats = dict(state.stats)
             error = _format_error(exc)
-            _finish(engine, run_id, "failed", stats, error)
             log.error("job.failed", error=error, stats=stats, exc_info=True)
             hc.fail(error)
+            _finish_failed(engine, run_id, stats, error, log)
             raise
-        return _complete(engine, run_id, name, settings, stats, quality, db_bytes, hc, log)
+        try:
+            return _complete(engine, run_id, name, settings, stats, quality, db_bytes, hc, log)
+        except BaseException as exc:  # recording the result failed before any ping
+            error = _format_error(exc)
+            log.error("job.complete_failed", error=error, exc_info=True)
+            hc.fail(f"could not record the result: {error}")
+            raise
     finally:
         if own_http:
             http.close()
