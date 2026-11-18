@@ -554,6 +554,19 @@ def test_ean_reference_uses_latest_shelf_price_per_chain(sc: Scenario) -> None:
     assert refs[0]["unit"] == "kg"
 
 
+def test_ean_reference_takes_the_lowest_price_of_one_observation(sc: Scenario) -> None:
+    """Regression (finding C10): equal ``last_seen_at`` must not pick an arbitrary price."""
+    netto = sc.offer(PORK_8_12, unit_price=80.0)
+    product_id = sc.ean_product(net_quantity=0.4)
+    sc.reference_price(product_id, 45.0)  # two stores, same run, different shelf prices
+    sc.reference_price(product_id, 30.0)
+    sc.clearance(PORK_8_12, product_id)
+
+    recompute_deals(sc.conn)
+
+    assert [(r["kind"], r["unit_price"]) for r in sc.refs(netto)] == [("ean_reference", 75.0)]
+
+
 @pytest.mark.parametrize(
     ("net_quantity", "net_unit", "seen_days_ago"),
     [

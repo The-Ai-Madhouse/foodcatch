@@ -60,7 +60,9 @@ Reference kinds (references are always quoted at their *best*, i.e. lowest, unit
         an *exact, homogeneous* listing of the same class that has an EAN (``product_id``, in
         practice a Salling food-waste clearance) contributes the latest
         ``product_reference_price`` per chain of that product, observed within
-        :data:`EAN_REFERENCE_MAX_AGE`, converted to a unit price as
+        :data:`EAN_REFERENCE_MAX_AGE` (when stores of one chain reported different prices in
+        the same run, the lowest - references are quoted at their best), converted to a unit
+        price as
         ``price / product.net_quantity``. Skipped when the product's net quantity or unit is
         unknown or the unit differs. ``valid_from`` / ``valid_to`` are the first / last time that
         shelf price was observed; ``title`` is the product name.
@@ -242,7 +244,7 @@ _EAN_REFS = """(
           ON prp.product_id = p.id AND prp.last_seen_at >= now() - :ean_max_age
         WHERE t.is_exact
         ORDER BY t.listing_id, t.variant_index, p.id, prp.chain_id,
-                 prp.last_seen_at DESC, rl.last_seen_at DESC, rl.id
+                 prp.last_seen_at DESC, prp.price, rl.last_seen_at DESC, rl.id
     )"""
 
 _UPSERT_SQL = """
