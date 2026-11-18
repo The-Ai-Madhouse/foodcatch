@@ -12,8 +12,9 @@ import respx
 from sqlalchemy import Engine, func, select
 
 from foodcatch.config import Settings
-from foodcatch.db.tables import listing, raw_object
+from foodcatch.db.tables import fetch_run, listing, raw_object
 from foodcatch.jobs.runner import RunResult, run_job
+from foodcatch.reprocess import reprocess
 from foodcatch.sources.rema import BASE_URL
 from foodcatch.storage.raw import LocalRawStore
 
@@ -115,6 +116,50 @@ def test_rerun_is_idempotent_and_closes_vanished_products(
             select(listing.c.valid_to).where(listing.c.source_item_id == "100004")
         ).scalar_one()
     assert closed_at is not None
+
+
+@respx.mock
+def test_reprocess_keeps_vanished_products_closed(
+    run: Callable[[], RunResult],
+    catalogue: dict[str, Any],
+    clean_db: Engine,
+    settings: Settings,
+    raw_store: LocalRawStore,
+) -> None:
+    """Regression (finding R3): a replay must not reopen products that left the catalogue."""
+    _mock(_pages(catalogue, slice(0, None)))
+    run()
+    respx.clear()
+    _mock(_pages(catalogue, slice(1, None)))  # JORDBÆRMARMELADE left the catalogue
+    vanished_run = run()
+    respx.clear()
+    _mock(_pages(catalogue, slice(1, None), total=3956))  # an incomplete run closes nothing
+    run()
+
+    def state() -> list[tuple[Any, ...]]:
+        with clean_db.connect() as conn:
+            rows = conn.execute(
+                select(listing.c.source_item_id, listing.c.valid_from, listing.c.valid_to)
+                .where(listing.c.source == "rema")
+                .order_by(listing.c.source_item_id, listing.c.valid_from)
+            )
+            return [tuple(r) for r in rows]
+
+    live = state()
+    with clean_db.connect() as conn:
+        vanished_at = conn.execute(
+            select(fetch_run.c.started_at).where(fetch_run.c.id == vanished_run.run_id)
+        ).scalar_one()
+        closed_at = conn.execute(
+            select(listing.c.valid_to).where(listing.c.source_item_id == "100004")
+        ).scalar_one()
+    assert closed_at == vanished_at
+
+    result = reprocess(clean_db, raw_store, settings, source="rema", hooks=())
+
+    assert result.stats["rema_listings_closed_vanished"] == 1
+    assert result.stats["rema_vanished_check_skipped"] == 1
+    assert state() == live
 
 
 @respx.mock

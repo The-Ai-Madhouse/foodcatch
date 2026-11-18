@@ -54,6 +54,7 @@ def test_replays_raw_objects_in_order_and_runs_hooks(
         hooked.append(set(state.listing_ids))
 
     monkeypatch.setattr("foodcatch.ingest.rema.ingest_payload", fake_ingest)
+    monkeypatch.delattr("foodcatch.ingest.rema.replay_run")  # the bodies are no real pages
     result = reprocess(stored_run, raw_store, settings, source="rema", hooks=[hook])
     assert result.objects == 2
     assert result.records == 6

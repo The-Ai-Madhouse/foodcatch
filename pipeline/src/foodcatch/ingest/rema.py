@@ -32,7 +32,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Final
@@ -400,6 +400,15 @@ def ingest_page(
     )
 
 
+def _parse(payload: RawPayload) -> RemaProductPage:
+    if payload.endpoint != ENDPOINT_PRODUCTS:
+        raise UnsupportedEndpointError(f"rema: unsupported endpoint {payload.endpoint!r}")
+    try:
+        return RemaProductPage.model_validate_json(payload.body)
+    except ValidationError as exc:
+        raise SourceSchemaError(f"rema/{payload.endpoint}: invalid payload: {exc}") from exc
+
+
 def ingest_payload(conn: Connection, payload: RawPayload, *, settings: Settings) -> IngestResult:
     """Parse one raw ``rema`` payload and upsert its listings.
 
@@ -408,15 +417,61 @@ def ingest_payload(conn: Connection, payload: RawPayload, *, settings: Settings)
         SourceSchemaError: if the stored body does not match :class:`RemaProductPage`.
     """
     del settings  # Rema ingest needs no configuration
-    if payload.endpoint != ENDPOINT_PRODUCTS:
-        raise UnsupportedEndpointError(f"rema: unsupported endpoint {payload.endpoint!r}")
-    try:
-        page = RemaProductPage.model_validate_json(payload.body)
-    except ValidationError as exc:
-        raise SourceSchemaError(f"rema/{payload.endpoint}: invalid payload: {exc}") from exc
+    page = _parse(payload)
     return ingest_page(
         conn, page, raw_object_id=payload.raw_object_id, fetched_at=payload.fetched_at
     )
+
+
+COMPLETE_CATALOGUE_FRACTION: Final = 0.95
+"""Share of ``meta.pagination.total`` a run must see before vanished products are closed."""
+
+
+@dataclass(slots=True)
+class CatalogueRun:
+    """The run-level step of ``rema-products``: close products that left the catalogue.
+
+    Fed with every page of one run (live by the job, on replay by ``foodcatch reprocess``),
+    :meth:`finish` closes the open price periods of products the run did not see - but only
+    when it saw (nearly) the whole catalogue as announced by ``meta.pagination.total``, so a
+    truncated response never ends the prices of thousands of products.
+    """
+
+    seen: set[str] = field(default_factory=set[str])
+    announced_total: int = 0
+
+    def add_page(self, page: RemaProductPage) -> None:
+        """Take note of one page of the run."""
+        self.announced_total = max(self.announced_total, page.meta.pagination.total)
+        self.seen |= item_ids(page.data)
+
+    def add(self, payload: RawPayload) -> None:
+        """:class:`~foodcatch.ingest.RunReplay`: take note of one stored page."""
+        self.add_page(_parse(payload))
+
+    @property
+    def complete(self) -> bool:
+        """Whether the run saw enough of the catalogue to close vanished products."""
+        return bool(self.seen) and len(self.seen) >= COMPLETE_CATALOGUE_FRACTION * (
+            self.announced_total
+        )
+
+    def finish(self, conn: Connection, *, at: datetime) -> IngestResult:
+        """Close vanished products as of ``at`` (the run's ``started_at``) if complete."""
+        result = IngestResult()
+        result.counts["rema_products_seen"] = len(self.seen)
+        if not self.complete:
+            result.counts["rema_vanished_check_skipped"] += 1
+            return result
+        closed = close_vanished_products(conn, seen_item_ids=self.seen, at=at)
+        result.counts["rema_listings_closed_vanished"] += len(closed)
+        result.listing_ids |= closed
+        return result
+
+
+def replay_run() -> CatalogueRun:
+    """Entry point for ``foodcatch reprocess`` (see :mod:`foodcatch.ingest`)."""
+    return CatalogueRun()
 
 
 def item_ids(products: Iterable[RemaProduct]) -> set[str]:

@@ -248,6 +248,9 @@ FOODCATCH_ENV_FILE=../.env.production uv run foodcatch reprocess --source tjek -
 * Ingest is idempotent: rows are upserted on their natural keys, so replaying never duplicates.
   Listings that the fixed code no longer produces are **not** deleted; remove them by hand if the
   bug created wrong rows (find them by `raw_object_id` or `first_seen_at`).
+* Run-level steps are replayed per fetch run too: after the last object of each finished
+  `rema-products` run, products that left a complete catalogue are closed again at that run's
+  `started_at`, exactly as live (`rema_listings_closed_vanished` in the output).
 * Everything runs in **one transaction**. A long range downloads many objects from B2 and holds
   the transaction open; pause the source's jobs first and split long replays into consecutive
   ranges with `--until` (exclusive), each of which commits on its own:

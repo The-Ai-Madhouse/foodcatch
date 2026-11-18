@@ -17,13 +17,18 @@ It parses ``payload.body`` with the source's pydantic models (dispatching on
 
 The same function is used live (``JobContext.ingest``) and when replaying the raw store
 (``foodcatch reprocess``), which guarantees reprocessing reproduces live ingest.
+
+A source whose job also writes after seeing *all* payloads of a run (Rema closes the prices of
+products that left a complete catalogue) exposes that step as ``replay_run``: a factory of a
+:class:`RunReplay` that the live job feeds too, and that ``foodcatch reprocess`` feeds with the
+payloads of each fetch run before calling ``finish`` at the run's ``started_at``.
 """
 
 from __future__ import annotations
 
 import importlib
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, cast
@@ -36,6 +41,7 @@ from foodcatch.sources import RAW_SOURCES
 
 INGEST_MODULES: Mapping[str, str] = {source: f"foodcatch.ingest.{source}" for source in RAW_SOURCES}
 INGEST_ENTRY_POINT = "ingest_payload"
+RUN_REPLAY_ENTRY_POINT = "replay_run"
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +90,32 @@ class UnknownSourceError(KeyError):
     """Raised for a source without an ingest module."""
 
 
+class RunReplay(Protocol):
+    """The run-level ingest step of a source (see the module docstring)."""
+
+    def add(self, payload: RawPayload) -> None:
+        """Take note of one (already ingested) payload of the run."""
+        ...
+
+    def finish(self, conn: Connection, *, at: datetime) -> IngestResult:
+        """Apply the run-level step as of ``at`` (the run's ``started_at``)."""
+        ...
+
+
+def get_run_replay(source: str) -> Callable[[], RunReplay] | None:
+    """``foodcatch.ingest.<source>.replay_run``, or ``None`` if the source has no run step.
+
+    Raises:
+        UnknownSourceError: if ``source`` is not one of :data:`foodcatch.sources.RAW_SOURCES`.
+    """
+    try:
+        module_name = INGEST_MODULES[source]
+    except KeyError as exc:
+        raise UnknownSourceError(source) from exc
+    module = importlib.import_module(module_name)
+    return cast("Callable[[], RunReplay] | None", getattr(module, RUN_REPLAY_ENTRY_POINT, None))
+
+
 def get_ingester(source: str) -> Ingester:
     """Return ``foodcatch.ingest.<source>.ingest_payload``.
 
@@ -103,6 +135,8 @@ __all__ = [
     "IngestResult",
     "Ingester",
     "RawPayload",
+    "RunReplay",
     "UnknownSourceError",
     "get_ingester",
+    "get_run_replay",
 ]
