@@ -223,9 +223,12 @@ def test_ingest_path_uses_source_ingester(
     assert seen[0].body == b"[]"
 
 
-def test_default_hooks_are_noops_until_implemented(run: Runner, behaviour: type[Behaviour]) -> None:
+def test_default_hooks_run_with_nothing_to_classify(
+    run: Runner, behaviour: type[Behaviour]
+) -> None:
     result = run(hooks=POST_FETCH_HOOKS)
-    assert result.stats.get("classified", 0) == 0
+    assert result.stats.get("classification_changed", 0) == 0
+    assert result.stats.get("deals", 0) == 0
     assert result.ok
 
 
