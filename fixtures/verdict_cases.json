@@ -1,0 +1,80 @@
+{
+  "description": "Shared test cases for the deal verdict (docs/architecture.md §6). Used by pipeline/src/foodcatch/deals/verdict.py and web/src/lib/verdict.ts.",
+  "cases": [
+    {
+      "name": "good deal: Netto worst price below every nearby reference",
+      "deal": {"netto_unit_price_worst": 33.33, "netto_unit_price_best": 33.33, "price_applies": true, "is_exact": true,
+               "references": [
+                 {"kind": "offer", "chain_id": "superbrugsen", "unit_price": 39.0},
+                 {"kind": "regular", "chain_id": "rema1000", "unit_price": 49.9},
+                 {"kind": "history", "chain_id": "netto", "unit_price": 33.33}]},
+      "nearby_chains": ["superbrugsen", "rema1000"],
+      "expected": {"verdict": "good_deal", "cheapest_unit_price": 33.33, "reference_count": 3}
+    },
+    {
+      "name": "cheaper elsewhere: even Netto's best price is above a nearby reference",
+      "deal": {"netto_unit_price_worst": 72.0, "netto_unit_price_best": 54.0, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "offer", "chain_id": "meny", "unit_price": 49.9}]},
+      "nearby_chains": ["meny"],
+      "expected": {"verdict": "cheaper_elsewhere", "cheapest_unit_price": 49.9, "reference_count": 1}
+    },
+    {
+      "name": "undecided: Netto pack sizes overlap the cheapest reference",
+      "deal": {"netto_unit_price_worst": 71.0, "netto_unit_price_best": 52.0, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "history", "chain_id": "netto", "unit_price": 56.52}]},
+      "nearby_chains": [],
+      "expected": {"verdict": "undecided", "cheapest_unit_price": 56.52, "reference_count": 1}
+    },
+    {
+      "name": "references from chains that are not nearby are ignored",
+      "deal": {"netto_unit_price_worst": 62.5, "netto_unit_price_best": 62.5, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "offer", "chain_id": "lidl", "unit_price": 59.9}]},
+      "nearby_chains": ["rema1000"],
+      "expected": {"verdict": "no_reference", "cheapest_unit_price": null, "reference_count": 0}
+    },
+    {
+      "name": "history references count regardless of distance",
+      "deal": {"netto_unit_price_worst": 30.0, "netto_unit_price_best": 30.0, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "history", "chain_id": "netto", "unit_price": 35.0},
+                              {"kind": "offer", "chain_id": "lidl", "unit_price": 20.0}]},
+      "nearby_chains": [],
+      "expected": {"verdict": "good_deal", "cheapest_unit_price": 35.0, "reference_count": 1}
+    },
+    {
+      "name": "EAN reference prices count regardless of distance",
+      "deal": {"netto_unit_price_worst": 20.0, "netto_unit_price_best": 20.0, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "ean_reference", "chain_id": "netto", "unit_price": 26.5}]},
+      "nearby_chains": [],
+      "expected": {"verdict": "good_deal", "cheapest_unit_price": 26.5, "reference_count": 1}
+    },
+    {
+      "name": "multi-product offer whose price does not apply to the variant",
+      "deal": {"netto_unit_price_worst": 76.0, "netto_unit_price_best": 48.0, "price_applies": false, "is_exact": true,
+               "references": [{"kind": "offer", "chain_id": "lidl", "unit_price": 47.44}]},
+      "nearby_chains": ["lidl"],
+      "expected": {"verdict": "ambiguous_offer", "cheapest_unit_price": null, "reference_count": 0}
+    },
+    {
+      "name": "unknown key attribute (e.g. added water) gives no verdict",
+      "deal": {"netto_unit_price_worst": 62.5, "netto_unit_price_best": 62.5, "price_applies": true, "is_exact": false,
+               "references": []},
+      "nearby_chains": ["lidl"],
+      "expected": {"verdict": "not_exact", "cheapest_unit_price": null, "reference_count": 0}
+    },
+    {
+      "name": "unknown unit price",
+      "deal": {"netto_unit_price_worst": null, "netto_unit_price_best": null, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "offer", "chain_id": "lidl", "unit_price": 10.0}]},
+      "nearby_chains": ["lidl"],
+      "expected": {"verdict": "no_price", "cheapest_unit_price": null, "reference_count": 0}
+    },
+    {
+      "name": "equal to cheapest reference counts as good deal",
+      "deal": {"netto_unit_price_worst": 87.5, "netto_unit_price_best": 87.5, "price_applies": true, "is_exact": true,
+               "references": [{"kind": "offer", "chain_id": "superbrugsen", "unit_price": 87.5},
+                              {"kind": "regular", "chain_id": "rema1000", "unit_price": 96.19}]},
+      "nearby_chains": ["superbrugsen", "rema1000"],
+      "expected": {"verdict": "good_deal", "cheapest_unit_price": 87.5, "reference_count": 2}
+    }
+  ]
+}

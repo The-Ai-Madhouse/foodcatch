@@ -1,0 +1,278 @@
+# FoodCatch – Architecture
+
+FoodCatch finds healthy, minimally processed staple groceries that are **genuinely cheap**
+near a given location: cheaper than the same product at nearby competitors, than reference
+shelf prices, and than its own price history. Trustworthiness of every price claim is the
+primary design goal.
+
+This document is the contract between the parts of the system. Code must follow it; changes
+to it are made deliberately (and recorded as an ADR in `docs/decisions/`).
+
+## 1. Overview
+
+```
+            ┌──────────────────────── GitHub Actions (cron) ───────────────────────┐
+            │  foodcatch collect <job>  →  raw store (B2)  →  ingest  →  classify   │
+            │                                   →  compute deals  →  quality checks │
+            └──────────────────────────────┬───────────────────────────────────────┘
+                                           │ SQLAlchemy (owner role)
+                                           ▼
+                                  Neon Postgres  ── schema `public` (pipeline-owned tables)
+                                           ▲       ── schema `api`    (read-only views = web contract)
+                                           │ SQL (read-only role `web_readonly`)
+                                  Next.js web app (runs locally for now)
+```
+
+* **pipeline/** – Python 3.12 package `foodcatch` (uv). Fetches, stores raw, normalizes,
+  classifies, computes deals. All business logic about prices and product recognition lives here.
+* **web/** – Next.js (App Router, TypeScript). Reads **only** from views in the `api` schema.
+  Contains presentation logic and a small, pure, unit-tested function for location filtering of
+  deal references (see §6). Never writes to the database.
+* **Postgres** – Neon in production, `docker compose` Postgres 17 locally and in CI.
+* **Raw store** – Backblaze B2 (S3-compatible) in production; local directory in development.
+
+## 2. Repository layout
+
+```
+foodcatch/
+├── README.md                  overview + quickstart
+├── LICENSE                    MIT
+├── docker-compose.yml         local Postgres 17
+├── .env.example               every environment variable, documented
+├── docs/
+│   ├── architecture.md        this file
+│   ├── setup.md               step-by-step: Neon, B2, GitHub secrets, healthchecks, Sentry
+│   ├── data-sources.md        what each external API gives, limits, terms caveats
+│   └── decisions/             ADRs (NNNN-title.md)
+├── pipeline/
+│   ├── pyproject.toml         uv project; ruff, pyright, pytest config
+│   ├── alembic.ini
+│   ├── src/foodcatch/
+│   │   ├── config.py          pydantic-settings Settings (env + .env)
+│   │   ├── cli.py             Typer app: `foodcatch ...`
+│   │   ├── logging.py         structured logging setup
+│   │   ├── http.py            shared httpx client: UA, timeouts, retry (tenacity), throttle
+│   │   ├── monitoring.py      healthchecks.io pings + optional Sentry init
+│   │   ├── storage/raw.py     RawStore protocol; LocalRawStore, S3RawStore (B2)
+│   │   ├── db/
+│   │   │   ├── engine.py      engine/session helpers
+│   │   │   ├── tables.py      SQLAlchemy Core Table definitions (single source of truth)
+│   │   │   └── migrations/    Alembic env + versions (also creates `api` views + role grants)
+│   │   ├── sources/           one module per external API: pydantic response models + fetchers
+│   │   │   ├── salling.py     stores, food-waste
+│   │   │   ├── tjek.py        dealers, stores, catalogs, offers
+│   │   │   ├── rema.py        product catalogue
+│   │   │   └── openfoodfacts.py  EAN enrichment
+│   │   ├── ingest/            raw payload → normalized rows (idempotent upserts)
+│   │   ├── matching/          product recognition (ported from poc/matching.py)
+│   │   ├── deals/             reference prices + conservative verdicts
+│   │   ├── jobs/              orchestration of one job run (fetch_run bookkeeping, quality checks)
+│   │   └── review.py          review queue helpers
+│   └── tests/
+├── web/
+│   ├── package.json           pnpm
+│   ├── src/app/               routes (Danish UI)
+│   ├── src/server/            db client + typed queries (server-only)
+│   ├── src/lib/               pure logic (deal filtering, formatting) – unit tested
+│   └── src/components/
+├── poc/                       archived proof of concept (not used by production code)
+└── .github/workflows/         ci.yml, collect-*.yml
+```
+
+## 3. Conventions
+
+* Code, identifiers, comments, docs, commit messages: **English**. Everything a user sees in the
+  web UI: **Danish**. Product-domain data values (e.g. `"Hakket oksekød"`) stay Danish.
+* Python: typed everywhere (`pyright` strict on `src/`), `ruff` (lint + format), `pytest`.
+  No bare `except`. No `print` outside the CLI layer – use logging.
+* TypeScript: `strict`, ESLint + Prettier, Vitest for `src/lib`.
+* Timestamps are stored as `timestamptz` in UTC; display in `Europe/Copenhagen`.
+* Money: `numeric(10,2)` DKK in the DB; unit prices `numeric(12,4)`.
+* Secrets only via environment variables. `.env` is git-ignored; `.env.example` documents all.
+* Every external request sends `User-Agent: foodcatch/<version> (+https://github.com/toke-dk/foodcatch)`.
+  No personal data in requests.
+* Commits: Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`).
+
+## 4. Data flow and job design
+
+Every job is a CLI command, e.g. `foodcatch collect salling-food-waste`. A job run:
+
+1. Creates a `fetch_run` row (`status='running'`, `git_sha`, `job`, `started_at`).
+2. **Fetch** – calls the external API via `sources/*`, validating responses with pydantic models.
+   A schema mismatch is a hard failure (we never store data we could not validate).
+3. **Raw** – stores every response body **unchanged**, gzip-compressed, in the raw store at
+   `{source}/{endpoint}/{YYYY}/{MM}/{DD}/{fetch_run_id}/{seq:05d}.json.gz` and records a
+   `raw_object` row (sha256, bytes, params). Raw objects are never modified or deleted.
+4. **Ingest** – parses validated payloads into normalized rows. Idempotent: re-running the same
+   raw objects yields the same database state (upserts on natural keys).
+5. **Classify** – runs product recognition (`matching/`) for new/changed `listing`s with the
+   current `MATCHER_VERSION`.
+6. **Deals** – recomputes `deal` rows affected by the run.
+7. **Quality checks** – compares record counts with the previous successful run of the same job;
+   a drop of more than 50 % (configurable) marks the run `degraded` and exits non-zero.
+8. Finishes the `fetch_run` (`succeeded` / `degraded` / `failed`, counts, error) and pings
+   healthchecks.io (`/start`, success, `/fail`) if a ping URL is configured.
+
+`foodcatch reprocess --source <s> [--since DATE]` replays steps 4–6 from the raw store.
+`foodcatch reclassify` re-runs steps 5–6 for all listings (used after matcher changes).
+
+### Jobs and schedules (GitHub Actions, times UTC)
+
+| Job | Command | Schedule |
+|---|---|---|
+| Salling stores | `collect salling-stores` | weekly (Mon 03:17) |
+| Salling food waste | `collect salling-food-waste` | daily 05:37 and 13:37 |
+| Tjek stores | `collect tjek-stores` | weekly (Mon 03:47) |
+| Tjek catalogs + offers | `collect tjek-offers` | daily 04:07 |
+| Rema catalogue | `collect rema-products` | daily 02:27 |
+| Open Food Facts | `collect off-enrich` | daily 06:07 (only EANs without data) |
+
+Minutes are deliberately off the hour (GitHub schedules are delayed at :00).
+
+### Volume control (Neon free plan: 1 GB)
+
+* Raw payloads live in B2, never in Postgres.
+* Store objects: drop fields we do not use (opening hours, customer flow) **after** raw storage.
+* Food-waste clearances are stored as `listing`s only for stores within
+  `REGION_RADIUS_KM` (default 30) of any configured `REGION_CENTERS` (default: home location).
+  For **all** stores we upsert the EAN-level reference price into `product_reference_price`
+  (only when the price changes). Raw data for all stores remains in B2, so the region can be
+  widened later by reprocessing.
+* `classification` rows for matcher versions older than the two most recent are pruned.
+* `foodcatch db stats` reports table sizes; a quality check warns at 70 % of `DB_SIZE_BUDGET_MB`.
+
+## 5. Database schema (schema `public`, owned by Alembic)
+
+Natural keys are enforced with unique constraints so ingest can upsert.
+
+**`fetch_run`** – `id uuid pk`, `job text`, `source text`, `status text` (running|succeeded|degraded|failed),
+`started_at`, `finished_at`, `git_sha text`, `stats jsonb` (counts per stage), `error text`.
+
+**`raw_object`** – `id uuid pk`, `fetch_run_id fk`, `source`, `endpoint`, `params jsonb`, `storage_key text unique`,
+`sha256 text`, `bytes int`, `fetched_at`.
+
+**`chain`** – `id text pk` (`netto`, `rema1000`, `lidl`, `foetex`, `bilka`, `365discount`, `superbrugsen`,
+`kvickly`, `meny`, `loevbjerg`, `spar`), `name text`, `tjek_dealer_id text unique null`, `salling_brand text null`.
+Seeded by migration.
+
+**`store`** – `id uuid pk`, `chain_id fk`, `source text` (salling|tjek), `source_store_id text`,
+`name`, `street`, `zip`, `city`, `lat double`, `lon double`, `first_seen_at`, `last_seen_at`,
+`unique(source, source_store_id)`. (Salling and Tjek ids for the same physical store are not linked in v1.)
+
+**`product`** – `id uuid pk`, `ean text unique`, `name`, `brand`, `source_category text` (e.g. Salling path),
+`quantity_text`, `net_quantity numeric`, `net_unit text` (kg|l|stk), `nova_group smallint`,
+`nutriscore_grade text`, `off_checked_at`, `first_seen_at`, `last_seen_at`.
+
+**`product_reference_price`** – EAN-level shelf price observed via Salling food-waste `originalPrice`:
+`product_id fk`, `chain_id fk`, `price numeric`, `first_seen_at`, `last_seen_at`, `observations int`,
+`unique(product_id, chain_id, price, first_seen_at)`; a new row only when the price changes.
+
+**`listing`** – one priced thing as published by a source, over a validity period:
+`id uuid pk`, `source text` (tjek|rema|salling_food_waste), `source_item_id text`, `chain_id fk`,
+`store_id fk null` (set for food waste), `catalog_id text null`, `kind text` (offer|regular|clearance),
+`title text`, `description text`, `product_id fk null` (EAN when known),
+`price numeric`, `reference_price numeric null` (pre-price / originalPrice),
+`unit text null` (kg|l|stk), `size_min numeric null`, `size_max numeric null` (in `unit`),
+`unit_price_min numeric null`, `unit_price_max numeric null`,
+`member_only bool`, `max_per_customer int null`,
+`valid_from timestamptz`, `valid_to timestamptz`, `first_seen_at`, `last_seen_at`,
+`raw_object_id fk`, `extra jsonb`,
+`unique(source, source_item_id, valid_from, price)`.
+Unit prices follow the PoC rule: `unit_price_min = price / size_max`, `unit_price_max = price / size_min`.
+
+**`matcher_release`** – `version text pk`, `created_at`, `is_current bool` (exactly one current).
+
+**`classification`** – result of recognition for one variant of a listing:
+`listing_id fk`, `matcher_version fk`, `variant_index smallint`, `type_id text`, `type_label text`,
+`group_name text`, `attrs jsonb`, `class_key text`, `is_exact bool`, `is_healthy bool`,
+`offer_variants smallint`, `same_class_variants smallint`, `notes text[]`, `source_hint text`,
+`pk(listing_id, matcher_version, variant_index)`; index on `(matcher_version, class_key)`.
+A listing with no recognized variant gets **no** rows (and may get a `review_item`).
+
+**`classification_override`** – manual corrections that win over rules:
+`id`, `source`, `match_title_normalized text`, `action text` (reject|force), `forced_result jsonb null`,
+`note`, `created_at`, `unique(source, match_title_normalized)`.
+
+**`review_item`** – queue for humans: `id`, `listing_id fk`, `reason text`
+(unrecognized_staple_word|unknown_key_attribute|ambiguous_offer), `status` (open|accepted|rejected|fixed),
+`created_at`, `resolved_at`, `unique(listing_id, reason)`.
+
+**`deal`** – precomputed verdict input for one Netto offer variant (see §6):
+`listing_id fk`, `variant_index`, `matcher_version`, `class_key`, `netto_unit_price_worst numeric`,
+`netto_unit_price_best numeric`, `price_applies bool`, `references jsonb`, `computed_at`,
+`pk(listing_id, variant_index, matcher_version)`.
+
+## 6. Deal logic (single source of truth: `pipeline/src/foodcatch/deals/`)
+
+Ported from the PoC and **must keep its conservatism**:
+
+* A reference counts as **same product** only if `comparability(a, b) == "same"`: identical type,
+  all key attributes known and equal (incl. organic, lactose-free), same processing state.
+* A competitor offer's unit price counts only if its price **applies to the variant**
+  (all variants of that offer are the same class, or the unit-price spread ≤ 25 %).
+* Netto is evaluated at its **worst** (highest) unit price, references at their **best** (lowest).
+* Reference kinds: `offer` (current competitor offers), `regular` (Rema shelf price;
+  later other chains), `history` (earlier Netto offers of the same class), `ean_reference`
+  (Salling originalPrice for the same EAN, when known).
+* `deal.references` is a JSON array of
+  `{kind, chain_id, listing_id, title, unit_price, unit, valid_from, valid_to}` – **all**
+  same-class references, not only the best, so the web can filter by nearby chains.
+
+Verdict (computed in the web from `deal` + the set of chains near the user, by the pure function
+`web/src/lib/verdict.ts`, mirrored by `pipeline/src/foodcatch/deals/verdict.py` and tested on
+shared fixtures in `fixtures/verdict_cases.json` at repo root):
+
+* `no_price` – unit price unknown.
+* `ambiguous_offer` – `price_applies = false`.
+* `not_exact` – the variant has unknown key attributes.
+* `no_reference` – no same-class reference from a nearby chain (history counts regardless of distance).
+* `good_deal` – `netto_unit_price_worst <= min(reference.unit_price)`.
+* `cheaper_elsewhere` – `netto_unit_price_best > min(reference.unit_price)`.
+* `undecided` – otherwise (Netto's pack sizes overlap the cheapest reference).
+
+## 7. Web contract (schema `api`, read-only)
+
+The web app may only read these views (created in Alembic migrations, `GRANT SELECT` to role
+`web_readonly`). Column changes are breaking changes for the web.
+
+* `api.stores` – `id, chain_id, chain_name, name, street, zip, city, lat, lon` (Tjek stores, all chains, plus Salling stores).
+* `api.current_netto_deals` – one row per (current or upcoming Netto offer listing × healthy classified variant)
+  under the current matcher: `listing_id, variant_index, title, description, price, unit, unit_price_min,
+  unit_price_max, valid_from, valid_to, type_id, type_label, group_name, class_label, attrs, is_exact,
+  notes, price_applies, netto_unit_price_worst, netto_unit_price_best, references`.
+* `api.food_waste_near` – current clearances with healthy classification:
+  `listing_id, store_id, chain_id, store_name, street, zip, city, lat, lon, title, ean, price, reference_price,
+  discount_pct, unit, unit_price, valid_to, stock, type_label, class_label, is_exact`.
+* `api.class_price_history` – `class_key, class_label, kind, chain_id, chain_name, title, unit_price_min,
+  unit_price_max, valid_from, valid_to` for all classified listings (all matcher-current).
+* `api.pipeline_status` – latest run per job: `job, status, started_at, finished_at, stats, error`,
+  plus `api.review_queue_summary` – `reason, open_count`.
+
+Location handling: the user's location (address → coordinates via Nominatim, cached; or a default from
+`FOODCATCH_DEFAULT_LOCATION`) is resolved server-side in the web app and kept in a cookie. Nearby chains =
+chains with a store in `api.stores` within the chosen radius (haversine in SQL).
+
+## 8. Environments and configuration
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `DATABASE_URL` | pipeline | owner connection (local: docker compose; prod: Neon) |
+| `WEB_DATABASE_URL` | web | read-only role connection |
+| `RAW_STORE_URL` | pipeline | `file://./data/raw` locally, `s3://<bucket>/raw` in prod |
+| `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` | pipeline | B2 S3 API |
+| `SALLING_API_KEY` | pipeline | Salling Group developer API |
+| `REGION_CENTERS` | pipeline | `lat,lon;lat,lon` – where detailed food-waste is kept |
+| `REGION_RADIUS_KM` | pipeline | default 30 |
+| `HEALTHCHECKS_URL_<JOB>` | pipeline | optional ping URLs per job |
+| `SENTRY_DSN` | pipeline | optional |
+| `DB_SIZE_BUDGET_MB` | pipeline | default 1024 |
+| `FOODCATCH_DEFAULT_LOCATION` | web | `lat,lon` default when no cookie |
+
+## 9. Testing
+
+* Unit tests for matching use the gold set derived from Salling categories and hand-verified cases
+  from the PoC review (`pipeline/tests/matching/`). The gold-set metrics are asserted with
+  thresholds so regressions fail CI (precision on staples, zero wrong key attributes, false positives).
+* Source modules are tested with recorded (small, trimmed) fixtures and `respx`.
+* Ingest/deals are tested against a real Postgres (docker compose locally, service container in CI).
+* Web: Vitest for `src/lib` (incl. the shared verdict fixtures), typecheck, lint, `next build`.
