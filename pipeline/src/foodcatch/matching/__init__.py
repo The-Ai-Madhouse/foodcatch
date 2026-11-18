@@ -27,7 +27,7 @@ from foodcatch.matching.compare import Comparability, comparability, is_healthy_
 from foodcatch.matching.model import Match
 from foodcatch.matching.recognize import classify
 
-MATCHER_VERSION = "2026.11.1"
+MATCHER_VERSION = "2026.11.2"
 
 __all__ = [
     "MATCHER_VERSION",

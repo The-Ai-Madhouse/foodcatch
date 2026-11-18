@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from foodcatch.matching import MATCHER_VERSION, Match
+import pytest
+
+from foodcatch.matching import MATCHER_VERSION, Match, classify
 
 
 def _mørbrad(**attrs: str) -> Match:
@@ -55,5 +57,47 @@ def test_tilsat_vand_label() -> None:
     assert m.class_label == "Kyllingebryst(filet), uden tilsat vand"
 
 
-def test_matcher_version_matches_seeded_release() -> None:
-    assert MATCHER_VERSION == "2026.11.1"
+def test_matcher_version_is_pinned() -> None:
+    """Bump deliberately (and update this pin) on every behaviour change of the matcher.
+
+    2026.11.1 is the release seeded by migration 0001; the post-fetch hook promotes newer ones.
+    2026.11.2: pork tenderloin/chops no longer match cuts of other animals.
+    """
+    assert MATCHER_VERSION == "2026.11.2"
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Kalvemørbrad",
+        "Oksemørbrad",
+        "Lammemørbrad",
+        "Mørbrad af kalv",
+        "Kalkunmørbrad",
+        "Kyllingemørbrad",
+        "Hjortemørbrad",
+        "Vildsvinemørbrad",
+        "Andemørbrad",
+        "Koteletter af lam",
+        "Lamme koteletter",
+        "Kalve koteletter",
+    ],
+)
+def test_cuts_of_other_animals_are_not_pork(title: str) -> None:
+    """Regression (finding C3): a veal or lamb cut must not become a pork reference."""
+    assert [m.type_id for m in classify(title)] == []
+
+
+@pytest.mark.parametrize(
+    ("title", "type_id"),
+    [
+        ("Mørbrad af dansk gris", "svinemørbrad"),
+        ("Grisemørbrad", "svinemørbrad"),
+        ("Dansk svinemørbrad", "svinemørbrad"),
+        ("Flammegrillet mørbrad", "svinemørbrad"),
+        ("Danske koteletter", "svinekoteletter"),
+        ("Svinekoteletter med ben", "svinekoteletter"),
+    ],
+)
+def test_pork_cuts_are_still_recognized(title: str, type_id: str) -> None:
+    assert [m.type_id for m in classify(title)] == [type_id]

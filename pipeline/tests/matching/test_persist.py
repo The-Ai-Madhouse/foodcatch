@@ -314,14 +314,13 @@ def test_new_version_creates_release_but_not_current(
 ) -> None:
     listing_id = add_listing("Hakket oksekød 8-12%")
     classify_pending(db_conn, version=MATCHER_VERSION)
+    current = select(matcher_release.c.version).where(matcher_release.c.is_current)
+    before = db_conn.execute(current).scalar_one()
 
     assert classify_pending(db_conn, version="2099.1.1") == [listing_id]
     assert len(_rows(db_conn, listing_id, "2099.1.1")) == 1
     assert len(_rows(db_conn, listing_id)) == 1
-    current = db_conn.execute(
-        select(matcher_release.c.version).where(matcher_release.c.is_current)
-    ).scalar_one()
-    assert current == MATCHER_VERSION
+    assert db_conn.execute(current).scalar_one() == before
 
 
 # -------------------------------------------------------------------------------- overrides

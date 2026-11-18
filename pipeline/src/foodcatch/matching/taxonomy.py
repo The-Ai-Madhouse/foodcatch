@@ -99,6 +99,9 @@ def _type(
     )
 
 
+_OTHER_SPECIES = r"\bkalv|\bokse|\blam(me|\b)|kalkun|kylling|\bhjort|vild|\band(e)?mørbrad"
+"""Other animals than pig in a cut's name ("Kalvemørbrad", "Koteletter af lam", "Vildsvin")."""
+
 PRODUCT_TYPES: tuple[ProductType, ...] = (
     # ---------------------------------------------------------------- meat
     _type(
@@ -161,13 +164,20 @@ PRODUCT_TYPES: tuple[ProductType, ...] = (
         key=("udskæring",),
     ),
     _type("hel_kylling", "Hel kylling", "Kød", r"hel(e)? kylling|helkylling"),
-    _type("svinekoteletter", "Svinekoteletter", "Kød", r"\bkoteletter|svinekotelet"),
+    # "koteletter" / "mørbrad" alone are pork, but not when another animal is named.
+    _type(
+        "svinekoteletter",
+        "Svinekoteletter",
+        "Kød",
+        r"\bkoteletter|svinekotelet",
+        exclude=_OTHER_SPECIES,
+    ),
     _type(
         "svinemørbrad",
         "Svinemørbrad",
         "Kød",
         r"(svine|grise)?mørbrad",
-        exclude=r"a ?la|ala\b|bøffer",
+        exclude=rf"a ?la|ala\b|bøffer|{_OTHER_SPECIES}",
     ),
     # ---------------------------------------------------------------- eggs
     _type(

@@ -2,6 +2,8 @@
 
 The gold sets were produced by ``poc/matching.py``; the production matcher must reproduce every
 recognized type, attribute, class key, exactness, health verdict, variant count, note and label.
+Deliberate fixes of PoC errors update the expected record (matcher 2026.11.2: "LAMMEMØRBRAD" is
+no longer pork tenderloin).
 """
 
 from __future__ import annotations
