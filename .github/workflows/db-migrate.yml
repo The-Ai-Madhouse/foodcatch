@@ -1,0 +1,114 @@
+# Apply Alembic migrations to the production database (Neon).
+#
+# Runs automatically when migrations change on main, and on demand. GitHub concurrency groups
+# cannot span workflows, so mutual exclusion with collect.yml is approximated in both
+# directions: this workflow waits until no collect run is active, and collect.yml waits while a
+# migration is running. The operational rules (expand/contract migrations, merge order) are in
+# docs/runbook.md, "Schema migrations".
+#
+# Never add `pull_request` triggers: this workflow uses the production owner credentials.
+
+name: db-migrate
+
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+  && format('db upgrade {0} (manual)', inputs.revision)
+  || 'db upgrade head (migrations changed)' }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pipeline/src/foodcatch/db/migrations/**
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Target revision (default head). Downgrades are done locally, see the runbook.
+        type: string
+        required: false
+        default: head
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: db upgrade
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read # to see whether collect runs are active
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.9"
+          enable-cache: true
+          cache-dependency-glob: pipeline/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      # A collect run holds one transaction for its whole duration; ALTER TABLE would queue
+      # behind it (and block everything else) or a half-migrated schema would meet running code.
+      - name: Wait until no collect run is active
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Only runs created before this one count; newer collect runs wait for us instead.
+          me=$(gh api "repos/$REPO/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
+          deadline=$(( $(date +%s) + 30 * 60 ))
+          while true; do
+            busy=$(gh run list --repo "$REPO" --workflow collect.yml --limit 20 \
+              --json status,createdAt \
+              --jq "[.[] | select(.status != \"completed\" and .createdAt < \"$me\")] | length")
+            if [[ "$busy" == 0 ]]; then
+              echo "No collect run is active."
+              break
+            fi
+            if (( $(date +%s) > deadline )); then
+              echo "::error::Collect runs stayed active for 30 minutes; re-run this workflow later."
+              exit 1
+            fi
+            echo "$busy collect run(s) active; waiting 30 s..."
+            sleep 30
+          done
+
+      - name: Upgrade database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REVISION: ${{ inputs.revision || 'head' }}
+          LOG_FORMAT: json
+          FOODCATCH_ENV_FILE: ""
+        run: |
+          set -euo pipefail
+          if [[ -z "$DATABASE_URL" ]]; then
+            echo "::error::Missing secret DATABASE_URL (docs/setup.md §4)."
+            exit 1
+          fi
+          if [[ ! "$REVISION" =~ ^[A-Za-z0-9_+-]+$ ]]; then
+            echo "::error::Invalid revision '$REVISION'."
+            exit 1
+          fi
+          uv run --no-sync foodcatch db upgrade --revision "$REVISION"
+          echo "Database upgraded to \`$REVISION\`." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Database size
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DB_SIZE_BUDGET_MB: ${{ vars.DB_SIZE_BUDGET_MB || '1024' }}
+          FOODCATCH_ENV_FILE: ""
+        run: uv run --no-sync foodcatch db stats
