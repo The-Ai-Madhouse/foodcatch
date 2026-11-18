@@ -116,6 +116,9 @@ class Settings(BaseSettings):
     quality_drop_threshold: float = Field(default=0.5, ge=0, le=1)
     """A run whose quality metric drops by more than this fraction is ``degraded``."""
 
+    off_batch_size: int = Field(default=500, ge=1, le=10_000)
+    """Products looked up per ``off-enrich`` run (``OFF_BATCH_SIZE``)."""
+
     log_level: str = "INFO"
     log_format: Literal["auto", "json", "console"] = "auto"
     git_sha: str | None = Field(

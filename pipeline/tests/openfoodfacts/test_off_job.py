@@ -101,12 +101,30 @@ def test_off_enrich_job(
 
 @pytest.mark.usefixtures("products")
 def test_batch_size_is_configurable(
-    run: Callable[[], RunResult], api: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+    clean_db: Engine,
+    settings: Settings,
+    raw_store: LocalRawStore,
+    http_client: httpx.Client,
+    api: respx.MockRouter,
 ) -> None:
-    monkeypatch.setenv("OFF_BATCH_SIZE", "1")
-    result = run()
+    result = run_job(
+        "off-enrich",
+        settings=settings.model_copy(update={"off_batch_size": 1}),
+        engine=clean_db,
+        raw_store=raw_store,
+        http=http_client,
+        hooks=(),
+    )
     assert result.stats["off_due"] == 1
     assert api.calls.call_count == 1
+
+
+def test_batch_size_setting_reads_off_batch_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OFF_BATCH_SIZE", "7")
+    assert Settings(_env_file=None).off_batch_size == 7  # pyright: ignore[reportCallIssue]
+    monkeypatch.setenv("OFF_BATCH_SIZE", "0")
+    with pytest.raises(ValueError, match="off_batch_size"):
+        Settings(_env_file=None)  # pyright: ignore[reportCallIssue]
 
 
 def test_a_failing_lookup_is_skipped(
