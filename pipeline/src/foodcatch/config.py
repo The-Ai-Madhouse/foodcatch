@@ -123,6 +123,10 @@ class Settings(BaseSettings):
     """Hard limit of Salling API requests per ``salling-food-waste`` run
     (``SALLING_FOOD_WASTE_MAX_CALLS``; the key's quota is about 60 requests, see ADR 0005)."""
 
+    tjek_full_refresh_days: int = Field(default=3, ge=0, le=365)
+    """``tjek-offers`` re-fetches the offers of an unchanged catalog once its last full fetch is
+    this many days old (``TJEK_FULL_REFRESH_DAYS``; 0 fetches every catalog on every run)."""
+
     log_level: str = "INFO"
     log_format: Literal["auto", "json", "console"] = "auto"
     git_sha: str | None = Field(

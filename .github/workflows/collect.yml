@@ -49,6 +49,12 @@ on:
           (sets QUALITY_DROP_THRESHOLD=1 for this run only; see docs/runbook.md)
         type: boolean
         default: false
+      tjek_full_refresh:
+        description: >-
+          tjek-offers only: fetch the offers of every catalog, also unchanged ones
+          (sets TJEK_FULL_REFRESH_DAYS=0 for this run only; see docs/runbook.md)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -215,6 +221,7 @@ jobs:
           DB_SIZE_BUDGET_MB: ${{ vars.DB_SIZE_BUDGET_MB }}
           OFF_BATCH_SIZE: ${{ vars.OFF_BATCH_SIZE }}
           SALLING_FOOD_WASTE_MAX_CALLS: ${{ vars.SALLING_FOOD_WASTE_MAX_CALLS }}
+          TJEK_FULL_REFRESH_DAYS: ${{ inputs.tjek_full_refresh && '0' || vars.TJEK_FULL_REFRESH_DAYS }}
           QUALITY_DROP_THRESHOLD: ${{ inputs.accept_drop && '1' || vars.QUALITY_DROP_THRESHOLD }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
           LOG_FORMAT: json
@@ -239,7 +246,7 @@ jobs:
             exit 1
           fi
           for name in REGION_RADIUS_KM DB_SIZE_BUDGET_MB OFF_BATCH_SIZE QUALITY_DROP_THRESHOLD \
-            SALLING_FOOD_WASTE_MAX_CALLS LOG_LEVEL; do
+            SALLING_FOOD_WASTE_MAX_CALLS TJEK_FULL_REFRESH_DAYS LOG_LEVEL; do
             [[ -n "${!name}" ]] || unset "$name"
           done
 

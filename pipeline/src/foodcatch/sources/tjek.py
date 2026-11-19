@@ -6,8 +6,9 @@ Base URL :data:`BASE_URL`. Only ``/v2`` endpoints; ``/v4/rpc/*`` needs a key we 
 * ``GET /stores?dealer_ids=ID&limit=100&offset=N`` -> id, dealer_id, street, city, zip_code,
   latitude, longitude, country, ... (opening hours etc. are dropped by the models).
 * ``GET /catalogs?dealer_ids=ID&limit=24`` -> id, label, run_from, run_till (ISO, ``+0000``),
-  offer_count, page_count. Only currently listed catalogs (no history). Catalogs whose label
-  contains "Nonfood" are skipped (:func:`is_food_catalog`).
+  publish, offer_count, page_count, images{thumb, view, zoom} (cover page). Only currently
+  listed catalogs (no history), and no modified/version field. Catalogs whose label contains
+  "Nonfood" are skipped (:func:`is_food_catalog`).
 * ``GET /offers?catalog_ids=ID&limit=100&offset=N`` -> id, heading, description,
   pricing{price, pre_price, currency}, quantity{unit{symbol, si{symbol, factor}}, size{from, to},
   pieces{from, to, min, max}}, run_from, run_till, dealer_id, catalog_id, catalog_page, store_id.
@@ -85,6 +86,12 @@ class TjekStore(_TjekModel):
     country: TjekCountry | None = None
 
 
+class TjekCatalogImages(_TjekModel):
+    """``catalog.images``: cover page image URLs (the file name changes when it is replaced)."""
+
+    view: str | None = None
+
+
 class TjekCatalog(_TjekModel):
     """One catalog (leaflet) from ``GET /catalogs``."""
 
@@ -93,8 +100,10 @@ class TjekCatalog(_TjekModel):
     label: str | None = None
     run_from: datetime
     run_till: datetime
+    publish: datetime | None = None
     offer_count: int | None = None
     page_count: int | None = None
+    images: TjekCatalogImages | None = None
 
 
 class TjekPricing(_TjekModel):
@@ -286,6 +295,7 @@ __all__ = [
     "PAGE_SIZE",
     "UPCOMING_DAYS",
     "TjekCatalog",
+    "TjekCatalogImages",
     "TjekCountry",
     "TjekDealer",
     "TjekOffer",

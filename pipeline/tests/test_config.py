@@ -28,6 +28,7 @@ def test_defaults() -> None:
     assert s.db_size_budget_mb == 1024
     assert s.quality_drop_threshold == 0.5
     assert s.salling_api_key is None
+    assert s.tjek_full_refresh_days == 3
 
 
 @pytest.mark.parametrize(
