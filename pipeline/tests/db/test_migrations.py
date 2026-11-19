@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import importlib.util
 from collections.abc import Iterator
+from decimal import Decimal
+from pathlib import Path
+from types import ModuleType
 from uuid import uuid4
 
 import pytest
@@ -9,15 +13,27 @@ from alembic.migration import MigrationContext
 from sqlalchemy import Connection, Engine, create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
-from api_contract import ADDED_IN_0007, API_COLUMNS, api_columns
+from api_contract import (
+    ADDED_IN_0007,
+    ADDED_IN_0008,
+    API_COLUMNS,
+    CREATED_IN_0008,
+    api_columns,
+    columns_before,
+)
 from dbtools import create_database, drop_database
 from foodcatch.db import migrate
 from foodcatch.db.engine import normalize_database_url
+from foodcatch.db.product_key import PRODUCT_KEY_SQL
 from foodcatch.db.tables import metadata
+from foodcatch.deals.compute import PIECE_TYPE_IDS
 
 API_VIEWS = {
     "stores",
+    "current_deals",
     "current_netto_deals",
+    "products",
+    "product_price_history",
     "food_waste_near",
     "class_price_history",
     "pipeline_status",
@@ -66,7 +82,7 @@ def test_migrations_match_table_definitions(db_engine: Engine) -> None:
 
 
 def test_single_head() -> None:
-    assert migrate.current_head() == "0007"
+    assert migrate.current_head() == "0008"
 
 
 def test_seed_data(db_engine: Engine) -> None:
@@ -186,10 +202,9 @@ def _view_definitions(conn: Connection) -> dict[str, str]:
 def test_0007_appends_view_columns_and_back(empty_database: str) -> None:
     """Up and down on a fresh database: only appended columns change, grants survive."""
     engine = create_engine(normalize_database_url(empty_database))
-    before_0007 = {
-        view: [c for c in columns if c[0] not in ADDED_IN_0007.get(view, [])]
-        for view, columns in API_COLUMNS.items()
-    }
+    at_0007 = columns_before(API_COLUMNS, ADDED_IN_0008, CREATED_IN_0008)
+    before_0007 = columns_before(at_0007, ADDED_IN_0007)
+    views_0007 = API_VIEWS - set(CREATED_IN_0008)
     try:
         migrate.upgrade(empty_database, "0006")
         with engine.connect() as conn:
@@ -198,15 +213,108 @@ def test_0007_appends_view_columns_and_back(empty_database: str) -> None:
 
         migrate.upgrade(empty_database, "0007")
         with engine.connect() as conn:
-            assert api_columns(conn) == API_COLUMNS
-            assert all(_web_role_can_select(conn, view) for view in API_VIEWS)
+            assert api_columns(conn) == at_0007
+            assert all(_web_role_can_select(conn, view) for view in views_0007)
 
         migrate.downgrade(empty_database, "0006")
         with engine.connect() as conn:
             assert _view_definitions(conn) == definitions
-            assert all(_web_role_can_select(conn, view) for view in API_VIEWS)
+            assert all(_web_role_can_select(conn, view) for view in views_0007)
 
         migrate.upgrade(empty_database, "0007")  # and back up again
+        with engine.connect() as conn:
+            assert api_columns(conn) == at_0007
+    finally:
+        engine.dispose()
+
+
+def _migration_0008() -> ModuleType:
+    path = (
+        Path(migrate.__file__).parent
+        / "migrations/versions/0008_all_chain_deals_and_product_history.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0008", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_0008_frozen_rules_match_the_code() -> None:
+    """The migration's frozen SQL copies equal the rules the pipeline applies today."""
+    module = _migration_0008()
+    assert module.PRODUCT_KEY_SQL == PRODUCT_KEY_SQL
+    assert module.PIECE_TYPE_IDS == PIECE_TYPE_IDS
+
+
+_SEED_0007 = """
+INSERT INTO fetch_run (id, job, source, status)
+VALUES ('00000000-0000-0000-0000-000000000001', 'tjek-offers', 'tjek', 'succeeded');
+INSERT INTO raw_object (id, fetch_run_id, source, endpoint, storage_key, sha256, bytes)
+VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
+        'tjek', 'offers', 'k', 'x', 1);
+INSERT INTO listing (id, source, source_item_id, chain_id, kind, title, description, price,
+                     valid_from, valid_to, raw_object_id)
+VALUES ('00000000-0000-0000-0000-00000000000a', 'tjek', 'l1', 'lidl', 'offer',
+        'Hakket grisekød', '500 g. Pr. kg 47,44 Fast  lav pris', 23.72, now() - interval '1 day',
+        now() + interval '30 days', '00000000-0000-0000-0000-000000000002'),
+       ('00000000-0000-0000-0000-00000000000b', 'tjek', 'l2', 'lidl', 'offer',
+        'Hakket grisekød', 'Super tilbud', 20, now() - interval '1 day',
+        now() + interval '3 days', '00000000-0000-0000-0000-000000000002'),
+       ('00000000-0000-0000-0000-00000000000c', 'tjek', 'n1', 'netto', 'offer',
+        'Hakket GRISEKØD 8-12%', 'Fast lav pris', 25, now() - interval '1 day',
+        now() + interval '3 days', '00000000-0000-0000-0000-000000000002');
+INSERT INTO classification (listing_id, matcher_version, variant_index, type_id, type_label,
+                            group_name, attrs, class_key, class_label, is_exact, is_healthy)
+VALUES ('00000000-0000-0000-0000-00000000000c', '2026.11.1', 0, 'hakket_grisekød',
+        'Hakket grisekød', 'Kød', '{}', 'k', 'K', true, true);
+INSERT INTO deal (listing_id, variant_index, matcher_version, class_key, netto_unit_price_worst,
+                  netto_unit_price_best, price_applies)
+VALUES ('00000000-0000-0000-0000-00000000000c', 0, '2026.11.1', 'k', 50, 45, true);
+"""
+
+
+def test_0008_backfills_kinds_keys_and_deal_columns_and_back(empty_database: str) -> None:
+    """Up and down with data: Lidl "Fast lav pris", product keys, renamed deal columns."""
+    engine = create_engine(normalize_database_url(empty_database))
+    kinds_sql = text("SELECT source_item_id, kind FROM listing ORDER BY source_item_id")
+    try:
+        migrate.upgrade(empty_database, "0007")
+        with engine.begin() as conn:
+            conn.execute(text(_SEED_0007))
+        with engine.connect() as conn:
+            definitions = _view_definitions(conn)
+            kinds_0007 = conn.execute(kinds_sql).all()
+
+        migrate.upgrade(empty_database, "0008")
+        with engine.connect() as conn:
+            assert api_columns(conn) == API_COLUMNS
+            assert all(_web_role_can_select(conn, view) for view in API_VIEWS)
+            kinds = dict(conn.execute(kinds_sql).all())
+            # only Lidl's text is read as a shelf price
+            assert kinds == {"l1": "regular", "l2": "offer", "n1": "offer"}
+            keys = dict(conn.execute(text("SELECT source_item_id, product_key FROM listing")).all())
+            assert keys["n1"] == "offer:netto:hakket grisekød 8 12"
+            deal_row = conn.execute(
+                text(
+                    "SELECT netto_unit_price_worst, netto_unit_price_best, product_key"
+                    " FROM api.current_netto_deals"
+                )
+            ).one()
+            assert deal_row == (Decimal(50), Decimal(45), "offer:netto:hakket grisekød 8 12")
+            assert conn.execute(text("SELECT count(*) FROM api.current_deals")).scalar() == 1
+
+        migrate.downgrade(empty_database, "0007")
+        with engine.connect() as conn:
+            assert _view_definitions(conn) == definitions
+            assert conn.execute(kinds_sql).all() == kinds_0007
+            assert "product_key" not in {c["name"] for c in inspect(conn).get_columns("listing")}
+            assert conn.execute(
+                text("SELECT netto_unit_price_worst FROM api.current_netto_deals")
+            ).scalar_one() == Decimal(50)
+
+        migrate.upgrade(empty_database, "0008")  # and back up again
         with engine.connect() as conn:
             assert api_columns(conn) == API_COLUMNS
     finally:

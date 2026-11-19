@@ -56,6 +56,42 @@ API_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("size_min", "numeric"),
         ("size_max", "numeric"),
         ("max_per_customer", "integer"),
+        # added in 0008
+        ("product_key", "text"),
+    ],
+    "current_deals": [
+        ("listing_id", "uuid"),
+        ("variant_index", "smallint"),
+        ("chain_id", "text"),
+        ("chain_name", "text"),
+        ("title", "text"),
+        ("description", "text"),
+        ("price", "numeric"),
+        ("unit", "text"),
+        ("unit_price_min", "numeric"),
+        ("unit_price_max", "numeric"),
+        ("valid_from", _TS),
+        ("valid_to", _TS),
+        ("type_id", "text"),
+        ("type_label", "text"),
+        ("group_name", "text"),
+        ("class_key", "text"),
+        ("class_label", "text"),
+        ("attrs", "jsonb"),
+        ("is_exact", "boolean"),
+        ("notes", "ARRAY"),
+        ("price_applies", "boolean"),
+        ("target_unit_price_worst", "numeric"),
+        ("target_unit_price_best", "numeric"),
+        ("references", "jsonb"),
+        ("member_only", "boolean"),
+        ("source", "text"),
+        ("source_item_id", "text"),
+        ("catalog_id", "text"),
+        ("size_min", "numeric"),
+        ("size_max", "numeric"),
+        ("max_per_customer", "integer"),
+        ("product_key", "text"),
     ],
     "food_waste_near": [
         ("listing_id", "uuid"),
@@ -87,6 +123,17 @@ API_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("product_net_quantity", "numeric"),
         ("product_net_unit", "text"),
         ("last_seen_at", _TS),
+        # added in 0008
+        ("product_key", "text"),
+        ("source_item_id", "text"),
+        ("salling_store_id", "text"),
+        ("source_fetched_at", _TS),
+        ("salling_percent_discount", "numeric"),
+        ("offer_ean", "text"),
+        ("product_code", "text"),
+        ("class_key", "text"),
+        ("food_waste_references", "jsonb"),
+        ("beats_competitors", "boolean"),
     ],
     "class_price_history": [
         ("class_key", "text"),
@@ -112,6 +159,52 @@ API_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("description", "text"),
         ("size_min", "numeric"),
         ("size_max", "numeric"),
+        # added in 0008
+        ("product_key", "text"),
+    ],
+    "product_price_history": [
+        ("product_key", "text"),
+        ("product_label", "text"),
+        ("chain_id", "text"),
+        ("kind", "text"),
+        ("price", "numeric"),
+        ("unit", "text"),
+        ("unit_price_min", "numeric"),
+        ("unit_price_max", "numeric"),
+        ("size_min", "numeric"),
+        ("size_max", "numeric"),
+        ("valid_from", _TS),
+        ("valid_to", _TS),
+        ("source", "text"),
+        ("source_item_id", "text"),
+        ("catalog_id", "text"),
+        ("store_id", "uuid"),
+        ("member_only", "boolean"),
+        ("listing_id", "uuid"),
+        ("title", "text"),
+    ],
+    "products": [
+        ("product_key", "text"),
+        ("label", "text"),
+        ("chain_id", "text"),
+        ("chain_name", "text"),
+        ("class_key", "text"),
+        ("class_label", "text"),
+        ("is_exact", "boolean"),
+        ("ean", "text"),
+        ("latest_listing_id", "uuid"),
+        ("latest_kind", "text"),
+        ("latest_source", "text"),
+        ("latest_source_item_id", "text"),
+        ("latest_price", "numeric"),
+        ("latest_unit", "text"),
+        ("latest_unit_price_min", "numeric"),
+        ("latest_unit_price_max", "numeric"),
+        ("latest_size_min", "numeric"),
+        ("latest_size_max", "numeric"),
+        ("latest_valid_from", _TS),
+        ("latest_valid_to", _TS),
+        ("latest_member_only", "boolean"),
     ],
     "pipeline_status": [
         ("job", "text"),
@@ -173,3 +266,36 @@ ADDED_IN_0007: dict[str, list[str]] = {
         "size_max",
     ],
 }
+
+
+# Migration 0008: columns appended to existing views, and the views it creates.
+ADDED_IN_0008: dict[str, list[str]] = {
+    "current_netto_deals": ["product_key"],
+    "food_waste_near": [
+        "product_key",
+        "source_item_id",
+        "salling_store_id",
+        "source_fetched_at",
+        "salling_percent_discount",
+        "offer_ean",
+        "product_code",
+        "class_key",
+        "food_waste_references",
+        "beats_competitors",
+    ],
+    "class_price_history": ["product_key"],
+}
+CREATED_IN_0008 = ("current_deals", "product_price_history", "products")
+
+
+def columns_before(
+    columns: dict[str, list[tuple[str, str]]],
+    added: dict[str, list[str]],
+    created: tuple[str, ...] = (),
+) -> dict[str, list[tuple[str, str]]]:
+    """``columns`` without the ``added`` columns and the ``created`` views (an earlier step)."""
+    return {
+        view: [c for c in cols if c[0] not in added.get(view, [])]
+        for view, cols in columns.items()
+        if view not in created
+    }

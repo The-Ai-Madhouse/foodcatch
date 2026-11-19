@@ -18,6 +18,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Computed,
     DateTime,
     Double,
     ForeignKey,
@@ -35,6 +36,8 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+
+from foodcatch.db.product_key import PRODUCT_KEY_SQL
 
 NAMING_CONVENTION = {
     "ix": "ix_%(table_name)s_%(column_0_N_name)s",
@@ -237,6 +240,8 @@ listing = Table(
     # fingerprint of the listing's last classification.
     Column("classified_version", Text),
     Column("classified_fingerprint", Text),
+    # Stable per-item key (db/product_key.py), generated from the columns above.
+    Column("product_key", Text, Computed(PRODUCT_KEY_SQL, persisted=True)),
     UniqueConstraint("source", "source_item_id", "valid_from", "price"),
     CheckConstraint(_in("source", LISTING_SOURCES), name="source"),
     CheckConstraint(_in("kind", LISTING_KINDS), name="kind"),
@@ -254,6 +259,7 @@ listing = Table(
     ),
     CheckConstraint("valid_to IS NULL OR valid_to >= valid_from", name="validity_range"),
     Index(None, "chain_id", "kind", "valid_to"),
+    Index(None, "product_key"),
 )
 
 matcher_release = Table(
@@ -356,6 +362,7 @@ deal = Table(
         nullable=False,
     ),
     Column("class_key", Text, nullable=False),
+    # The target offer's unit prices (any chain since migration 0008; the names predate that).
     Column("netto_unit_price_worst", UNIT_PRICE),
     Column("netto_unit_price_best", UNIT_PRICE),
     Column("price_applies", Boolean, nullable=False),
