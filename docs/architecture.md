@@ -216,6 +216,7 @@ Tjek ids for the same physical store are not linked in v1.)
 `compare_unit`, `deposit`, `price_over_max_quantity`, `labels`),
 `classified_version text null`, `classified_fingerprint text null` (owned by `matching.persist`:
 matcher version and input fingerprint of the last classification; never written by ingest),
+`product_key text` (stored generated column, indexed; see below),
 `unique(source, source_item_id, valid_from, price)`. Ingest sets `last_seen_at = now()` on every
 upsert; `api.food_waste_near` only shows clearances seen by the latest finished food-waste run.
 A new price or start for an existing `source_item_id` is a new listing: the Rema and Tjek ingests
@@ -223,6 +224,20 @@ then close the superseded open versions (`valid_to` = the payload's fetch time),
 `api.current_netto_deals` only use the latest version (highest `last_seen_at, valid_from`) of a
 Tjek offer id.
 Unit prices follow the PoC rule: `unit_price_min = price / size_max`, `unit_price_max = price / size_min`.
+Kinds: Tjek leaflet items are `offer`, except Lidl items whose heading or description contains
+"Fast lav pris" (any case, any whitespace between the words; `ingest.tjek.is_fixed_low_price`),
+which are Lidl's shelf prices printed in the leaflet and stored as `regular`; Rema catalogue prices
+are `regular` or `offer` (campaign); food waste is `clearance`.
+
+`listing.product_key` names the *individual item* whose prices can be followed over time
+(`db/product_key.py`, frozen in migration 0008): `rema:<Rema product id>` (every regular and
+campaign period of a Rema product); `ean:<EAN>` (a food-waste clearance with a real GTIN; the EAN
+shelf prices in `product_reference_price` share the key); `clearance:<chain>:<normalized title>`
+(clearances without a GTIN); `offer:<chain>:<normalized title>` (Tjek leaflet items). Tjek has no
+product id, so `offer:` keys are **approximate**: two products with the same heading at one chain
+share a key and a renamed heading starts a new one. Normalization: a fixed upper-to-lower table for
+ASCII and Nordic/Western accented letters (no locale), every other run of characters becomes one
+space, trimmed (`"Hakket grisekød 8-12%"` → `hakket grisekød 8 12`).
 
 **`matcher_release`** – `version text pk`, `created_at`, `is_current bool` (exactly one current).
 
@@ -242,10 +257,11 @@ A listing with no recognized variant gets **no** rows (and may get a `review_ite
 (unrecognized_staple_word|unknown_key_attribute|ambiguous_offer), `status` (open|accepted|rejected|fixed),
 `created_at`, `resolved_at`, `note text null` (reviewer's note), `unique(listing_id, reason)`.
 
-**`deal`** – precomputed verdict input for one Netto offer variant (see §6):
+**`deal`** – precomputed verdict input for one offer variant of any chain (see §6):
 `listing_id fk`, `variant_index`, `matcher_version`, `class_key`, `netto_unit_price_worst numeric`,
-`netto_unit_price_best numeric`, `price_applies bool`, `references jsonb`, `computed_at`,
-`pk(listing_id, variant_index, matcher_version)`.
+`netto_unit_price_best numeric` (the target offer's unit prices whatever its chain; the names predate
+all-chain deals, the views expose them as `target_unit_price_*`), `price_applies bool`,
+`references jsonb`, `computed_at`, `pk(listing_id, variant_index, matcher_version)`.
 
 ## 6. Deal logic (single source of truth: `pipeline/src/foodcatch/deals/`)
 
@@ -255,15 +271,24 @@ Ported from the PoC and **must keep its conservatism**:
   all key attributes known and equal (incl. organic, lactose-free), same processing state.
 * A competitor offer's unit price counts only if its price **applies to the variant**
   (all variants of that offer are the same class, or the unit-price spread ≤ 25 %).
-* Netto is evaluated at its **worst** (highest) unit price, references at their **best** (lowest).
+* Deals exist for every current or upcoming offer of **every chain** (the *target*): Tjek offers
+  (latest version of the offer id) and REMA 1000 catalogue campaigns that are not also in Rema's
+  Tjek leaflet. A catalogue campaign counts as in the leaflet when a Tjek offer of the same chain
+  (latest version) has the same price, an overlapping validity and a same-`class_key`
+  classification; it then gets no deal of its own. `regular` listings (Rema shelf prices, Lidl
+  "Fast lav pris") and clearances are never targets. Below, "Netto" stands for the target's
+  chain X; Netto deals keep exactly their earlier semantics.
+* The target is evaluated at its **worst** (highest) unit price, references at their **best** (lowest).
 * Unit prices compare only in the same unit. A price per piece (`stk`) is comparable only for
   types counted in pieces (`ProductType.unit == "stk"`, i.e. eggs); a Netto variant of any other
   type priced per `stk` has no unit price (`no_price`), so packs of different size are never
   compared per piece.
-* Reference kinds: `offer` (current or upcoming competitor offers: Tjek offers of other chains
-  and REMA 1000 campaign prices from the Rema catalogue), `regular` (Rema shelf price;
-  later other chains), `history` (Netto offers of the same class that ended before this offer
-  started; concurrent offers are not history), `ean_reference`
+* Reference kinds for a target of chain X: `offer` (current or upcoming offers of chains other
+  than X: Tjek offers and REMA 1000 campaign prices from the Rema catalogue), `regular` (shelf
+  prices of any chain, X included: the latest started Rema price per product, and current Lidl
+  "Fast lav pris" items, latest version), `history` (X's own offers of the same class that ended
+  before this offer started – Tjek offers of another offer id, and for REMA 1000 earlier catalogue
+  campaigns, also of the same product; concurrent offers are not history), `ean_reference`
   (Salling originalPrice for the same EAN, when known).
 * "Same class" is evaluated in SQL as equal `classification.class_key` with both rows exact,
   which equals `comparability(a, b) == "same"` (`class_key` contains the type, every key
@@ -274,6 +299,16 @@ Ported from the PoC and **must keep its conservatism**:
 * Member prices (`listing.member_only`: Netto+, Coop members, ...): a competitor's member price
   counts as a reference like any other (only more conservative); a Netto member price is shown
   with a "Medlemspris" badge and may only be a `good_deal` when shown as such (below).
+
+**Food-waste references** (`api.food_waste_near.food_waste_references`, computed in the view): for a
+clearance with a known, comparable unit price (exact class, unit known, per-piece only for piece
+types) the same-class exact references of other chains with the same unit whose price applies:
+current or upcoming offers (Tjek, latest version; Rema campaigns) and regular shelf prices (Rema
+started, Lidl "Fast lav pris"), one per source item, in the `deal.references` shape.
+`beats_competitors` is true when the clearance's worst unit price ≤ the cheapest reference (whole
+øre), false when a reference is cheaper, and null when it cannot be judged (no unit price, not exact,
+the clearance's price does not apply, or no reference). It counts references of every chain
+regardless of distance (more conservative); the web may re-judge against nearby chains only.
 
 Verdict (computed in the web from `deal` + the set of chains near the user, by the pure function
 `web/src/lib/verdict.ts`, mirrored by `pipeline/src/foodcatch/deals/verdict.py` and tested on
@@ -311,6 +346,15 @@ CREATEDB or write access to pipeline tables). Column changes are breaking change
   (`price_applies` etc. are null until the deal is computed; `references` is then `[]`). `source_item_id`
   and `catalog_id` are the Tjek offer and catalog ids (eTilbudsavis `offer=` / `publication=`);
   `size_min`/`size_max` are the pack size range in `unit`.
+* `api.current_deals` – the same as `api.current_netto_deals` for every chain: one row per (current
+  or upcoming deal-target offer listing × healthy classified variant, §6): `listing_id, variant_index,
+  chain_id, chain_name, title, description, price, unit, unit_price_min, unit_price_max, valid_from,
+  valid_to, type_id, type_label, group_name, class_key, class_label, attrs, is_exact, notes,
+  price_applies, target_unit_price_worst, target_unit_price_best, references, member_only, source,
+  source_item_id, catalog_id, size_min, size_max, max_per_customer, product_key`. `source` is `tjek`
+  or `rema` (an in-store REMA 1000 campaign; `source_item_id` is then the Rema product id). Since
+  0008 `api.current_netto_deals` is its Netto part (`target_unit_price_*` exposed under the old
+  `netto_unit_price_*` names) plus `product_key`.
 * `api.food_waste_near` – current clearances with healthy classification:
   `listing_id, store_id, chain_id, store_name, street, zip, city, lat, lon, title, ean, price, reference_price,
   discount_pct, unit, unit_price, valid_to, stock, stock_unit, type_label, class_label, is_exact, size,
@@ -319,6 +363,16 @@ CREATEDB or write access to pipeline tables). Column changes are breaking change
   Salling product image (`https://digitalassets.sallinggroup.com/…`; null for Salling's placeholder
   ending in `/image` and for any other host); `product_*` come from Open Food Facts and may describe
   another pack size, so they are never used for unit prices; `last_seen_at` is the stock snapshot time.
+  Added in 0008 ("Kilde" and competitor comparison): `product_key, source_item_id, salling_store_id,
+  source_fetched_at, salling_percent_discount, offer_ean, product_code, class_key,
+  food_waste_references, beats_competitors`. What Salling's API said: `price` = newPrice,
+  `reference_price` = originalPrice, `salling_percent_discount` = percentDiscount, `offer_ean` = the
+  clearance label code, `product_code` = the product EAN as sent (also for non-GTIN codes; `ean` is
+  set only for real GTINs), `salling_store_id` = Salling's store id, `source_fetched_at` = when the
+  latest response carrying the clearance was fetched (`raw_object.fetched_at`). The EAN-level normal
+  price over time is `api.product_price_history` for `product_key` (kind `reference`). The Open Food
+  Facts link is built from `ean` (`https://world.openfoodfacts.org/product/{ean}`). References and
+  `beats_competitors`: §6 "Food-waste references".
 * `api.class_price_history` – `class_key, class_label, kind, chain_id, chain_name, listing_id, title, unit,
   unit_price_min, unit_price_max, valid_from, valid_to, price_applies, member_only, source, source_item_id,
   catalog_id, store_id, price, description, size_min, size_max` for all classified listings (all
@@ -327,10 +381,30 @@ CREATEDB or write access to pipeline tables). Column changes are breaking change
   details of a deal's comparison rows (source link, pack price and size) here by `listing_id`;
   `source_item_id` is the Tjek offer id, the REMA 1000 product id or `{salling store}:{label ean}`, and
   `store_id` is set only for food-waste clearances.
+  Since 0008 also `product_key`.
+* `api.product_price_history` – every price of one item over time, keyed by `product_key` (§5):
+  `product_key, product_label, chain_id, kind, price, unit, unit_price_min, unit_price_max, size_min,
+  size_max, valid_from, valid_to, source, source_item_id, catalog_id, store_id, member_only,
+  listing_id, title`. One row per listing (kind `offer`, `regular` or `clearance`; superseded Tjek
+  versions included) plus, for `ean:` keys, one row per `product_reference_price` (kind `reference`,
+  per chain: a shelf pack price observed from `valid_from` to `valid_to`; `unit`/unit prices/sizes,
+  `source_item_id`, `listing_id` are null, `source` is `salling_food_waste`). `product_label` is the
+  product name (EAN) or the listing title. Filter by `product_key` (indexed).
+* `api.products` – one row per `product_key`, describing its latest listing (latest started first,
+  then latest start): `product_key, label, chain_id, chain_name, class_key, class_label, is_exact, ean,
+  latest_listing_id, latest_kind, latest_source, latest_source_item_id, latest_price, latest_unit,
+  latest_unit_price_min, latest_unit_price_max, latest_size_min, latest_size_max, latest_valid_from,
+  latest_valid_to, latest_member_only`. `class_*` are the current classification of that listing's
+  first variant (null when unclassified); for an `ean:` key sold by several chains, `chain_id` is
+  the latest listing's chain.
 * `api.pipeline_status` – latest run per job: `job, status, started_at, finished_at, stats, error`,
   plus `api.review_queue_summary` – `reason, open_count`.
 
-Every column is a stored listing/store/product column or derived from one in SQL. Migration 0007 added
+Every column is a stored listing/store/product column or derived from one in SQL. Migration 0008
+(all-chain deals, product history, food-waste sources) needed no ingest backfill either: its
+`kind` change for Lidl "Fast lav pris" is applied by the migration in SQL (the same rule as the
+ingest), `product_key` is generated, and `foodcatch deals recompute` fills the new deal rows
+(runbook §5). Migration 0007 added
 the source ids, sizes and images for the redesigned web (`docs/ui.md` §8) from columns ingest already
 filled (`listing.extra.image` since the first Salling ingest), so it needed no backfill; a future column
 that needs a new ingested field is backfilled with `foodcatch reprocess` (runbook). The

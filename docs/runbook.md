@@ -352,7 +352,12 @@ best effort (it relies on the GitHub API), so these operational rules apply:
    possible.
 5. **Never run `foodcatch db upgrade` against production from a laptop** while workflows are
    active. Use the workflow, which runs the same command with the same code as the jobs.
-6. **Downgrades** are a manual emergency procedure: pause all jobs, then in the production shell
+6. **Migration 0008** (all-chain deals, `listing.product_key`) rewrites `listing` once to add
+   the generated column (seconds at current volumes; merge it in a quiet window) and marks
+   Lidl "Fast lav pris" listings `regular`. Afterwards run `foodcatch deals recompute` once
+   (production shell, §1): job runs only recompute the deals of changed listings, so the other
+   chains' deals would otherwise appear gradually.
+7. **Downgrades** are a manual emergency procedure: pause all jobs, then in the production shell
    `uv run foodcatch db downgrade --revision -1`, revert the code on `main`, resume. Restoring
    from a Neon branch (§7.1) is often simpler.
 
@@ -561,7 +566,21 @@ later work.
   (Netto+, Coop-medlem), not read from the offer.
 * *Duplicate REMA 1000 references.* A Rema campaign is collected from Tjek (leaflet) and from
   the Rema catalogue; when both carry it, a deal lists it twice. The cheapest reference and
-  hence the verdict are unaffected.
+  hence the verdict are unaffected. As a *deal of its own* ("Ugens tilbud" for REMA 1000) a
+  catalogue campaign is dropped when a Tjek Rema offer has the same price, an overlapping validity
+  and the same class; a campaign whose leaflet price differs (e.g. a multi-buy price) or whose
+  leaflet text is classified differently appears twice.
+* *"Fast lav pris" is read from Lidl's text.* A Lidl leaflet item whose heading or description
+  says "Fast lav pris" is a shelf price (`kind = 'regular'`): no deal of its own, a `regular`
+  reference elsewhere. Other chains' texts are not read this way, and a Lidl shelf price printed
+  without the phrase is treated as an offer.
+* *Product keys of leaflet items are approximate.* Tjek has no product id, so a leaflet item's
+  price history (`api.product_price_history`, key `offer:<chain>:<normalized heading>`) joins
+  every item of that chain with the same heading and starts afresh when the heading changes.
+  `rema:` and `ean:` keys are exact.
+* *Food-waste comparison is chain-wide.* `food_waste_references` / `beats_competitors` use the
+  current offers and shelf prices of every other chain regardless of distance (more conservative
+  than a local comparison) and are computed when the view is read.
 * *Withdrawn Tjek offers stay current.* A Tjek offer re-published with a new price or start
   replaces its earlier version at once, but an offer Tjek removes from a catalogue without a
   replacement stays current until its own end date (the jobs do not yet close offers of a fully
