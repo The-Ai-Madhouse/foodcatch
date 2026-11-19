@@ -106,12 +106,31 @@ use, no key, no SLA. Base URL `https://squid-api.tjek.com/v2`. Only `/v2` endpoi
 |---|---|
 | `GET /dealers?country_id=DK&limit=100&offset=N` | dealer (chain) ids; only to look up ids for `chain.tjek_dealer_id` (no scheduled job) |
 | `GET /stores?dealer_ids=ID&limit=100&offset=N` | stores: `id`, `dealer_id`, `name`, `street`, `city`, `zip_code`, `latitude`, `longitude`, `country` |
-| `GET /catalogs?dealer_ids=ID&limit=24` | leaflets: `id`, `label`, `run_from`, `run_till` (ISO, `+0000`), `offer_count`, `page_count` |
+| `GET /catalogs?dealer_ids=ID&limit=24` | leaflets: `id`, `label`, `run_from`, `run_till` (ISO, `+0000`), `publish`, `offer_count`, `page_count`, `images` (cover page); no modified/version field |
 | `GET /offers?catalog_ids=ID&limit=100&offset=N` | offers of one leaflet (fields below) |
 
 Dealer ids: netto `9ba51`, rema1000 `11deC`, lidl `71c90`, foetex `bdf5A`, 365discount `DWZE1w`,
 bilka `93f13`, loevbjerg `65caN`, superbrugsen `0b1e8`, kvickly `c1edq`, meny `267e1m`,
 spar `88ddE`. They are seeded by the first migration.
+
+### Request volume
+
+`tjek-offers` fetches every dealer's catalog list daily (11 requests, ~0.13 MB gzip), but the
+offer pages of a catalog only when the catalog is new, its fingerprint changed (label, period,
+`publish`, `offer_count`, `page_count`, cover image URL), or its last full fetch is
+`TJEK_FULL_REFRESH_DAYS` (default 3) days old (architecture §4). Measured locally:
+
+| Run | Requests | Raw data (gzip) |
+|---|---|---|
+| Before (every offer page of every current catalog, 2026-11-18) | 110 (11 catalog lists + 99 offer pages of 48 catalogs) | 19.8 MB |
+| After, day 2 (2026-11-19: 1 new and 4 changed catalogs, 43 skipped) | 24 (11 + 13) | 3.0 MB |
+| After, nothing changed (second run the same day) | 11 (catalog lists only) | 0.13 MB |
+
+The leaflets do change during their week: on 2026-11-19 four of 48 food catalogs had a
+different `offer_count` (offers withdrawn or added) and Lidl renamed and extended its leaflet.
+In steady state roughly a third of the offer pages are fetched each day by the 3-day refresh,
+plus the new and changed catalogs, so expect about 45-55 requests (~8 MB) a day, roughly half of
+the old volume; `TJEK_FULL_REFRESH_DAYS=7` would bring it to about 35 requests.
 
 ### Data caveats
 
@@ -119,7 +138,8 @@ spar `88ddE`. They are seeded by the first migration.
   fetched one dealer at a time (the largest chain has about 550 stores). If a single query ever
   reaches the cap, the job fails rather than silently truncating.
 * `/catalogs` lists only currently published leaflets, **no history**. A day without collection
-  is a day of offers lost for good, which is why the jobs are monitored. The job fetches
+  is a day of offers lost for good, which is why the jobs are monitored (a catalog whose offers
+  were skipped as unchanged is still in its listings from the last full fetch). The job fetches
   catalogs that are current or start within 7 days, and skips catalogs whose label contains
   "Nonfood" (case-insensitive).
 * Offer fields: `id`, `heading`, `description`, `pricing{price, pre_price, currency}`,

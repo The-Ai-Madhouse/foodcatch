@@ -118,7 +118,8 @@ Every job is a CLI command, e.g. `foodcatch collect salling-food-waste`. A job r
    pruned (the same as `foodcatch reclassify`).
 6. **Deals** – recomputes `deal` rows affected by the run: listings ingest changed and listings
    whose classification changed (`jobs/hooks.py`); every deal when step 5 promoted a release.
-7. **Quality checks** – compares the job's quality metric (`records` by default) with the
+7. **Quality checks** – compares the job's quality metric (`records` by default; `tjek-offers`
+   uses `current_listings`, `salling-food-waste` `region_clearances`) with the
    previous successful run of the same job; a drop of more than 50 % (configurable) marks the run
    `degraded` and exits non-zero. A job can also report `degraded` itself when it could not
    finish its work (e.g. the Salling quota ended a food-waste run before the region was covered).
@@ -144,7 +145,7 @@ scheduled workflows monthly. Operations: `docs/runbook.md`.
 | Salling stores | `collect salling-stores` | weekly (Mon 03:17) |
 | Salling food waste | `collect salling-food-waste` | daily 05:37 and 13:37 (≤ `SALLING_FOOD_WASTE_MAX_CALLS` requests each) |
 | Tjek stores | `collect tjek-stores` | weekly (Mon 03:47) |
-| Tjek catalogs + offers | `collect tjek-offers` | daily 04:07 |
+| Tjek catalogs + offers | `collect tjek-offers` | daily 04:07 (offer pages only of new, changed or due catalogs) |
 | Rema catalogue | `collect rema-products` | daily 02:27 |
 | Open Food Facts | `collect off-enrich` | daily 06:07 (only EANs without data) |
 
@@ -159,6 +160,23 @@ recently covered first, persisted in `store.food_waste_checked_at`), never more 
 once without retries; the run keeps its data and is `degraded` only if the region was not fully
 covered. Its quality metric is `region_clearances` (not `records`), so the rotating national
 coverage does not trigger false alarms. `salling-stores` needs about 9 requests a week (one per page of 100 stores).
+
+**Tjek request volume.** Tjek's API is unofficial, so `tjek-offers` keeps its load low. It
+fetches the catalog list of every dealer on each run (11 requests), but the offer pages of a
+current or upcoming food catalog only when (`jobs/tjek.py::fetch_reason`) the catalog id was
+never fetched (`new`), its fingerprint changed (`changed`: hash of `label`, `run_from`,
+`run_till`, `publish`, `offer_count`, `page_count` and the cover image URL; Tjek has no
+modified/version field), or its last full fetch is `TJEK_FULL_REFRESH_DAYS` (default 3) days
+old, less 6 hours for schedule jitter (`refresh`). The state is `tjek_catalog_fetch` (§5),
+written in the run's transaction after all of a catalog's pages were ingested, so a failed
+catalog is retried by the next run. `TJEK_FULL_REFRESH_DAYS=0` fetches everything (runbook).
+A skipped catalog's listings are left exactly as they are: Tjek ingest never treats an offer
+missing from a payload as withdrawn, and `last_seen_at` is only compared between versions of one
+offer id (latest-version rule, §5), which belong to the same catalog and are fetched together.
+Because `records` now drops on every skip day, the job's quality metric is `current_listings`:
+Tjek listings still valid after the run whose catalog is a food catalog listed in that run. It
+stays stable on skip days and drops when a dealer's catalog list fails or its catalogs vanish.
+Volumes: data sources, "Tjek / eTilbudsavis".
 
 ### Volume control (Neon free plan: 1 GB)
 
@@ -192,6 +210,12 @@ Seeded by migration.
 `food_waste_checked_at null` (scheduling state of `salling-food-waste`: when a run last covered
 the store; written by the job, not by ingest), `unique(source, source_store_id)`. (Salling and
 Tjek ids for the same physical store are not linked in v1.)
+
+**`tjek_catalog_fetch`** – scheduling state of `tjek-offers` (§4 "Tjek request volume"), written
+by the job, not by ingest, and not replayed by `reprocess`: `catalog_id text pk`, `chain_id fk`,
+`fingerprint text`, `offer_count int null`, `offers_fetched_at` (last full fetch of the catalog's
+offers). Rows not fetched for 90 days are deleted. Emptying the table makes the next run fetch
+every catalog.
 
 **`product`** – `id uuid pk`, `ean text unique`, `name`, `brand`, `source_category text` (e.g. Salling path),
 `quantity_text`, `net_quantity numeric`, `net_unit text` (kg|l|stk), `nova_group smallint`,
@@ -428,13 +452,14 @@ gone (docs/ui.md §5.1). Nearby chains = chains with a store in `api.stores` wit
 | `S3_ENDPOINT_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` | pipeline | B2 S3 API |
 | `SALLING_API_KEY` | pipeline | Salling Group developer API |
 | `SALLING_FOOD_WASTE_MAX_CALLS` | pipeline | default 25 – Salling requests per `salling-food-waste` run |
+| `TJEK_FULL_REFRESH_DAYS` | pipeline | default 3 – `tjek-offers` re-fetches an unchanged catalog's offers after this many days; 0 = every run |
 | `REGION_CENTERS` | pipeline | `lat,lon;lat,lon` – where detailed food-waste is kept |
 | `REGION_RADIUS_KM` | pipeline | default 30 |
 | `HEALTHCHECKS_URL_<JOB>` | pipeline | optional ping URLs per job |
 | `SENTRY_DSN` | pipeline | optional |
 | `DB_SIZE_BUDGET_MB` | pipeline | default 1024 |
 | `OFF_BATCH_SIZE` | pipeline | default 500 – products looked up per `off-enrich` run |
-| `QUALITY_DROP_THRESHOLD` | pipeline | default 0.5 – record-count drop that marks a run `degraded` |
+| `QUALITY_DROP_THRESHOLD` | pipeline | default 0.5 – quality-metric drop that marks a run `degraded` |
 | `LOG_LEVEL`, `LOG_FORMAT` | pipeline | `INFO`; `auto` (JSON in CI) \| `json` \| `console` |
 | `FOODCATCH_ENV_FILE` | pipeline | explicit `.env` path; empty = load none (tests) |
 | `GIT_SHA` / `GITHUB_SHA` | pipeline | commit recorded in `fetch_run.git_sha` (default: `git rev-parse HEAD`) |

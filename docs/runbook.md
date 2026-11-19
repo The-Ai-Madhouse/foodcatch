@@ -108,7 +108,8 @@ Then:
 ## 3. A job is degraded
 
 `degraded` means the run **succeeded and its data was committed**, but its quality metric
-(`records` by default; `region_clearances` for `salling-food-waste`) dropped by more than
+(`records` by default; `current_listings` for `tjek-offers`, §3.6; `region_clearances` for
+`salling-food-waste`) dropped by more than
 `QUALITY_DROP_THRESHOLD` (default 50 %) compared with the **previous succeeded run** of the same
 job, or the job reported itself incomplete (`salling-food-waste`: the region was not fully
 covered, §3.5). The run exits with code 3, the workflow is
@@ -119,7 +120,7 @@ marked failed and healthchecks.io gets `/fail`. The reason is in `fetch_run.erro
 
 | Job | Normal reasons for a drop | Suspicious reasons |
 |---|---|---|
-| `tjek-offers` | holiday weeks, a chain publishing late, fewer upcoming catalogs on the day | several chains with `dealer_errors`/`catalog_errors` in `stats`; offers parsed but skipped |
+| `tjek-offers` | holiday weeks, a chain publishing late, fewer current or upcoming catalogs on the day | several chains with `dealer_errors`/`catalog_errors` in `stats`; offers parsed but skipped; `catalogs_seen` far below the previous run |
 | `salling-food-waste` | Sunday or holiday (fewer clearances in the region); the 13:37 run compared with 05:37; `region not fully covered` because the quota ran out (§3.5) | `geo_calls_failed` in `stats`; `region_stores_covered` far below `region_stores` on a run without `quota_exhausted` |
 | `rema-products`, `*-stores` | assortment or store-list changes (small) | anything above 10 % |
 | `off-enrich` | few new EANs that day (expected to vary a lot) | – |
@@ -127,7 +128,8 @@ marked failed and healthchecks.io gets `/fail`. The reason is in `fetch_run.erro
 Compare the stats of recent runs:
 
 ```sql
-SELECT started_at, status, stats->'records' AS records, stats->'quality' AS quality, error
+SELECT started_at, status, stats->'quality' AS quality, stats->'catalogs_seen' AS catalogs,
+       stats->'catalog_errors' AS catalog_errors, stats->'dealer_errors' AS dealer_errors, error
 FROM fetch_run WHERE job = 'tjek-offers' ORDER BY started_at DESC LIMIT 14;
 ```
 
@@ -227,6 +229,39 @@ burned the quota):
 and the rotation continues where it stopped (`store.food_waste_checked_at`). If every run hits
 429, pause the job (§3.4), wait for the quota to recover (at least an hour), lower the budget and
 resume.
+
+### 3.6 Tjek offers: skipped catalogs and a full refresh
+
+`tjek-offers` fetches every dealer's catalog list on each run, but the offer pages of a catalog
+only when it is new, its fingerprint changed, or its last full fetch is `TJEK_FULL_REFRESH_DAYS`
+(default 3) days old ([architecture §4](architecture.md#4-data-flow-and-job-design), "Tjek
+request volume"). A run's `stats`:
+
+| Stat | Meaning |
+|---|---|
+| `catalogs_seen` | current or upcoming food catalogs in the catalog lists |
+| `catalogs_fetched` | catalogs whose offers were fetched; split into `catalogs_fetched_new`, `_changed`, `_refresh` |
+| `catalogs_skipped_unchanged` | catalogs whose offers were not fetched (their listings stay as they are) |
+| `offer_pages_fetched` | offer requests made (plus one catalog request per dealer) |
+| `current_listings` | the quality metric: Tjek listings still valid after the run, of the catalogs seen |
+| `records` | offers parsed in this run; small or 0 on days that skip most catalogs - normal |
+
+**Forcing a full refresh** (every offer page of every current catalog, as before the change),
+e.g. after fixing a Tjek ingest bug or when a leaflet changed without its fingerprint changing:
+
+```bash
+gh workflow run collect.yml -f job=tjek-offers -f tjek_full_refresh=true    # production
+TJEK_FULL_REFRESH_DAYS=0 uv run foodcatch collect tjek-offers               # locally
+```
+
+To refresh every catalog permanently more or less often, set the repository variable
+(`gh variable set TJEK_FULL_REFRESH_DAYS --body 2`; `0` = every run). Deleting the rows of
+`tjek_catalog_fetch` (all, or one `catalog_id`) makes the next scheduled run fetch those catalogs
+in full. A full refresh costs about 110 requests (~20 MB); avoid repeating it on the same day.
+
+The first run after migration 0009 (`tjek_catalog_fetch`) fetches every catalog, as the table is
+empty, and cannot degrade: earlier runs have no `current_listings` to compare with. The job fails
+on a database without the table, so the migration must be applied first (§5 rule 2).
 
 ---
 

@@ -220,10 +220,11 @@ gh secret set SALLING_API_KEY
 | `REGION_CENTERS` | `55.68,12.57` | yes | `lat,lon;lat,lon`: where food-waste listings are kept |
 | `REGION_RADIUS_KM` | `30` | no (default 30) | radius around each center |
 | `COLLECT_PAUSED_JOBS` | `tjek-offers` | no | jobs whose scheduled runs are skipped (runbook) |
-| `QUALITY_DROP_THRESHOLD` | `0.5` | no (default 0.5) | record-count drop that marks a run degraded |
+| `QUALITY_DROP_THRESHOLD` | `0.5` | no (default 0.5) | quality-metric drop that marks a run degraded |
 | `DB_SIZE_BUDGET_MB` | `1024` | no (default 1024) | database budget for the 70 % warning |
 | `OFF_BATCH_SIZE` | `500` | no (default 500) | products looked up per `off-enrich` run |
 | `SALLING_FOOD_WASTE_MAX_CALLS` | `25` | no (default 25) | Salling requests per `salling-food-waste` run (runbook §3.5) |
+| `TJEK_FULL_REFRESH_DAYS` | `3` | no (default 3) | days after which `tjek-offers` re-fetches an unchanged catalog's offers; 0 = every run (runbook §3.6) |
 | `LOG_LEVEL` | `INFO` | no | pipeline log level |
 
 **`REGION_CENTERS` is not secret and appears in public logs.** Use a neighbourhood or city
