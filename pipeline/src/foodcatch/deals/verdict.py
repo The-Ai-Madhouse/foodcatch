@@ -23,6 +23,10 @@ member prices count as references like any other price (more conservative).
 
 ``cheapest_unit_price`` / ``reference_count`` describe the references that counted (``None`` /
 0 for the first four verdicts).
+
+The ``netto_*`` names are the web contract of ``api.current_netto_deals``; for a row of
+``api.current_deals`` (any chain) pass ``target_unit_price_worst/best`` and read "Netto" as "the
+offer's chain" throughout.
 """
 
 from __future__ import annotations

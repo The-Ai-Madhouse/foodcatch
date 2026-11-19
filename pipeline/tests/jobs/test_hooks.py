@@ -77,7 +77,7 @@ def test_hooks_classify_then_compute_deals(
     run_post_fetch_hooks(db_conn, state)
 
     assert state.stats["classification_changed"] == 2
-    assert state.stats["deals"] == 1
+    assert state.stats["deals"] == 2  # both offers are deals (all chains)
     row = db_conn.execute(select(deal).where(deal.c.listing_id == netto)).one()
     assert row.matcher_version == MATCHER_VERSION
     assert row.price_applies is True
@@ -101,7 +101,7 @@ def test_competitor_price_change_recomputes_deals_without_reclassifying(
     run_post_fetch_hooks(db_conn, changed)
 
     assert changed.stats["classification_changed"] == 0
-    assert changed.stats["deals"] == 1
+    assert changed.stats["deals"] == 2  # Lidl's own deal and Netto's reference
     refs = db_conn.execute(select(deal.c.references).where(deal.c.listing_id == netto)).scalar_one()
     assert refs[0]["unit_price"] == 30.0
 
@@ -111,7 +111,7 @@ def test_first_run_after_a_matcher_upgrade_promotes_the_release(
 ) -> None:
     db_conn.execute(update(matcher_release).values(is_current=False))
     db_conn.execute(insert(matcher_release).values(version="2026.10.9", is_current=True))
-    netto, _, state = _scenario(db_conn, raw_payload)
+    netto, lidl, state = _scenario(db_conn, raw_payload)
 
     run_post_fetch_hooks(db_conn, state)
 
@@ -120,7 +120,7 @@ def test_first_run_after_a_matcher_upgrade_promotes_the_release(
     ).scalar_one()
     assert current == MATCHER_VERSION
     assert state.stats["matcher_promoted"] == 1
-    assert db_conn.execute(select(deal.c.listing_id)).scalars().all() == [netto]
+    assert set(db_conn.execute(select(deal.c.listing_id)).scalars()) == {netto, lidl}
     versions = set(db_conn.execute(select(classification.c.matcher_version)).scalars())
     assert versions == {MATCHER_VERSION}
 
@@ -129,21 +129,21 @@ def test_rollback_to_an_older_matcher_version_recomputes_every_deal(
     db_conn: Connection, raw_payload: Callable[..., RawPayload]
 ) -> None:
     """Regression (finding C7): V1 -> V2 -> V1 must leave the deal rows in place."""
-    netto, _, state = _scenario(db_conn, raw_payload)
+    netto, lidl, state = _scenario(db_conn, raw_payload)
     run_post_fetch_hooks(db_conn, state)  # V1 = MATCHER_VERSION is current
     newer = "2099.1.1"
     classify_pending(db_conn, version=newer)
     set_current_release(db_conn, newer)  # V2 deployed: its run deletes every V1 deal row
     prune_classifications(db_conn)
     recompute_deals(db_conn)
-    assert db_conn.execute(select(deal.c.matcher_version)).scalars().all() == [newer]
+    assert set(db_conn.execute(select(deal.c.matcher_version)).scalars()) == {newer}
 
     rollback = PipelineState()  # the first run after redeploying V1: nothing new was fetched
     run_post_fetch_hooks(db_conn, rollback)
 
     assert rollback.stats["matcher_promoted"] == 1
     rows = db_conn.execute(select(deal.c.listing_id, deal.c.matcher_version)).all()
-    assert [tuple(r) for r in rows] == [(netto, MATCHER_VERSION)]
+    assert {tuple(r) for r in rows} == {(netto, MATCHER_VERSION), (lidl, MATCHER_VERSION)}
 
 
 def _rebuild(m: Match) -> Match:

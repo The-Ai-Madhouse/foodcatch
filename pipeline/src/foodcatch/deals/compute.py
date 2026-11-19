@@ -1,13 +1,27 @@
 """Deal computation (architecture §6; owned by the deals module).
 
-:func:`recompute_deals` maintains the ``deal`` table: one row per *Netto variant*, i.e. per
-healthy ``classification`` row (current matcher release) of a current or upcoming Netto offer
-listing (``source='tjek'``, ``chain_id='netto'``, ``kind='offer'``, ``valid_to`` null or in the
-future, the latest version of its Tjek offer id - the same rows ``api.current_netto_deals``
-shows). Each row holds:
+:func:`recompute_deals` maintains the ``deal`` table: one row per *target variant*, i.e. per
+healthy ``classification`` row (current matcher release) of a current or upcoming **offer
+listing of any chain** (``kind='offer'``, ``valid_to`` null or in the future) - the rows
+``api.current_deals`` shows ("Ugens tilbud" for every chain; ``api.current_netto_deals`` is its
+Netto part). Target offers are:
+
+* Tjek leaflet offers (``source='tjek'``), the latest version of each Tjek offer id;
+* REMA 1000 campaign prices from the Rema catalogue (``source='rema'``) that are *not* also in
+  Rema's Tjek leaflet. A catalogue campaign counts as in the leaflet (and gets no deal row of
+  its own) when a Tjek offer of the same chain (latest version) has the same ``price``, an
+  overlapping validity and a classification of the same ``class_key`` under the same release
+  (:func:`_in_leaflet`). In-store campaigns that the leaflet lacks thus become deals once.
+
+Lidl leaflet items marked "Fast lav pris" are stored as ``kind='regular'`` by the Tjek ingest
+(``ingest.tjek.is_fixed_low_price``), so they are no targets, only ``regular`` references.
+
+Each row holds:
 
 * ``netto_unit_price_worst`` = ``unit_price_max`` (fallback ``unit_price_min``) and
-  ``netto_unit_price_best`` = ``unit_price_min`` (fallback ``unit_price_max``);
+  ``netto_unit_price_best`` = ``unit_price_min`` (fallback ``unit_price_max``) - the target
+  offer's unit prices whatever its chain (the column names predate all-chain deals; the views
+  expose them as ``target_unit_price_worst/best``);
 * ``price_applies`` - the offer's unit price applies to this variant (see *Price applies*);
 * ``references`` - **all** same-class reference prices, as a JSON array of
   ``{kind, chain_id, listing_id, title, unit_price, unit, valid_from, valid_to, member_only}``
@@ -21,12 +35,12 @@ Same class
     A reference is the *same product* only when its classification (current release) has the
     identical ``class_key`` and ``is_exact`` - i.e. ``comparability(a, b) == "same"``: same type,
     every key attribute known and equal, same processing state. Units must match
-    (``listing.unit`` / ``product.net_unit`` equals the Netto listing's unit).
+    (``listing.unit`` / ``product.net_unit`` equals the target listing's unit).
 
 Comparable unit
     A price per piece (``unit = 'stk'``; Tjek's ``pcs`` with size 1) says nothing about the
     amount unless the type itself is counted in pieces (``ProductType.unit == 'stk'``, i.e.
-    eggs). A Netto variant of any other type priced per ``stk`` (e.g. "Arla laktosefri mælk,
+    eggs). A target variant of any other type priced per ``stk`` (e.g. "Arla laktosefri mælk,
     1 stk") therefore gets no unit price (verdict ``no_price``) and no references, so two packs
     of different volume are never compared per piece. ``kg`` and ``l`` compare only with the
     same unit.
@@ -38,30 +52,34 @@ Price applies
     "Mørbrad, skank eller stegeben" style offers whose cheapest kilo price belongs to another
     product. The same rule decides ``deal.price_applies`` and which references are usable.
 
-Reference kinds (references are always quoted at their *best*, i.e. lowest, unit price)
+Reference kinds for a target offer of chain X (always quoted at their *best*, i.e. lowest,
+unit price)
     ``offer``
-        Current or upcoming competitor offers, ``valid_to`` null or in the future, price applies:
-        Tjek offers (``source='tjek'``, ``kind='offer'``, chain other than Netto; one per Tjek
-        offer id, the latest version when Tjek re-published it with a new price) **and** REMA
-        1000 campaign prices from the Rema catalogue (``source='rema'``, ``kind='offer'``; one
-        per price period - superseded periods are closed by the Rema ingest). The catalogue also
-        lists in-store campaigns that are missing from the Tjek leaflet; leaving them out would
-        let a Netto offer beat Rema's *regular* price while Rema actually sells it cheaper. A
-        Rema campaign that is also in the Tjek leaflet appears twice (same price, two sources),
-        which does not change the cheapest reference.
+        Current or upcoming offers of **other chains** than X, ``valid_to`` null or in the
+        future, price applies: Tjek offers (one per Tjek offer id, the latest version when Tjek
+        re-published it with a new price) **and** REMA 1000 campaign prices from the Rema
+        catalogue (one per price period - superseded periods are closed by the Rema ingest).
+        The catalogue also lists in-store campaigns that are missing from the Tjek leaflet;
+        leaving them out would let an offer beat Rema's *regular* price while Rema actually
+        sells it cheaper. A Rema campaign that is also in the Tjek leaflet appears twice (same
+        price, two sources), which does not change the cheapest reference.
     ``regular``
-        Rema 1000 shelf prices: ``source='rema'``, ``kind='regular'``, valid now. Only the
-        latest price per Rema product.
+        Shelf prices of any chain, X included (a cheaper shelf price of the same class at X
+        itself also means the offer is no bargain): Rema 1000 (``source='rema'``,
+        ``kind='regular'``, started and not ended; only the latest price per Rema product) and
+        Lidl "Fast lav pris" leaflet items (``source='tjek'``, ``kind='regular'``, current or
+        upcoming, latest version of the Tjek offer id).
     ``history``
-        Other Netto offers of the class that *ended before this offer started* (a different
-        Tjek offer id, price applies, the latest version of that offer id - a superseded
-        mistaken price is no history), one per listing. A concurrent or overlapping offer
-        (e.g. the same product in two catalogues of one week) is not history: it would let an
-        offer be its own evidence of a good price. Netto weeks end at 22:59:59 before the next
-        one starts, so the current offer is history for next week's offer.
+        X's own offers of the class that *ended before this offer started*, price applies, one
+        per listing: Tjek offers of a different Tjek offer id (the latest version of that id -
+        a superseded mistaken price is no history) and, for REMA 1000, earlier catalogue
+        campaign periods (also of the same product). A concurrent or overlapping offer (e.g.
+        the same product in two catalogues of one week) is not history: it would let an offer
+        be its own evidence of a good price. Netto weeks end at 22:59:59 before the next one
+        starts, so the current offer is history for next week's offer.
     ``ean_reference``
-        A Netto Tjek offer carries no EAN, so EAN shelf prices are tied to it through the class:
-        an *exact, homogeneous* listing of the same class that has an EAN (``product_id``, in
+        A Tjek offer carries no EAN, so EAN shelf prices are tied to it through the class: an
+        *exact, homogeneous* listing of the same class that has an EAN (``product_id``, in
         practice a Salling food-waste clearance) contributes the latest
         ``product_reference_price`` per chain of that product, observed within
         :data:`EAN_REFERENCE_MAX_AGE` (when stores of one chain reported different prices in
@@ -72,19 +90,20 @@ Reference kinds (references are always quoted at their *best*, i.e. lowest, unit
         shelf price was observed; ``title`` is the product name.
 
 Incremental scope
-    With ``listing_ids``, the recomputed variants are: Netto variants of those listings, Netto
-    variants sharing a ``class_key`` with any of those listings (a changed competitor, Rema,
-    history or EAN listing), Netto variants whose stored references point at one of those
-    listings (a reference that was re-classified into another class must disappear), and Netto
-    variants whose stored ``offer``/``regular`` references have expired since (so expired
-    competitor prices disappear on the next run of any job).
-    ``listing_ids=None`` recomputes every Netto variant. A ``product_reference_price`` change
-    without a changed listing is picked up by the next full recompute.
+    With ``listing_ids``, the recomputed variants are: target variants of those listings,
+    target variants sharing a ``class_key`` with any of those listings (a changed reference
+    listing), target variants whose stored references point at one of those listings (a
+    reference that was re-classified into another class must disappear), and target variants
+    whose stored ``offer``/``regular`` references have expired since (so expired prices
+    disappear on the next run of any job). ``listing_ids=None`` recomputes every target
+    variant. A ``product_reference_price`` change without a changed listing is picked up by the
+    next full recompute.
 
 Staleness
-    Every call deletes deal rows that no longer describe a current Netto variant: rows of
+    Every call deletes deal rows that no longer describe a current target variant: rows of
     other matcher releases, of expired or superseded listings (an earlier version of a
-    re-published Tjek offer id), and of variants that are no longer healthy.
+    re-published Tjek offer id), of Rema catalogue campaigns that are now in the leaflet, and
+    of variants that are no longer healthy.
 
 Efficiency (Neon free tier)
     Everything is three set-based statements: the release lookup, one ``DELETE`` and one
@@ -114,9 +133,6 @@ from foodcatch.matching.taxonomy import PRODUCT_TYPES
 
 log = get_logger(__name__)
 
-NETTO_CHAIN_ID: Final = "netto"
-"""Chain whose offers are evaluated."""
-
 PRICE_SPREAD_LIMIT: Final = Decimal("1.25")
 """An offer's unit price applies to a variant if ``unit_price_max <= limit * unit_price_min``."""
 
@@ -141,11 +157,6 @@ def _current(listing: str) -> str:
     return f"({listing}.valid_to IS NULL OR {listing}.valid_to >= now())"
 
 
-def _netto_offer(listing: str) -> str:
-    """SQL predicate: ``listing`` is a Netto offer from Tjek."""
-    return f"{listing}.source = 'tjek' AND {listing}.kind = 'offer' AND {listing}.chain_id = :netto"
-
-
 def _latest_version(listing: str) -> str:
     """SQL predicate: ``listing`` is the latest version of its Tjek offer id.
 
@@ -161,6 +172,36 @@ def _latest_version(listing: str) -> str:
               AND nv.id <> {listing}.id
               AND (nv.last_seen_at, nv.valid_from)
                   > ({listing}.last_seen_at, {listing}.valid_from))"""
+
+
+def _in_leaflet(listing: str, variant: str) -> str:
+    """SQL predicate: Rema catalogue campaign ``listing`` (variant ``variant``) is in the leaflet.
+
+    True when a Tjek offer of the same chain (latest version of its offer id) has the same
+    price, an overlapping validity and a classification of the same class under the same
+    release: the campaign then already has a deal row through the leaflet offer.
+    """
+    return f"""EXISTS (
+            SELECT 1 FROM listing tl
+            JOIN classification tc
+              ON tc.listing_id = tl.id
+             AND tc.matcher_version = {variant}.matcher_version
+             AND tc.class_key = {variant}.class_key
+            WHERE tl.source = 'tjek' AND tl.kind = 'offer'
+              AND tl.chain_id = {listing}.chain_id
+              AND tl.price = {listing}.price
+              AND tl.valid_from < COALESCE({listing}.valid_to, 'infinity')
+              AND {listing}.valid_from < COALESCE(tl.valid_to, 'infinity')
+              AND {_latest_version("tl")})"""
+
+
+def _target(listing: str, variant: str) -> str:
+    """SQL predicate: ``variant`` of ``listing`` is a target variant (module docstring)."""
+    return f"""({variant}.is_healthy
+          AND {listing}.kind = 'offer'
+          AND {_current(listing)}
+          AND (({listing}.source = 'tjek' AND {_latest_version(listing)})
+               OR ({listing}.source = 'rema' AND NOT {_in_leaflet(listing, variant)})))"""
 
 
 _SCOPE_ALL = "true"
@@ -210,8 +251,7 @@ def _listing_refs(kind: str, where: str, distinct_on: str, order_by: str) -> str
 
 _OFFER_REFS = _listing_refs(
     "offer",
-    "rl.kind = 'offer'"
-    " AND ((rl.source = 'tjek' AND rl.chain_id <> :netto) OR rl.source = 'rema')"
+    "rl.kind = 'offer' AND rl.source IN ('tjek', 'rema') AND rl.chain_id <> t.chain_id"
     f" AND {_current('rl')}",
     # Tjek: one per offer id (latest re-publication); Rema: every open price period.
     distinct_on="CASE WHEN rl.source = 'rema' THEN rl.id::text"
@@ -220,14 +260,19 @@ _OFFER_REFS = _listing_refs(
 )
 _REGULAR_REFS = _listing_refs(
     "regular",
-    f"rl.source = 'rema' AND rl.kind = 'regular' AND rl.valid_from <= now() AND {_current('rl')}",
-    distinct_on="rl.source_item_id",
+    f"rl.kind = 'regular' AND {_current('rl')}"
+    " AND ((rl.source = 'rema' AND rl.valid_from <= now())"
+    f" OR (rl.source = 'tjek' AND {_latest_version('rl')}))",
+    # Rema: the latest started price period per product; Tjek: one per offer id.
+    distinct_on="rl.source, rl.source_item_id",
     order_by="rl.valid_from DESC, rl.last_seen_at DESC",
 )
 _HISTORY_REFS = _listing_refs(
     "history",
-    f"{_netto_offer('rl')} AND rl.source_item_id <> t.source_item_id"
-    f" AND rl.valid_to < t.valid_from AND {_latest_version('rl')}",
+    "rl.chain_id = t.chain_id AND rl.kind = 'offer' AND rl.valid_to < t.valid_from"
+    " AND (rl.source = 'rema'"
+    f" OR (rl.source = 'tjek' AND rl.source_item_id <> t.source_item_id"
+    f" AND {_latest_version('rl')}))",
     distinct_on="rl.id",
     order_by="rl.last_seen_at DESC",
 )
@@ -257,17 +302,14 @@ _UPSERT_SQL = """
 WITH target AS MATERIALIZED (
     SELECT c.listing_id, c.variant_index, c.class_key, c.is_exact,
            CASE WHEN {comparable} THEN l.unit END AS unit,
-           l.valid_from, l.source_item_id,
+           l.chain_id, l.valid_from, l.source_item_id,
            CASE WHEN {comparable} THEN l.unit_price_min END AS unit_price_min,
            CASE WHEN {comparable} THEN l.unit_price_max END AS unit_price_max,
            {price_applies} AS price_applies
     FROM classification c
     JOIN listing l ON l.id = c.listing_id
     WHERE c.matcher_version = :version
-      AND c.is_healthy
-      AND {netto_offer}
-      AND {current}
-      AND {latest}
+      AND {target}
       AND {scope}
 ),
 refs AS (
@@ -327,10 +369,7 @@ WHERE d.matcher_version <> :version
        WHERE c.listing_id = d.listing_id
          AND c.matcher_version = d.matcher_version
          AND c.variant_index = d.variant_index
-         AND c.is_healthy
-         AND {_netto_offer("l")}
-         AND {_current("l")}
-         AND {_latest_version("l")})
+         AND {_target("l", "c")})
 """
 
 
@@ -345,9 +384,7 @@ def _iso_utc(timestamp: str) -> str:
 def _upsert_sql(*, scoped: bool) -> str:
     return _UPSERT_SQL.format(
         price_applies=_price_applies("c", "l"),
-        netto_offer=_netto_offer("l"),
-        current=_current("l"),
-        latest=_latest_version("l"),
+        target=_target("l", "c"),
         comparable="(l.unit IS DISTINCT FROM 'stk' OR c.type_id = ANY(:piece_types))",
         scope=_SCOPE_LISTINGS if scoped else _SCOPE_ALL,
         offer_refs=_OFFER_REFS,
@@ -380,7 +417,7 @@ def current_matcher_version(conn: Connection) -> str | None:
 def recompute_deals(conn: Connection, *, listing_ids: Collection[UUID] | None = None) -> int:
     """Recompute deals affected by ``listing_ids`` (``None`` = all); returns rows written.
 
-    Deletes stale deal rows, then inserts or updates the deal rows of the affected Netto
+    Deletes stale deal rows, then inserts or updates the deal rows of the affected target
     variants under the current matcher release (see the module docstring for the rules).
     The return value counts inserted or changed rows; unchanged rows are not rewritten.
     """
@@ -388,10 +425,9 @@ def recompute_deals(conn: Connection, *, listing_ids: Collection[UUID] | None = 
     if version is None:
         log.warning("deals.no_current_matcher_release")
         return 0
-    deleted = conn.execute(_DELETE_STALE, {"version": version, "netto": NETTO_CHAIN_ID}).rowcount
+    deleted = conn.execute(_DELETE_STALE, {"version": version}).rowcount
     params: dict[str, object] = {
         "version": version,
-        "netto": NETTO_CHAIN_ID,
         "spread_limit": PRICE_SPREAD_LIMIT,
         "ean_max_age": EAN_REFERENCE_MAX_AGE,
         "piece_types": list(PIECE_TYPE_IDS),

@@ -324,16 +324,21 @@ def test_unknown_unit_price_still_gets_a_deal_row(sc: Scenario) -> None:
     assert row["references"] == []
 
 
-def test_unhealthy_and_non_netto_variants_get_no_deal(sc: Scenario) -> None:
+def test_unhealthy_variants_regular_prices_and_clearances_get_no_deal(sc: Scenario) -> None:
     unhealthy = sc.listing(unit_price=20.0)
     sc.classify(unhealthy, PORK_8_12, healthy=False)
     lidl = sc.offer(PORK_8_12, chain="lidl", unit_price=30.0)
+    lidl_regular = sc.offer(PORK_8_12, chain="lidl", kind="regular", unit_price=31.0)
+    rema_regular = sc.offer(
+        PORK_8_12, chain="rema1000", source="rema", kind="regular", unit_price=40.0
+    )
+    clearance = sc.clearance(PORK_8_12, sc.ean_product(net_quantity=1))
 
     recompute_deals(sc.conn)
 
     keys = {listing_id for listing_id, _ in sc.deals()}
-    assert unhealthy not in keys
-    assert lidl not in keys
+    assert lidl in keys  # every chain's offers are deals
+    assert not keys & {unhealthy, lidl_regular, rema_regular, clearance}
 
 
 # ----------------------------------------------------------------------- references
@@ -422,7 +427,7 @@ def test_republished_netto_offer_only_latest_version_gets_a_deal(sc: Scenario) -
 
     recompute_deals(sc.conn, listing_ids={corrected})
 
-    assert set(sc.deals()) == {(corrected, 0)}
+    assert {k for k in sc.deals() if k[0] in (mistaken, corrected)} == {(corrected, 0)}
     later = sc.offer(PORK_8_12, unit_price=90.0, valid_from=NOW + 6 * DAY, valid_to=NOW + 13 * DAY)
     recompute_deals(sc.conn)
     history = {r["listing_id"] for r in sc.refs(later) if r["kind"] == "history"}
@@ -637,16 +642,106 @@ def test_competitor_member_price_is_a_reference_marked_as_such(sc: Scenario) -> 
     assert (result.verdict, result.cheapest_unit_price) == ("cheaper_elsewhere", 35.0)
 
 
+# ------------------------------------------------------------------- all chains
+def test_offers_of_every_chain_get_references_from_other_chains(sc: Scenario) -> None:
+    lidl = sc.offer(PORK_8_12, chain="lidl", unit_price=35.0, source_item_id="lidl-now")
+    netto = sc.offer(PORK_8_12, unit_price=33.33)
+    same_week_lidl = sc.offer(PORK_8_12, chain="lidl", unit_price=30.0)  # concurrent, own chain
+    earlier_lidl = sc.offer(
+        PORK_8_12, chain="lidl", unit_price=32.0, valid_from=NOW - 30 * DAY, valid_to=NOW - 24 * DAY
+    )
+    sc.offer(  # an earlier Netto offer is history for Netto only
+        PORK_8_12, unit_price=31.0, valid_from=NOW - 30 * DAY, valid_to=NOW - 24 * DAY
+    )
+    rema_regular = sc.offer(
+        PORK_8_12, chain="rema1000", source="rema", kind="regular", unit_price=49.9
+    )
+
+    recompute_deals(sc.conn)
+
+    assert sc.ref_listings(lidl) == {
+        ("offer", netto),
+        ("history", earlier_lidl),
+        ("regular", rema_regular),
+    }
+    assert {("offer", lidl), ("offer", same_week_lidl)} <= sc.ref_listings(netto)
+    assert sc.deal(lidl)["netto_unit_price_worst"] == Decimal("35.0")
+
+
+def test_lidl_fast_lav_pris_is_a_regular_reference(sc: Scenario) -> None:
+    """Lidl's "Fast lav pris" leaflet items (kind ``regular``) are shelf prices."""
+    netto = sc.offer(PORK_8_12, unit_price=40.0)
+    lidl_offer = sc.offer(PORK_8_12, chain="lidl", unit_price=45.0)
+    shelf = sc.offer(
+        PORK_8_12, chain="lidl", kind="regular", unit_price=47.44, source_item_id="flp-1"
+    )
+    sc.conn.execute(update(listing).where(listing.c.id == shelf).values(last_seen_at=NOW - DAY))
+    republished = sc.offer(
+        PORK_8_12, chain="lidl", kind="regular", unit_price=46.0, source_item_id="flp-1"
+    )
+
+    recompute_deals(sc.conn)
+
+    assert sc.ref_listings(netto) == {("offer", lidl_offer), ("regular", republished)}
+    # Lidl's own shelf price is a reference for Lidl's offer too, and gets no deal itself
+    assert ("regular", republished) in sc.ref_listings(lidl_offer)
+    assert republished not in {listing_id for listing_id, _ in sc.deals()}
+
+
+def test_rema_campaigns_are_deals_once(sc: Scenario) -> None:
+    """A catalogue campaign also in Rema's Tjek leaflet is a deal only through the leaflet."""
+    rema = {"chain": "rema1000", "source": "rema"}
+    leaflet = sc.offer(PORK_8_12, chain="rema1000", unit_price=30.0)  # Tjek, price 30
+    in_leaflet = sc.offer(PORK_8_12, kind="offer", unit_price=30.0, source_item_id="r-1", **rema)
+    in_store_only = sc.offer(MØRBRAD, kind="offer", unit_price=59.0, source_item_id="r-2", **rema)
+    earlier = sc.offer(  # the same product's previous campaign
+        MØRBRAD,
+        kind="offer",
+        unit_price=55.0,
+        source_item_id="r-2",
+        valid_from=NOW - 30 * DAY,
+        valid_to=NOW - 24 * DAY,
+        **rema,
+    )
+    regular = sc.offer(MØRBRAD, kind="regular", unit_price=89.0, source_item_id="r-2", **rema)
+    netto = sc.offer(MØRBRAD, unit_price=60.0)
+
+    recompute_deals(sc.conn)
+
+    targets = {listing_id for listing_id, _ in sc.deals()}
+    assert {leaflet, in_store_only, netto} <= targets
+    assert in_leaflet not in targets
+    assert sc.ref_listings(in_store_only) == {
+        ("offer", netto),
+        ("history", earlier),
+        ("regular", regular),
+    }
+    # the leaflet offer is not its own chain's offer reference
+    assert sc.ref_listings(leaflet) == set()
+
+
+def test_rema_campaign_deal_is_removed_when_the_leaflet_lists_it(sc: Scenario) -> None:
+    rema = {"chain": "rema1000", "source": "rema"}
+    campaign = sc.offer(PORK_8_12, kind="offer", unit_price=30.0, **rema)
+    recompute_deals(sc.conn)
+    assert (campaign, 0) in sc.deals()
+
+    leaflet = sc.offer(PORK_8_12, chain="rema1000", unit_price=30.0)
+    recompute_deals(sc.conn, listing_ids={leaflet})
+
+    assert set(sc.deals()) == {(leaflet, 0)}
+
+
 # ------------------------------------------------------------- lifecycle and scope
 def test_recompute_is_idempotent_and_updates_changed_rows(sc: Scenario) -> None:
     netto = sc.offer(PORK_8_12, unit_price=33.33)
     lidl = sc.offer(PORK_8_12, chain="lidl", unit_price=39.0)
 
-    assert recompute_deals(sc.conn) == 1
+    assert recompute_deals(sc.conn) == 2  # the Netto and the Lidl offer
     assert recompute_deals(sc.conn) == 0
 
     sc.conn.execute(update(listing).where(listing.c.id == lidl).values(unit_price_min=30))
-    assert recompute_deals(sc.conn, listing_ids={lidl}) == 1
+    assert recompute_deals(sc.conn, listing_ids={lidl}) == 2  # Lidl's own price, Netto's ref
     assert sc.refs(netto)[0]["unit_price"] == 30.0
 
 
@@ -655,11 +750,11 @@ def test_scoped_recompute_touches_only_affected_classes(sc: Scenario) -> None:
     mørbrad = sc.offer(MØRBRAD, unit_price=79.0)
     lidl = sc.offer(PORK_8_12, chain="lidl", unit_price=39.0)
 
-    assert recompute_deals(sc.conn, listing_ids={lidl}) == 1
-    assert set(sc.deals()) == {(pork, 0)}
+    assert recompute_deals(sc.conn, listing_ids={lidl}) == 2
+    assert set(sc.deals()) == {(pork, 0), (lidl, 0)}
 
     assert recompute_deals(sc.conn, listing_ids={mørbrad}) == 1
-    assert set(sc.deals()) == {(pork, 0), (mørbrad, 0)}
+    assert set(sc.deals()) == {(pork, 0), (lidl, 0), (mørbrad, 0)}
     assert recompute_deals(sc.conn, listing_ids=set()) == 0
 
 
@@ -673,7 +768,7 @@ def test_reference_moved_to_another_class_is_removed_by_scoped_recompute(sc: Sce
     sc.conn.execute(classification.delete().where(classification.c.listing_id == lidl))
     sc.classify(lidl, PORK_4_7)
 
-    assert recompute_deals(sc.conn, listing_ids={lidl}) == 1
+    assert recompute_deals(sc.conn, listing_ids={lidl}) == 2  # Netto's refs, Lidl's class
     assert sc.refs(netto) == []
 
 
