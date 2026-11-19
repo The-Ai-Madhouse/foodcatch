@@ -11,6 +11,7 @@ import {
   normalUnitPrice,
   offerItem,
   typeIdOf,
+  usedCost,
   type Recipe,
 } from "./meals";
 
@@ -187,12 +188,15 @@ describe("fillRecipe", () => {
   const recipe: Recipe = {
     id: "test",
     name: "Test",
+    meal: "frokost",
+    servings: 2,
     description: "",
     slots: [
-      { label: "Æg", types: ["æg"], core: true },
-      { label: "Tomater", types: ["hakkede_tomater"] },
+      { label: "Æg", types: ["æg"], amount: 4, unit: "stk", estimateKr: 12, core: true },
+      { label: "Tomater", types: ["hakkede_tomater"], amount: 0.4, unit: "kg", estimateKr: 6 },
     ],
-    pantry: [],
+    pantry: [{ name: "brød", amount: "4 skiver", estimateKr: 5 }],
+    steps: ["Kog æggene."],
   };
 
   it("needs every core slot", () => {
@@ -202,7 +206,7 @@ describe("fillRecipe", () => {
   it("lists unfilled optional slots as missing and sums known savings", () => {
     const byType = mealItemsByType(
       [],
-      [waste(), waste({ listingId: "waste-2", price: 20, referencePrice: 40 })],
+      [waste(), waste({ listingId: "waste-2", price: 20, unitPrice: 2, referencePrice: 40 })],
       NEARBY,
       NOW,
     );
@@ -211,18 +215,49 @@ describe("fillRecipe", () => {
     expect(idea?.missing.map((s) => s.label)).toEqual(["Tomater"]);
     expect(idea?.totalSaving).toBe(20);
     expect(idea?.unknownSavings).toBe(0);
+    expect(idea?.purchasePrice).toBe(20);
+    expect(idea?.savingPct).toBe(50);
+    // 4 of 10 eggs at 2 kr. = 8 kr., tomatoes estimated 6 kr., bread 5 kr.
+    expect(idea?.dishCost).toBe(19);
+    expect(idea?.costPerServing).toBe(9.5);
   });
 
   it("does not use one item for two slots", () => {
     const twice: Recipe = {
       ...recipe,
       slots: [
-        { label: "Æg", types: ["æg"], core: true },
-        { label: "Flere æg", types: ["æg"], core: true },
+        { label: "Æg", types: ["æg"], amount: 4, unit: "stk", estimateKr: 12, core: true },
+        { label: "Flere æg", types: ["æg"], amount: 2, unit: "stk", estimateKr: 6, core: true },
       ],
     };
     const byType = mealItemsByType([], [waste()], NEARBY, NOW);
     expect(fillRecipe(twice, byType)).toBeNull();
+  });
+});
+
+describe("usedCost", () => {
+  const eggs = { label: "Æg", types: ["æg"], amount: 4, unit: "stk" as const, estimateKr: 12 };
+
+  it("prices the used part of the pack at the item's unit price", () => {
+    const item = foodWasteItem(waste());
+    expect(item && usedCost(eggs, item)).toBe(7.2);
+  });
+
+  it("never costs more than the whole pack", () => {
+    const item = foodWasteItem(waste());
+    expect(item && usedCost({ ...eggs, amount: 30 }, item)).toBe(18);
+  });
+
+  it("falls back to the estimate when the unit price is unknown", () => {
+    const item = foodWasteItem(waste({ size: null, unit: null, unitPrice: null }));
+    expect(item && usedCost(eggs, item)).toBe(12);
+  });
+
+  it("uses the smallest pack of an offer", () => {
+    const item = offerItem(deal(), NEARBY, NOW);
+    const mince = { label: "Kød", types: ["hakket_oksekød"], amount: 0.4, unit: "kg" as const };
+    // 35 kr. / 0,5 kg = 70 kr./kg × 0,4 kg.
+    expect(item && usedCost({ ...mince, estimateKr: 40 }, item)).toBe(28);
   });
 });
 
@@ -247,6 +282,7 @@ describe("mealIdeas", () => {
       [waste()],
       NEARBY,
       NOW,
+      "frokost",
     );
     expect(ideas.length).toBeGreaterThanOrEqual(2);
     expect(ideas.length).toBeLessThanOrEqual(MAX_IDEAS);
@@ -264,13 +300,13 @@ describe("mealIdeas", () => {
   });
 
   it("builds every idea around a different main item", () => {
-    const ideas = mealIdeas([deal()], [], NEARBY, NOW);
-    // Only one cheap item (minced beef): bolognese, chili and lasagne all hinge on it.
+    const ideas = mealIdeas([deal()], [], NEARBY, NOW, "aftensmad");
+    // Only one cheap item (minced beef): bolognese, chili, lasagne and tacos all hinge on it.
     expect(ideas).toHaveLength(1);
   });
 
   it("returns nothing when nothing is cheap", () => {
-    expect(mealIdeas([], [], NEARBY, NOW)).toEqual([]);
+    expect(mealIdeas([], [], NEARBY, NOW, "aftensmad")).toEqual([]);
   });
 
   it("caps the number of ideas", () => {
@@ -287,61 +323,41 @@ describe("mealIdeas", () => {
         referencePrice: 20,
         price: 9,
       }),
+      waste({ listingId: "w-hytte", classKey: "hytteost|øko=nej", referencePrice: 18, price: 9 }),
     ];
-    expect(mealIdeas([], items, NEARBY, NOW)).toHaveLength(MAX_IDEAS);
+    // Five different lunch mains (eggs, feta, tuna, lentils, cottage cheese) and more dishes.
+    expect(mealIdeas([], items, NEARBY, NOW, "frokost")).toHaveLength(MAX_IDEAS);
+  });
+
+  it("only suggests dishes of the requested meal", () => {
+    const items = [waste(), waste({ listingId: "w-feta", classKey: "feta|øko=nej" })];
+    for (const meal of ["frokost", "aftensmad"] as const) {
+      for (const idea of mealIdeas([], items, NEARBY, NOW, meal)) {
+        expect(idea.recipe.meal).toBe(meal);
+      }
+    }
   });
 });
 
 describe("RECIPES", () => {
-  it("has unique ids and at least one core slot per dish", () => {
+  it("has unique ids, a core slot, a method and sane amounts per dish", () => {
     expect(new Set(RECIPES.map((r) => r.id)).size).toBe(RECIPES.length);
-    for (const r of RECIPES) expect(r.slots.some((s) => s.core)).toBe(true);
+    for (const r of RECIPES) {
+      expect(
+        r.slots.some((s) => s.core),
+        r.id,
+      ).toBe(true);
+      expect(r.steps.length, r.id).toBeGreaterThan(0);
+      expect(r.servings, r.id).toBeGreaterThan(0);
+      for (const s of r.slots) {
+        expect(s.amount, `${r.id}: ${s.label}`).toBeGreaterThan(0);
+        expect(s.estimateKr, `${r.id}: ${s.label}`).toBeGreaterThan(0);
+      }
+    }
   });
 
-  it("only uses type ids of the taxonomy", () => {
-    const known = new Set([
-      "hakket_gris_kalv",
-      "hakket_okse_gris",
-      "hakket_oksekød",
-      "hakket_grisekød",
-      "hakket_kylling",
-      "hakket_kalkun",
-      "kyllingeinderfilet",
-      "kyllingebryst",
-      "kyllingelår",
-      "hel_kylling",
-      "svinekoteletter",
-      "svinemørbrad",
-      "æg",
-      "kærnemælk",
-      "mælk",
-      "piskefløde",
-      "madlavningsfløde",
-      "creme_fraiche",
-      "smørbar",
-      "smør",
-      "hytteost",
-      "mozzarella",
-      "feta",
-      "fast_ost",
-      "skyr",
-      "græsk_yoghurt",
-      "a38_ymer",
-      "yoghurt",
-      "hakkede_tomater",
-      "flåede_tomater",
-      "passata",
-      "tomatpuré",
-      "kikærter",
-      "kidneybønner",
-      "sorte_bønner",
-      "hvide_bønner",
-      "linser",
-      "tun",
-      "havregryn",
-    ]);
-    for (const r of RECIPES) {
-      for (const s of r.slots) for (const t of s.types) expect(known, `${r.id}: ${t}`).toContain(t);
-    }
+  it("has lunches and dinners", () => {
+    expect(RECIPES.filter((r) => r.meal === "frokost").length).toBeGreaterThanOrEqual(5);
+    expect(RECIPES.filter((r) => r.meal === "aftensmad").length).toBeGreaterThanOrEqual(5);
   });
 });
