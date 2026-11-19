@@ -31,7 +31,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 import httpx
-from sqlalchemy import Engine, insert, update
+from sqlalchemy import Connection, Engine, insert, text, update
 from structlog.typing import FilteringBoundLogger
 
 from foodcatch.config import Settings, get_settings
@@ -125,6 +125,31 @@ def _finish_failed(
         log.error("job.finish_failed", error=_format_error(exc))
 
 
+JOB_LOCK_KEY = 7_316_044_201
+"""Transaction-level advisory lock key shared by all job runs (see :func:`acquire_job_lock`)."""
+
+JOB_LOCK_TIMEOUT = "45min"
+"""How long a run waits for another run's lock before failing (Postgres ``lock_timeout``)."""
+
+
+def acquire_job_lock(conn: Connection, log: FilteringBoundLogger | None = None) -> None:
+    """Serialize job runs: take the shared advisory lock inside the run's main transaction.
+
+    Jobs upsert the same tables (e.g. ``product`` from both food-waste ingest and Open Food Facts
+    enrichment). Two runs in parallel could deadlock (observed 2026-11-19 when two jobs were
+    dispatched together), so a run waits here until the other run's transaction has ended. The
+    lock is released automatically on commit or rollback. ``lock_timeout`` bounds the wait so a
+    stuck run makes the waiting one fail visibly instead of hanging.
+    """
+    conn.execute(text(f"SET LOCAL lock_timeout = '{JOB_LOCK_TIMEOUT}'"))
+    if log is not None:
+        log.info("job.lock_wait")
+    conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": JOB_LOCK_KEY})
+    conn.execute(text("SET LOCAL lock_timeout = DEFAULT"))
+    if log is not None:
+        log.info("job.lock_acquired")
+
+
 def run_job(
     name: str,
     *,
@@ -181,6 +206,7 @@ def run_job(
         try:
             store = raw_store or raw_store_from_url(settings.raw_store_url, settings)
             with engine.connect() as conn, conn.begin():
+                acquire_job_lock(conn, log)
                 ctx = JobContext(
                     run_id=run_id,
                     spec=spec,
