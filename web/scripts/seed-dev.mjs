@@ -29,13 +29,15 @@ const sql = postgres(url, { max: 1, onnotice: () => {} });
 try {
   await sql.unsafe(sqlText).simple();
   const [counts] = await sql`
-    SELECT (SELECT count(*) FROM api.current_netto_deals)::int AS deals,
+    SELECT (SELECT count(*) FROM api.current_deals)::int AS deals,
+           (SELECT count(*) FROM api.current_netto_deals)::int AS netto_deals,
            (SELECT count(*) FROM api.food_waste_near)::int AS food_waste,
            (SELECT count(*) FROM api.stores)::int AS stores,
            (SELECT count(*) FROM api.pipeline_status)::int AS jobs
   `;
   console.log(
-    `Seeded ${parsed.pathname.slice(1)}: ${counts.deals} deal rows, ${counts.food_waste} ` +
+    `Seeded ${parsed.pathname.slice(1)}: ${counts.deals} deal rows (${counts.netto_deals} ` +
+      `Netto), ${counts.food_waste} ` +
       `food-waste items, ${counts.stores} stores, ${counts.jobs} jobs.`,
   );
 } catch (error) {

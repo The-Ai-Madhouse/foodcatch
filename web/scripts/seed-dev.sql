@@ -2,8 +2,9 @@
 --
 -- Fills the pipeline-owned public tables of a LOCAL development database with a small, realistic
 -- sample (stores around Rådhuspladsen in Copenhagen, one week of Netto offers, competitor offers,
--- REMA 1000 shelf prices, earlier Netto offers, food-waste clearances and pipeline runs) so every
--- page of the web app renders. All dates are relative to now(), so re-seeding keeps it current.
+-- REMA 1000 shelf prices and campaigns, Lidl "Fast lav pris" shelf prices, earlier offers,
+-- EAN shelf prices over time, food-waste clearances and pipeline runs) so every page of the web
+-- app renders. Deals are written for the started offers of every chain (`api.current_deals`). All dates are relative to now(), so re-seeding keeps it current.
 --
 -- Run with `pnpm db:seed` (see web/README.md). Never run this against production: it TRUNCATEs
 -- every data table. The schema itself comes from the pipeline's Alembic migrations.
@@ -121,7 +122,9 @@ VALUES
 
 INSERT INTO public.product_reference_price (product_id, chain_id, price, first_seen_at, last_seen_at, observations)
 VALUES
+  ('c0000000-0000-4000-8000-000000000001', 'netto', 42.95, now() - interval '120 days', now() - interval '41 days', 50),
   ('c0000000-0000-4000-8000-000000000001', 'netto', 44.95, now() - interval '40 days', now(), 31),
+  ('c0000000-0000-4000-8000-000000000001', 'foetex', 46.95, now() - interval '30 days', now() - interval '2 days', 9),
   ('c0000000-0000-4000-8000-000000000002', 'foetex', 13.95, now() - interval '25 days', now(), 12),
   ('c0000000-0000-4000-8000-000000000003', 'netto', 22.95, now() - interval '60 days', now(), 44);
 
@@ -227,6 +230,17 @@ VALUES
   ('a0000000-0000-4000-8000-000000000210', 'tjek', 'seed-c10', 'lidl', NULL, 'seed-lidl-tidl', 'offer',
    'Hakket grisekød 8-12%', '1 kg', NULL, 35.95, NULL, 'kg', 1, 1,
    false, NULL, pg_temp.day(-30), pg_temp.day_end(-24), 'e0000000-0000-4000-8000-000000000002', '{}'),
+  -- Lidl "Fast lav pris": a shelf price printed in the leaflet (kind regular, no deal of its own)
+  ('a0000000-0000-4000-8000-000000000211', 'tjek', 'seed-c11', 'lidl', NULL, 'seed-lidl-uge', 'regular',
+   'Hakket grisekød 8-12%', '500 g / pk. Pr. kg 47,90 Fast lav pris', NULL, 23.95, NULL, 'kg', 0.5, 0.5,
+   false, NULL, pg_temp.day(-200), pg_temp.day_end(40), 'e0000000-0000-4000-8000-000000000001', '{}'),
+  ('a0000000-0000-4000-8000-000000000212', 'tjek', 'seed-c12', 'meny', NULL, 'seed-meny-uge', 'offer',
+   'Økologisk letmælk, 2 x 1 l', '0,5 % fedt', NULL, 12.00, NULL, 'l', 2, 2,
+   false, NULL, pg_temp.day(-1), pg_temp.day_end(5), 'e0000000-0000-4000-8000-000000000001', '{}'),
+  -- REMA 1000's leaflet (Tjek); its catalogue twin (308) gets no deal of its own
+  ('a0000000-0000-4000-8000-000000000213', 'tjek', 'seed-c13', 'rema1000', NULL, 'seed-rema-uge', 'offer',
+   'Hakket grisekød 8-12%', '500 g', NULL, 21.00, NULL, 'kg', 0.5, 0.5,
+   false, NULL, pg_temp.day(-1), pg_temp.day_end(5), 'e0000000-0000-4000-8000-000000000001', '{}'),
 
   -- REMA 1000 shelf prices (open-ended) --------------------------------------------------------
   ('a0000000-0000-4000-8000-000000000301', 'rema', 'seed-r01', 'rema1000', NULL, NULL, 'regular',
@@ -250,6 +264,17 @@ VALUES
   ('a0000000-0000-4000-8000-000000000307', 'rema', 'seed-r07', 'rema1000', NULL, NULL, 'regular',
    'Hakket oksekød 8-12%', '500 g / Dansk', NULL, 39.95, NULL, 'kg', 0.5, 0.5,
    false, NULL, pg_temp.day(-90), NULL, 'e0000000-0000-4000-8000-000000000003', '{}'),
+
+  -- REMA 1000 catalogue campaigns: in the leaflet too (308), in-store only (309), earlier (310)
+  ('a0000000-0000-4000-8000-000000000308', 'rema', 'seed-r01', 'rema1000', NULL, NULL, 'offer',
+   'Hakket grisekød 8-12%', '500 g / Dansk', NULL, 21.00, NULL, 'kg', 0.5, 0.5,
+   false, NULL, pg_temp.day(-1), pg_temp.day_end(5), 'e0000000-0000-4000-8000-000000000003', '{}'),
+  ('a0000000-0000-4000-8000-000000000309', 'rema', 'seed-r04', 'rema1000', NULL, NULL, 'offer',
+   'Letmælk', '1 ltr. / 0,5 %', NULL, 9.00, NULL, 'l', 1, 1,
+   false, NULL, pg_temp.day(-1), pg_temp.day_end(5), 'e0000000-0000-4000-8000-000000000003', '{}'),
+  ('a0000000-0000-4000-8000-000000000310', 'rema', 'seed-r04', 'rema1000', NULL, NULL, 'offer',
+   'Letmælk', '1 ltr. / 0,5 %', NULL, 9.50, NULL, 'l', 1, 1,
+   false, NULL, pg_temp.day(-40), pg_temp.day_end(-34), 'e0000000-0000-4000-8000-000000000003', '{}'),
 
   -- Salling food waste (clearances in specific stores) -----------------------------------------
   -- extra.image: real Salling CDN URLs (pictures of other products; they only exercise the
@@ -303,6 +328,13 @@ VALUES
    'c0000000-0000-4000-8000-000000000007', 6.00, 11.95, 'kg', 0.125, 0.125, false, NULL,
    now() - interval '6 hours', now() + interval '1 day 6 hours', 'e0000000-0000-4000-8000-000000000004',
    '{"stock": 5, "stock_unit": "each", "percent_discount": 49.8}');
+
+-- What Salling's API said: the clearance label code and the product's EAN (`listing.product_key`
+-- is `ean:<product_code>` for clearances with a product).
+UPDATE public.listing l
+SET extra = l.extra || jsonb_build_object('product_code', p.ean, 'offer_ean', '24' || right(p.ean, 11))
+FROM public.product p
+WHERE p.id = l.product_id AND l.source = 'salling_food_waste';
 
 -- Unit prices follow the PoC rule (architecture §5).
 UPDATE public.listing
@@ -389,6 +421,9 @@ INSERT INTO seed_listing_class VALUES
   (208, 0, 'skyr|smag=naturel|forarbejdet=nej', 1, 1, '{}'),
   (209, 0, 'mælk|mælketype=letmælk|øko=nej|laktosefri=nej|forarbejdet=nej', 1, 1, '{}'),
   (210, 0, 'hakket_grisekød|fedt=8-12%|øko=nej|forarbejdet=nej', 1, 1, '{}'),
+  (211, 0, 'hakket_grisekød|fedt=8-12%|øko=nej|forarbejdet=nej', 1, 1, '{}'),
+  (212, 0, 'mælk|mælketype=letmælk|øko=ja|laktosefri=nej|forarbejdet=nej', 1, 1, '{}'),
+  (213, 0, 'hakket_grisekød|fedt=8-12%|øko=nej|forarbejdet=nej', 1, 1, '{}'),
   (301, 0, 'hakket_grisekød|fedt=8-12%|øko=nej|forarbejdet=nej', 1, 1, '{}'),
   (302, 0, 'hakket_oksekød|fedt=13-20%|øko=nej|forarbejdet=nej', 1, 1, '{}'),
   (303, 0, 'æg|produktion=frilands|øko=nej|forarbejdet=nej', 1, 1, '{}'),
@@ -396,6 +431,9 @@ INSERT INTO seed_listing_class VALUES
   (305, 0, 'fast_ost|form=skiver|forarbejdet=nej', 1, 1, '{}'),
   (306, 0, 'smør|øko=nej|forarbejdet=nej', 1, 1, '{}'),
   (307, 0, 'hakket_oksekød|fedt=8-12%|øko=nej|forarbejdet=nej', 1, 1, '{}'),
+  (308, 0, 'hakket_grisekød|fedt=8-12%|øko=nej|forarbejdet=nej', 1, 1, '{}'),
+  (309, 0, 'mælk|mælketype=letmælk|øko=nej|laktosefri=nej|forarbejdet=nej', 1, 1, '{}'),
+  (310, 0, 'mælk|mælketype=letmælk|øko=nej|laktosefri=nej|forarbejdet=nej', 1, 1, '{}'),
   (401, 0, 'hakket_oksekød|fedt=8-12%|øko=nej|forarbejdet=nej', 1, 1, '{}'),
   (402, 0, 'mælk|mælketype=letmælk|øko=ja|laktosefri=nej|forarbejdet=nej', 1, 1, '{}'),
   (403, 0, 'skyr|smag=naturel|forarbejdet=nej', 1, 1, '{}'),
@@ -418,8 +456,10 @@ CROSS JOIN public.matcher_release mr
 WHERE mr.is_current;
 
 -- ---------------------------------------------------------------------------------------------
--- Deals for Netto offers that have started (the upcoming offer stays "pending"). References are
--- every same-class listing: current competitor offers, shelf prices and earlier Netto offers.
+-- Deals for the started offers of every chain (upcoming offers stay "pending"; the REMA 1000
+-- catalogue campaign 308 is in the leaflet as 213, so it gets none). References are every
+-- same-class listing: other chains' current offers, shelf prices of any chain and the chain's own
+-- earlier offers (a simplified deals/compute.py).
 -- ---------------------------------------------------------------------------------------------
 INSERT INTO public.deal (listing_id, variant_index, matcher_version, class_key,
                          netto_unit_price_worst, netto_unit_price_best, price_applies, "references")
@@ -428,7 +468,7 @@ SELECT c.listing_id, c.variant_index, c.matcher_version, c.class_key,
        CASE WHEN NOT c.is_exact THEN '[]'::jsonb ELSE COALESCE((
          SELECT jsonb_agg(jsonb_build_object(
                   'kind', CASE WHEN r.kind = 'regular' THEN 'regular'
-                               WHEN r.chain_id = 'netto' THEN 'history'
+                               WHEN r.chain_id = l.chain_id THEN 'history'
                                ELSE 'offer' END,
                   'chain_id', r.chain_id,
                   'listing_id', r.id,
@@ -436,7 +476,8 @@ SELECT c.listing_id, c.variant_index, c.matcher_version, c.class_key,
                   'unit_price', r.unit_price_min,
                   'unit', r.unit,
                   'valid_from', to_char(r.valid_from AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-                  'valid_to', to_char(r.valid_to AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+                  'valid_to', to_char(r.valid_to AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                  'member_only', r.member_only)
                 ORDER BY r.unit_price_min)
          FROM public.listing r
          JOIN public.classification rc
@@ -447,14 +488,15 @@ SELECT c.listing_id, c.variant_index, c.matcher_version, c.class_key,
            AND r.unit_price_min IS NOT NULL
            AND rc.same_class_variants >= rc.offer_variants
            AND (r.kind = 'regular'
-                OR (r.kind = 'offer' AND r.chain_id = 'netto' AND r.valid_to < now())
-                OR (r.kind = 'offer' AND r.chain_id <> 'netto'
+                OR (r.kind = 'offer' AND r.chain_id = l.chain_id AND r.valid_to < l.valid_from)
+                OR (r.kind = 'offer' AND r.chain_id <> l.chain_id
                     AND (r.valid_to IS NULL OR r.valid_to >= now())))
        ), '[]'::jsonb) END
 FROM public.listing l
 JOIN public.classification c ON c.listing_id = l.id
 JOIN public.matcher_release mr ON mr.version = c.matcher_version AND mr.is_current
-WHERE l.chain_id = 'netto' AND l.kind = 'offer' AND c.is_healthy
+WHERE l.kind = 'offer' AND l.source IN ('tjek', 'rema') AND c.is_healthy
+  AND l.id <> 'a0000000-0000-4000-8000-000000000308'
   AND l.valid_from <= now() AND l.valid_to >= now();
 
 -- An EAN-level reference price (Salling originalPrice) for the milk offer.
@@ -462,7 +504,7 @@ UPDATE public.deal
 SET "references" = "references" || jsonb_build_array(jsonb_build_object(
       'kind', 'ean_reference', 'chain_id', 'netto', 'listing_id', NULL,
       'title', 'Letmælk 0,5 % 1 l (normalpris i Netto)', 'unit_price', 11.95, 'unit', 'l',
-      'valid_from', NULL, 'valid_to', NULL))
+      'valid_from', NULL, 'valid_to', NULL, 'member_only', false))
 WHERE listing_id = 'a0000000-0000-4000-8000-000000000005';
 
 -- ---------------------------------------------------------------------------------------------
