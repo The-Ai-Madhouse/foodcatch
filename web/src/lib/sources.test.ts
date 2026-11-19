@@ -4,6 +4,7 @@ import {
   openFoodFactsLink,
   openFoodFactsProductLink,
   routeLink,
+  storeMapsLink,
   sourceLink,
   storePageLink,
 } from "./sources";
@@ -113,6 +114,26 @@ describe("other links", () => {
   it("builds directions", () => {
     expect(routeLink(55.6761, 12.5683)).toBe(
       "https://www.google.com/maps/dir/?api=1&destination=55.6761%2C12.5683",
+    );
+  });
+});
+
+describe("storeMapsLink", () => {
+  it("searches by name and address, or by coordinates without an address", () => {
+    expect(
+      storeMapsLink({
+        name: "Netto Rådhuspladsen",
+        street: "Vesterbrogade 2",
+        zip: "1620",
+        city: "København V",
+        lat: 55.676,
+        lon: 12.568,
+      }),
+    ).toBe(
+      "https://www.google.com/maps/search/?api=1&query=Netto+R%C3%A5dhuspladsen%2C+Vesterbrogade+2%2C+1620+K%C3%B8benhavn+V",
+    );
+    expect(storeMapsLink({ name: "Netto", street: " ", lat: 55.676, lon: 12.568 })).toBe(
+      "https://www.google.com/maps/search/?api=1&query=55.676%2C12.568",
     );
   });
 });

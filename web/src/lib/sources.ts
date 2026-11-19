@@ -104,3 +104,23 @@ export function routeLink(lat: number, lon: number): string {
   const params = new URLSearchParams({ api: "1", destination: `${lat},${lon}` });
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
+
+/**
+ * A store in Google Maps (documented Maps URLs API, opens a new tab): searched by name and
+ * address when the address is known, otherwise by its coordinates.
+ */
+export function storeMapsLink(store: {
+  name: string;
+  street?: string | null;
+  zip?: string | null;
+  city?: string | null;
+  lat: number;
+  lon: number;
+}): string {
+  const place = [store.street, [store.zip, store.city].filter(nonEmpty).join(" ")]
+    .filter(nonEmpty)
+    .join(", ");
+  const query = place ? `${store.name}, ${place}` : `${store.lat},${store.lon}`;
+  const params = new URLSearchParams({ api: "1", query });
+  return `https://www.google.com/maps/search/?${params.toString()}`;
+}

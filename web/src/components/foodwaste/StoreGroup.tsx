@@ -4,7 +4,7 @@ import { ChainDot } from "@/components/ChainDot";
 import { ExternalLink } from "@/components/SourceLink";
 import { useMapFocus } from "@/components/map/MapFocus";
 import { formatDistance } from "@/lib/format";
-import { routeLink } from "@/lib/sources";
+import { routeLink, storeMapsLink } from "@/lib/sources";
 
 /**
  * A store with its clearances on /madspild: a sticky header (chain, name, distance, address,
@@ -16,6 +16,7 @@ export function StoreGroup({
   chainId,
   name,
   address,
+  addressParts,
   distanceKm,
   lat,
   lon,
@@ -26,6 +27,8 @@ export function StoreGroup({
   chainId: string;
   name: string;
   address: string | null;
+  /** Street, zip and city, for the Google Maps search. */
+  addressParts?: { street: string | null; zip: string | null; city: string | null };
   distanceKm: number;
   lat: number;
   lon: number;
@@ -49,7 +52,16 @@ export function StoreGroup({
         <ChainDot chainId={chainId} size="md" />
         <div className="min-w-0 flex-1">
           <h2 id={headingId} className="text-heading font-semibold text-ink">
-            {name}
+            {/* The name opens the store in Google Maps (new tab). */}
+            <a
+              href={storeMapsLink({ name, ...(addressParts ?? {}), lat, lon })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-ink decoration-line-strong underline-offset-4 hover:underline"
+            >
+              {name}
+              <span className="sr-only"> – vis i Google Maps (åbner i nyt vindue)</span>
+            </a>
           </h2>
           <p className="text-meta text-ink-2">
             <span className="tabular">{formatDistance(distanceKm)}</span>

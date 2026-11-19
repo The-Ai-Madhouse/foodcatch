@@ -2,7 +2,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { MemberBadge, VerdictBadge } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
-import { SourceLink } from "@/components/SourceLink";
+import { ExternalLink, SourceLink } from "@/components/SourceLink";
 import { chainName } from "@/lib/chains";
 import {
   cleanClassLabel,
@@ -24,7 +24,7 @@ import {
   packSize,
 } from "@/lib/format";
 import { classPath, productPath } from "@/lib/routes";
-import { sourceLink } from "@/lib/sources";
+import { sourceLink, storeMapsLink } from "@/lib/sources";
 import { shortStoreName, type NearbyStore } from "@/lib/stores";
 import { LOCATION_INDEPENDENT_KINDS } from "@/lib/verdict";
 import { Comparison, type ComparisonRow, type ComparisonSection } from "./Comparison";
@@ -175,18 +175,34 @@ function HistoryLink({ productKey, className = "" }: { productKey: string; class
   );
 }
 
+/** "Maps ↗": the store in Google Maps in a new tab. */
+export function MapsLink({ store }: { store: NearbyStore }) {
+  return (
+    <ExternalLink
+      href={storeMapsLink(store)}
+      iconSize={14}
+      className="min-h-11 shrink-0 text-meta whitespace-nowrap"
+    >
+      Maps<span className="sr-only">: {store.name}</span>
+    </ExternalLink>
+  );
+}
+
 /** The chain's nearest store within the radius, or how far the nearest one is. */
 function ChainWhere({ chainId, ctx }: { chainId: string; ctx: DealContext }) {
   const stores = ctx.storesByChain.get(chainId) ?? [];
   const nearest = stores[0];
   if (nearest) {
     return (
-      <WhereLine
-        chainId={chainId}
-        nearestName={shortStoreName(nearest.name, chainId)}
-        nearestDistance={formatDistance(nearest.distanceKm)}
-        moreCount={stores.length - 1}
-      />
+      <div className="flex items-center justify-between gap-3">
+        <WhereLine
+          chainId={chainId}
+          nearestName={shortStoreName(nearest.name, chainId)}
+          nearestDistance={formatDistance(nearest.distanceKm)}
+          moreCount={stores.length - 1}
+        />
+        <MapsLink store={nearest} />
+      </div>
     );
   }
   // The page explains it in a notice; the card only says where the nearest store is.

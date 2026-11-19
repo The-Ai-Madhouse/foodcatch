@@ -1,4 +1,5 @@
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
+import { CategoryOverview, CollapsibleCategory } from "@/components/CategoryOverview";
 import { Notice } from "@/components/Notice";
 import { Segmented } from "@/components/Segmented";
 import { FoodWasteItemRow } from "@/components/foodwaste/FoodWasteItemRow";
@@ -9,6 +10,7 @@ import { MapFocusProvider } from "@/components/map/MapFocus";
 import { SideMap } from "@/components/map/SideMap";
 import { latestSeen, type FoodWasteItem } from "@/lib/foodwaste";
 import { daysFromToday, formatClock, formatRelative } from "@/lib/format";
+import { countByGroup, groupOfClassKey, groupSlug, parseGroupFilter } from "@/lib/groups";
 import {
   compareByDiscount,
   groupByStore,
@@ -26,6 +28,15 @@ const VISIBLE_PER_STORE = 4;
 
 const DAY_MS = 86_400_000;
 
+/** The page's URL with a sort order and a category (both optional). */
+function foodWasteHref(sort: "afstand" | "rabat", category: string | null): string {
+  const params = new URLSearchParams();
+  if (sort === "rabat") params.set("sorter", "rabat");
+  if (category) params.set("kategori", groupSlug(category));
+  const query = params.toString();
+  return query ? `/madspild?${query}` : "/madspild";
+}
+
 function parseSort(value: string | string[] | undefined): "afstand" | "rabat" {
   return value === "rabat" ? "rabat" : "afstand";
 }
@@ -40,16 +51,21 @@ function updatedText(at: string | null, now: Date): { text: string; stale: boole
 }
 
 export default async function FoodWastePage({ searchParams }: PageProps<"/madspild">) {
-  const sort = parseSort((await searchParams).sorter);
+  const params = await searchParams;
+  const sort = parseSort(params.sorter);
   const location = await getUserLocation();
-  const [items, run] = await Promise.all([
+  const [allItems, run] = await Promise.all([
     getFoodWasteNear(location),
     getLatestRun("salling-food-waste"),
   ]);
+  const groupOf = (item: FoodWasteItem) => groupOfClassKey(item.classKey);
+  const categories = countByGroup(allItems, groupOf);
+  const category = parseGroupFilter(params.kategori, categories);
+  const items = category ? allItems.filter((i) => groupOf(i) === category) : allItems;
   const now = new Date();
   const nowIso = now.toISOString();
   const groups = groupByStore(items);
-  const updated = updatedText(run?.finishedAt ?? latestSeen(items), now);
+  const updated = updatedText(run?.finishedAt ?? latestSeen(allItems), now);
   const mapStores: MapStore[] = groups.map((g) => {
     const first = g.items[0] as FoodWasteItem;
     return {
@@ -87,7 +103,7 @@ export default async function FoodWastePage({ searchParams }: PageProps<"/madspi
             </p>
           ) : null}
 
-          {items.length === 0 ? (
+          {allItems.length === 0 ? (
             <div className="mt-4">
               <Notice title={`Ingen madspild inden for ${location.radiusKm} km lige nu`}>
                 Udvalget skifter i løbet af dagen. Prøv igen senere eller vælg en større afstand.
@@ -102,15 +118,41 @@ export default async function FoodWastePage({ searchParams }: PageProps<"/madspi
                 <Segmented
                   label="Sortering"
                   items={[
-                    { href: "/madspild", label: "Nærmest", active: sort === "afstand" },
                     {
-                      href: "/madspild?sorter=rabat",
+                      href: foodWasteHref("afstand", category) as Route,
+                      label: "Nærmest",
+                      active: sort === "afstand",
+                    },
+                    {
+                      href: foodWasteHref("rabat", category) as Route,
                       label: "Størst rabat",
                       active: sort === "rabat",
                     },
                   ]}
                 />
               </div>
+
+              {categories.length > 1 ? (
+                <div className="mt-3">
+                  <CategoryOverview
+                    label="Kategorier"
+                    links={[
+                      {
+                        label: "Alle",
+                        count: allItems.length,
+                        href: foodWasteHref(sort, null),
+                        active: category == null,
+                      },
+                      ...categories.map((c) => ({
+                        label: c.name,
+                        count: c.count,
+                        href: foodWasteHref(sort, c.name),
+                        active: c.name === category,
+                      })),
+                    ]}
+                  />
+                </div>
+              ) : null}
 
               {sort === "afstand" ? (
                 <div className="mt-4 space-y-3">
@@ -125,6 +167,7 @@ export default async function FoodWastePage({ searchParams }: PageProps<"/madspi
                         chainId={first.chainId}
                         name={storeDisplayName(first.storeName, first.chainId)}
                         address={storeAddress(first)}
+                        addressParts={{ street: first.street, zip: first.zip, city: first.city }}
                         distanceKm={group.distanceKm}
                         lat={first.lat}
                         lon={first.lon}
@@ -158,13 +201,27 @@ export default async function FoodWastePage({ searchParams }: PageProps<"/madspi
                   })}
                 </div>
               ) : (
-                <ul className="mt-4 divide-y divide-line rounded-xl border border-line bg-surface px-4 lg:px-5">
-                  {[...items].sort(compareByDiscount).map((item) => (
-                    <li key={item.listingId}>
-                      <FoodWasteItemRow item={item} now={nowIso} showStore />
-                    </li>
+                <div className="mt-2 space-y-2">
+                  {countByGroup(items, groupOf).map((group) => (
+                    <CollapsibleCategory
+                      key={group.slug}
+                      id={`kategori-${group.slug}`}
+                      title={group.name}
+                      count={group.count}
+                    >
+                      <ul className="divide-y divide-line rounded-xl border border-line bg-surface px-4 lg:px-5">
+                        {items
+                          .filter((item) => groupOf(item) === group.name)
+                          .sort(compareByDiscount)
+                          .map((item) => (
+                            <li key={item.listingId}>
+                              <FoodWasteItemRow item={item} now={nowIso} showStore />
+                            </li>
+                          ))}
+                      </ul>
+                    </CollapsibleCategory>
                   ))}
-                </ul>
+                </div>
               )}
 
               <p className="mt-4 text-meta text-ink-3">
