@@ -86,7 +86,7 @@ describe("stapleMatches", () => {
     expect(eggs?.clearances.map((w) => w.listingId)).toEqual(["w1"]);
   });
 
-  it("leaves out offers that are cheaper elsewhere and sorts good deals first", () => {
+  it("only shows good and undecided deals, good deals first", () => {
     const [eggs] = stapleMatches(
       ["aeg"],
       listings([
@@ -98,6 +98,7 @@ describe("stapleMatches", () => {
           targetUnitPriceBest: 2,
         }),
         row({ listingId: "good" }),
+        row({ listingId: "uncompared", references: [] }),
       ]),
       [],
     );

@@ -987,8 +987,8 @@ costs, and the recipe on demand.
 ## 15. "Dine basisvarer" on the offers page (2026-11-19)
 
 - At the top of `/`, under the title: the staples the user picked that are on offer or cleared
-  nearby, per staple at most three offers (best verdict, then lowest unit price; never
-  `cheaper_elsewhere`) and two clearances (largest discount), with "+N flere" and a line "Ikke på
+  nearby, per staple at most three offers (only `good_deal` and `undecided`, good deals
+  first, then lowest unit price) and two clearances (largest discount), with "+N flere" and a line "Ikke på
   tilbud: …". The chain filter does not apply.
 - Picker: "Vælg dine basisvarer" (open while nothing is picked) / "Skift basisvarer", a checkbox
   per staple and "Gem basisvarer". A server action (`saveStaples`) stores the ids in the cookie

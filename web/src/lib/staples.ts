@@ -3,7 +3,7 @@
  * the top of the offers page whenever one of them is on offer or cleared nearby. Pure.
  */
 
-import type { ListingDeal } from "./deals";
+import type { DealStatus, ListingDeal } from "./deals";
 import { STATUS_RANK } from "./deals";
 import type { FoodWasteItem } from "./foodwaste";
 import { typeIdOf } from "./meals";
@@ -68,9 +68,13 @@ const unitPrice = (l: ListingDeal) =>
   l.offer.unitPriceMin ?? l.offer.unitPriceMax ?? Number.POSITIVE_INFINITY;
 
 /**
- * The chosen staples with their offers and clearances. Offers that are cheaper elsewhere are
- * left out: the section is about staples worth buying now.
+ * Verdicts worth showing among the staples: a documented good deal, or one that may be (it
+ * depends on the pack). Offers without a comparison or cheaper elsewhere are left out: the
+ * section is about staples worth buying now.
  */
+const WORTH_SHOWING: ReadonlySet<DealStatus> = new Set(["good_deal", "undecided"]);
+
+/** The chosen staples with their offers worth buying and their clearances nearby. */
 export function stapleMatches(
   selected: readonly string[],
   listings: readonly ListingDeal[],
@@ -81,9 +85,7 @@ export function stapleMatches(
     if (!staple) return [];
     const types = new Set(staple.types);
     const offers = listings
-      .filter(
-        (l) => l.status !== "cheaper_elsewhere" && l.variants.some((v) => types.has(v.typeId)),
-      )
+      .filter((l) => WORTH_SHOWING.has(l.status) && l.variants.some((v) => types.has(v.typeId)))
       .sort(
         (a, b) =>
           STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
