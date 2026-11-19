@@ -927,18 +927,21 @@ The visual system (§4) is unchanged.
 
 ## 13. Meal ideas, "Madideer" (2026-11-19)
 
-The owner's request: after choosing an address, when offers and food waste are shown, suggest
-2–5 things to cook from those items and how much that saves.
+The owner's request: after choosing an address, suggest 2–5 lunches and 2–5 dinners from this
+week's offers and the food waste nearby, what the cheap items cost and save, what the dish
+costs, and the recipe on demand.
 
 - Route `/madideer`, fourth tab "Madideer" (pot icon) between "Madspild" and "Kort". It uses the
   saved location like `/` and `/madspild`: offers of chains with a store within the radius
-  (`nearbyDeals`) and clearances within the radius (`getFoodWasteNear`).
-- Ideas come from a **fixed catalogue** of ~25 everyday dishes in `web/src/lib/meals.ts`
-  (`RECIPES`), not from a language model: deterministic, free, testable. Each dish has
-  ingredient slots of taxonomy type ids (pipeline `matching/taxonomy.py`; a unit test fails on
-  an unknown id) and a pantry list. A **core** slot must be on offer or cleared for the dish to
-  be suggested; other slots are filled when possible and otherwise listed under "Du skal også
-  bruge" with the pantry.
+  (`nearbyDeals`) and clearances within the radius (`getFoodWasteNear`). Two sections,
+  "Frokost" and "Aftensmad", with jump pills at the top. Breakfast is not a section: staples
+  are on the offers page (§15).
+- Ideas come from a **fixed catalogue** (`web/src/lib/recipes.ts`, ~30 dishes), not from a
+  language model: deterministic, free, testable. Each dish has a meal, servings, ingredient
+  slots (taxonomy type ids with the amount used, its unit and a rough normal-price estimate),
+  pantry items (amount text and estimate) and the method. A **core** slot must be on offer or
+  cleared for the dish to be suggested; other slots are filled when possible and otherwise
+  listed under "Du skal også bruge".
 - Which items may be used: clearances with a class; offers that are valid now, whose price
   applies (`price_applies`), that are not `cheaper_elsewhere`, and that are either `good_deal` or
   cheaper than the normal price. Per slot the item with the largest known saving wins (then the
@@ -949,13 +952,48 @@ The owner's request: after choosing an address, when offers and food waste are s
     nearby chain, or `ean_reference`) × the offer's **smallest** pack − the offer price, at least
     0, in whole øre. No normal price → saving unknown (`null`), shown as "godt køb, normalpris
     ukendt" and as "+" after the dish total; it adds nothing to the total.
-- Selection: dishes sorted by total known saving, then by filled slots, then by mixing offers
-  and food waste; at most 5, and each built around a **different main item** (its first core
-  slot), so the ideas do not all hinge on one pack of mince. One idea → a notice suggesting a
-  larger radius; none → "Ingen madideer lige nu".
-- Card: dish name, saving badge ("Spar 17,95 kr.", good tone; "Besparelse ukendt" otherwise), a
-  one-line method, then one row per cheap item: slot label, title, "Tilbud"/"Madspild" pill,
-  price with the struck-through normal price ("normalpris" / "før"), pack size, "spar X kr.",
-  where (the clearance's store, or the offer chain's nearest store), member badge, the
-  clearance's end, and the leaflet link (offers) or "Prishistorik". A `<details>` at the bottom
-  explains the calculation.
+- Numbers per dish (a three-column summary): **"Indkøb"** – the cheap items as whole packs;
+  **"Du sparer"** – the sum of known savings, and the percentage of the normal price of those
+  items; **"Retten koster ca."** – an estimate: the used part of each cheap item (slot amount ×
+  the item's unit price, at most the pack price; with an unknown unit price the slot's estimate,
+  at most the pack price) plus the estimates of missing slots and pantry items, also per
+  person. Estimates are never used for a saving.
+- Selection per meal: dishes sorted by total known saving, then by filled slots, then by mixing
+  offers and food waste; at most 5, each built around a **different main item** (its first core
+  slot). Fewer than two in a section → a notice suggesting a larger radius; none at all → "Ingen
+  madideer lige nu".
+- Item rows: slot label, title, "Tilbud"/"Madspild" pill, price with the struck-through normal
+  price ("normalt" / "før"), pack size, "spar X kr. (Y %)", the store as a Google Maps link
+  (§14), member badge, the clearance's end, "Prishistorik" and the quiet leaflet link.
+- "Vis opskrift" (`<details>`): ingredients with amounts ("billig nu" on the cheap ones) and
+  numbered steps. A `<details>` at the bottom explains every number.
+
+## 14. Categories, quiet sources and store links (2026-11-19)
+
+- **Offers (`/`)**: when there is more than one product group, a row of pills
+  (`CategoryOverview`) lists the groups with their counts and jumps to them; every group is a
+  `<details open>` (`CollapsibleCategory`) that can be folded away.
+- **Food waste (`/madspild`)**: pills "Alle" plus one per group filter the page
+  (`?kategori=koed`, kept with `?sorter=`); the stores and the map follow the filter. In "Størst
+  rabat" the list is split into foldable groups. Food-waste rows carry no group, so it comes from
+  the taxonomy type of the class key (`lib/groups.ts`, a static map tested against the 39 types).
+- **Leaflet link**: "Se tilbuddet i avisen" stays on every offer but is small and muted (micro
+  text, muted ink, 14 px icon). It is there for the sceptical reader, not as a call to action.
+- **Store → Google Maps**: a store opens in Google Maps in a new tab (`storeMapsLink`: the
+  documented Maps URLs search, by name and address, or by coordinates without an address):
+  "Maps ↗" next to the nearest store on offer cards, the store name on `/madspild` (next to the
+  existing "Rute") and every store in a meal idea.
+
+## 15. "Dine basisvarer" on the offers page (2026-11-19)
+
+- At the top of `/`, under the title: the staples the user picked that are on offer or cleared
+  nearby, per staple at most three offers (best verdict, then lowest unit price; never
+  `cheaper_elsewhere`) and two clearances (largest discount), with "+N flere" and a line "Ikke på
+  tilbud: …". The chain filter does not apply.
+- Picker: "Vælg dine basisvarer" (open while nothing is picked) / "Skift basisvarer", a checkbox
+  per staple and "Gem basisvarer". A server action (`saveStaples`) stores the ids in the cookie
+  `fc_staples` for a year; no JavaScript needed.
+- Staples (`lib/staples.ts`): æg, havregryn, mælk, skyr, yoghurt, A38/ymer, smør, ost, hytteost,
+  kærnemælk. Rugbrød, bread, coffee and fruit are not recognized by the pipeline's taxonomy yet,
+  so they cannot be picked (stated in the picker); adding them needs new taxonomy types, a new
+  `MATCHER_VERSION` and a reclassification.

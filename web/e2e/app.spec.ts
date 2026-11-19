@@ -217,19 +217,57 @@ test("a clearance cheaper than the other chains says so", async ({ page }) => {
   await expect(item.getByRole("region", { name: "Sammenligning" })).toContainText("Billigere end");
 });
 
-test("meal ideas combine offers and food waste and show the saving", async ({ page }) => {
+test("meal ideas: lunch and dinner, prices, savings and the recipe", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Madideer" }).first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Madideer" })).toBeVisible();
-  const cards = page.locator("main article");
+  const main = page.locator("main");
+  await expect(main.getByRole("heading", { level: 2, name: /^Frokost/ })).toBeVisible();
+  await expect(main.getByRole("heading", { level: 2, name: /^Aftensmad/ })).toBeVisible();
+  const cards = main.locator("article");
   const count = await cards.count();
   expect(count).toBeGreaterThanOrEqual(2);
-  expect(count).toBeLessThanOrEqual(5);
-  // The seed's minced beef, eggs, tomatoes and clearances give savings on at least one dish.
-  await expect(cards.first().getByText(/^Spar \d+,\d{2}/)).toBeVisible();
-  await expect(page.locator("main").getByText("Madspild", { exact: true }).first()).toBeVisible();
-  await expect(page.locator("main").getByText("Tilbud", { exact: true }).first()).toBeVisible();
-  await expect(cards.first().getByText("Du skal også bruge:")).toBeVisible();
+  expect(count).toBeLessThanOrEqual(10);
+  const card = cards.first();
+  await expect(card.getByText("Indkøb")).toBeVisible();
+  await expect(card.getByText("Du sparer")).toBeVisible();
+  await expect(card.getByText("Retten koster ca.")).toBeVisible();
+  await expect(card.getByText(/pr\. pers\./)).toBeVisible();
+  await expect(main.getByText("Madspild", { exact: true }).first()).toBeVisible();
+  await expect(main.getByText("Tilbud", { exact: true }).first()).toBeVisible();
+  // Stores open in Google Maps in a new tab.
+  const maps = card.locator('a[href^="https://www.google.com/maps/search/"]').first();
+  await expect(maps).toHaveAttribute("target", "_blank");
+  // The recipe is shown on demand.
+  await card.getByText("Vis opskrift").click();
+  await expect(card.getByRole("heading", { name: "Sådan gør du" })).toBeVisible();
+});
+
+test("offers: staples picker and foldable categories", async ({ page }) => {
+  await page.goto("/");
+  const staples = page.getByRole("region", { name: "Dine basisvarer" });
+  await staples.getByText(/Vælg dine basisvarer|Skift basisvarer/).click();
+  await staples.getByLabel("Æg").check();
+  await staples.getByRole("button", { name: "Gem basisvarer" }).click();
+  await expect(staples.getByRole("heading", { level: 3, name: /^Æg/ })).toBeVisible();
+
+  const categories = page.getByRole("navigation", { name: "Kategorier" });
+  await expect(categories.getByRole("link").first()).toBeVisible();
+  const group = page.locator("details[id^=gruppe-]").first();
+  await expect(group).toHaveAttribute("open", "");
+  await group.locator("summary").click();
+  await expect(group).not.toHaveAttribute("open", "");
+});
+
+test("food waste: filter by category", async ({ page }) => {
+  await page.goto("/madspild");
+  const categories = page.getByRole("navigation", { name: "Kategorier" });
+  await categories.getByRole("link", { name: /^Mejeri/ }).click();
+  await expect(page).toHaveURL(/kategori=mejeri/);
+  await expect(categories.getByRole("link", { name: /^Mejeri/ })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
 });
 
 test("no horizontal page scroll on phones", async ({ page }, testInfo) => {
