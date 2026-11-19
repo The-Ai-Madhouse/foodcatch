@@ -1,5 +1,5 @@
 /**
- * Presentation logic for Netto deals: parsing `deal.references`, evaluating verdicts for the
+ * Presentation logic for the deals of every chain: parsing `deal.references`, evaluating verdicts for the
  * user's nearby chains, one card per listing (variants inside), grouping, filtering and the
  * one-line Danish reasons (docs/ui.md §5.2 and §5.6). Pure and unit tested.
  */
@@ -18,10 +18,13 @@ import {
   verdict,
 } from "./verdict";
 
-/** One row of `api.current_netto_deals`, with numbers parsed and names in camelCase. */
+/** One row of `api.current_deals`, with numbers parsed and names in camelCase. */
 export interface DealRow {
   listingId: string;
   variantIndex: number;
+  /** The chain whose offer this is (the deal's target). */
+  chainId: string;
+  chainName: string;
   title: string;
   description: string;
   price: number;
@@ -39,14 +42,15 @@ export interface DealRow {
   notes: string[];
   /** Null until the pipeline has computed the deal. */
   priceApplies: boolean | null;
-  nettoUnitPriceWorst: number | null;
-  nettoUnitPriceBest: number | null;
+  /** The offer's worst and best unit price (`target_unit_price_*`). */
+  targetUnitPriceWorst: number | null;
+  targetUnitPriceBest: number | null;
   references: Reference[];
-  /** Only members get this price (Netto+); shown with a "Kræver Netto+" badge. */
+  /** Only members get this price (Netto+, Coop); shown with a "Kræver …" badge. */
   memberOnly: boolean;
-  /** Listing source (`tjek`). */
+  /** Listing source (`tjek`, or `rema` for an in-store REMA 1000 campaign). */
   source: string | null;
-  /** Tjek offer id (eTilbudsavis `offer=`). */
+  /** Tjek offer id (eTilbudsavis `offer=`) or REMA 1000 product id. */
   sourceItemId: string | null;
   /** Tjek catalog id (eTilbudsavis `publication=`). */
   catalogId: string | null;
@@ -54,6 +58,8 @@ export interface DealRow {
   sizeMin: number | null;
   sizeMax: number | null;
   maxPerCustomer: number | null;
+  /** The item's key in `api.product_price_history` (its price history page). */
+  productKey: string | null;
 }
 
 /** A deal's state as shown to the user: a verdict, or `pending` before the deal is computed. */
@@ -65,6 +71,11 @@ export interface EvaluatedDeal extends DealRow {
 }
 
 export type DealFilter = "gode" | "alle";
+
+/** Danish genitive of a name: "Nettos", "REMA 1000s", "føtex'". */
+export function genitive(name: string): string {
+  return /[sxz]$/i.test(name) ? `${name}'` : `${name}s`;
+}
 
 export type Tone = "good" | "bad" | "warn" | "neutral";
 
@@ -97,12 +108,19 @@ export const STATUS_RANK: Readonly<Record<DealStatus, number>> = {
   pending: 7,
 };
 
-export const REFERENCE_KIND_LABELS: Readonly<Record<ReferenceKind, string>> = {
-  offer: "Tilbud",
-  regular: "Normalpris",
-  history: "Tidligere Netto-tilbud",
-  ean_reference: "EAN-pris",
-};
+/** The label of a reference kind; `history` names the offer's own chain. */
+export function referenceKindLabel(kind: ReferenceKind, targetChainId: string): string {
+  switch (kind) {
+    case "offer":
+      return "Tilbud";
+    case "regular":
+      return "Normalpris";
+    case "history":
+      return `Tidligere ${chainName(targetChainId)}-tilbud`;
+    case "ean_reference":
+      return "EAN-pris";
+  }
+}
 
 /** Product groups in shopping order; unknown groups follow alphabetically. */
 const GROUP_ORDER = ["Kød", "Fisk", "Æg", "Mejeri", "Frugt og grønt", "Kolonial"];
@@ -157,12 +175,15 @@ export function parseReferences(json: unknown): Reference[] {
   return refs;
 }
 
-/** The verdict input of a row; null while the deal has not been computed. */
+/**
+ * The verdict input of a row; null while the deal has not been computed. The verdict's `netto_*`
+ * fields are the offer's own chain (`target_unit_price_*`) for every chain (lib/verdict.ts).
+ */
 export function toDealInput(row: DealRow): DealInput | null {
   if (row.priceApplies == null) return null;
   return {
-    netto_unit_price_worst: row.nettoUnitPriceWorst,
-    netto_unit_price_best: row.nettoUnitPriceBest,
+    netto_unit_price_worst: row.targetUnitPriceWorst,
+    netto_unit_price_best: row.targetUnitPriceBest,
     price_applies: row.priceApplies,
     is_exact: row.isExact,
     references: row.references,
@@ -171,7 +192,7 @@ export function toDealInput(row: DealRow): DealInput | null {
 }
 
 /**
- * Every member-only Netto deal is shown as a member price: the deal card puts the
+ * Every member-only deal is shown as a member price: the deal card puts the
  * {@link memberPriceLabel} badge next to the verdict and the verdict badge reads "Godt køb med
  * Netto+" ({@link verdictBadgeLabel}). That is the condition under which the verdict may call a
  * member price a good deal (architecture §6).
@@ -187,15 +208,25 @@ export function membershipName(chainId: string): string | null {
   return null;
 }
 
-/** Badge text for a member-only Netto price: `"Kræver Netto+"`. */
+/** Badge text for a member-only price: `"Kræver Netto+"`, `"Kræver Coop-medlem"`. */
 export function memberPriceLabel(chainId: string): string {
   const membership = membershipName(chainId);
   return membership ? `Kræver ${membership}` : "Medlemspris";
 }
 
-/** The verdict badge text; a marked member price reads "Godt køb med Netto+". */
-export function verdictBadgeLabel(status: DealStatus, memberOnly: boolean): string {
-  if (status === "good_deal" && memberOnly) return `Godt køb med ${membershipName("netto")}`;
+/**
+ * The verdict badge text; a marked member price reads "Godt køb med Netto+", "Godt køb for
+ * Coop-medlemmer" or "Godt køb for medlemmer".
+ */
+export function verdictBadgeLabel(
+  status: DealStatus,
+  memberOnly: boolean,
+  chainId = "netto",
+): string {
+  if (status === "good_deal" && memberOnly) {
+    if (chainId === "netto") return `Godt køb med ${membershipName(chainId)}`;
+    return COOP_CHAINS.has(chainId) ? "Godt køb for Coop-medlemmer" : "Godt køb for medlemmer";
+  }
   return STATUS_META[status].label;
 }
 
@@ -219,6 +250,50 @@ export function parseDealFilter(value: string | string[] | undefined): DealFilte
   return value === "alle" ? "alle" : "gode";
 }
 
+/** Parse the `?kaede=lidl,netto` chain filter: valid ids in order, without duplicates. */
+export function parseChainFilter(value: string | string[] | undefined): string[] {
+  if (typeof value !== "string") return [];
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((c) => c.trim())
+        .filter((c) => /^[a-z0-9]+$/.test(c)),
+    ),
+  ];
+}
+
+/** The `?kaede=` value after toggling one chain (null: no chain filter). */
+export function toggleChain(selected: readonly string[], chainId: string): string | null {
+  const next = selected.includes(chainId)
+    ? selected.filter((c) => c !== chainId)
+    : [...selected, chainId];
+  return next.length ? next.join(",") : null;
+}
+
+/** The query string of the deals page (`?vis=alle&kaede=lidl`), empty for the defaults. */
+export function dealsHref(filter: DealFilter, chains: string | null): string {
+  const params = new URLSearchParams();
+  if (filter === "alle") params.set("vis", "alle");
+  if (chains) params.set("kaede", chains);
+  const query = params.toString().replaceAll("%2C", ",");
+  return query ? `/?${query}` : "/";
+}
+
+/**
+ * Only offers of chains with a store within the radius (a chain-wide leaflet is no use to someone
+ * who has no such store nearby), and of the selected chains when a chain filter is set.
+ */
+export function nearbyDeals<T extends Pick<DealRow, "chainId">>(
+  rows: readonly T[],
+  nearbyChains: ReadonlySet<string>,
+  selected: readonly string[] = [],
+): T[] {
+  return rows.filter(
+    (r) => nearbyChains.has(r.chainId) && (selected.length === 0 || selected.includes(r.chainId)),
+  );
+}
+
 /**
  * A class label without the attributes the matcher could not determine (parts ending in "?"):
  * `"Kyllingebryst(filet), tilsat vand?"` -> `"Kyllingebryst(filet)"`.
@@ -231,7 +306,7 @@ export function cleanClassLabel(label: string): string {
   return parts.join(", ") || label.trim();
 }
 
-/** One Netto offer (listing) with its recognised variants, best verdict first. */
+/** One offer (listing) with its recognised variants, best verdict first. */
 export interface ListingDeal {
   listingId: string;
   /** The first variant; carries the listing's own fields (title, price, size, period, source). */
@@ -280,13 +355,32 @@ function groupRank(name: string): number {
   return i === -1 ? GROUP_ORDER.length : i;
 }
 
+const UNIT_ORDER = ["kg", "l", "stk"];
+
+function unitRank(unit: string | null): number {
+  const i = unit ? UNIT_ORDER.indexOf(unit) : -1;
+  return i === -1 ? UNIT_ORDER.length : i;
+}
+
+/** The unit price a listing is sorted by: its lowest, unknown last. */
+function sortPrice(listing: ListingDeal): number {
+  return listing.offer.unitPriceMin ?? listing.offer.unitPriceMax ?? Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Verdict first (all are good deals in the default view), then by unit price – per kg, per l,
+ * per piece, unknown last, since prices in different units do not compare – then title.
+ */
 function compareListings(a: ListingDeal, b: ListingDeal): number {
   return (
-    STATUS_RANK[a.status] - STATUS_RANK[b.status] || collator.compare(a.offer.title, b.offer.title)
+    STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
+    unitRank(a.offer.unit) - unitRank(b.offer.unit) ||
+    sortPrice(a) - sortPrice(b) ||
+    collator.compare(a.offer.title, b.offer.title)
   );
 }
 
-/** Listings by product group in shopping order; within a group by verdict, then title. */
+/** Listings by product group in shopping order; within a group by verdict, then unit price. */
 export function groupListings(listings: readonly ListingDeal[]): ListingGroup[] {
   const groups = new Map<string, ListingDeal[]>();
   for (const listing of listings) {
@@ -364,7 +458,8 @@ export function verdictReason(
   const ref = cheapestReference(deal, nearbyChains);
   if (!ref) return FIXED_REASONS.no_reference as string;
   const price = formatUnitPrice(ref.unit_price, ref.unit ?? deal.unit);
-  const pastNetto = ref.kind === "history";
+  const pastOwn = ref.kind === "history";
+  const own = chainName(deal.chainId);
   const who =
     ref.kind === "ean_reference"
       ? `${chainName(ref.chain_id)} (EAN-pris)`
@@ -373,16 +468,16 @@ export function verdictReason(
   const where = km == null ? "" : ` (${formatDistance(km)})`;
   switch (deal.status) {
     case "good_deal":
-      return pastNetto
-        ? `Billigst i nærheden. Nettos tidligere tilbud: ${price}`
+      return pastOwn
+        ? `Billigst i nærheden. ${genitive(own)} tidligere tilbud: ${price}`
         : `Billigst i nærheden. Næstbedst: ${who} ${price}`;
     case "cheaper_elsewhere":
-      return pastNetto
-        ? `Netto havde den til ${price} i et tidligere tilbud.`
+      return pastOwn
+        ? `${own} havde den til ${price} i et tidligere tilbud.`
         : `${who} har den til ${price}${where}`;
     default:
-      return pastNetto
-        ? `Afhænger af pakningen – Netto havde den til ${price} i et tidligere tilbud`
+      return pastOwn
+        ? `Afhænger af pakningen – ${own} havde den til ${price} i et tidligere tilbud`
         : `Afhænger af pakningen – ${who} har ${price}${where}`;
   }
 }
@@ -400,6 +495,8 @@ export interface ReferenceDetail {
   sizeMin: number | null;
   sizeMax: number | null;
   validTo: string | null;
+  /** The listing's item key (its price history page). */
+  productKey: string | null;
 }
 
 /** Listing ids of every reference of the given deals (for one detail query per page). */

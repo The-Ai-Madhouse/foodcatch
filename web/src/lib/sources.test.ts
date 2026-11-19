@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FOOD_WASTE_SOURCE_TEXT,
   openFoodFactsLink,
+  openFoodFactsProductLink,
   routeLink,
   sourceLink,
   storePageLink,
@@ -113,5 +114,16 @@ describe("other links", () => {
     expect(routeLink(55.6761, 12.5683)).toBe(
       "https://www.google.com/maps/dir/?api=1&destination=55.6761%2C12.5683",
     );
+  });
+});
+
+describe("openFoodFactsProductLink", () => {
+  it("links every valid EAN to its product page", () => {
+    expect(openFoodFactsProductLink("5701234000011")).toEqual({
+      href: "https://world.openfoodfacts.org/product/5701234000011",
+      label: "Varen på Open Food Facts",
+    });
+    expect(openFoodFactsProductLink(null)).toBeNull();
+    expect(openFoodFactsProductLink("123")).toBeNull();
   });
 });

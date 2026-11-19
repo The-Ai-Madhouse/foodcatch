@@ -79,6 +79,12 @@ export function openFoodFactsLink(ean: string | null | undefined): SourceLink | 
   };
 }
 
+/** The product page on Open Food Facts, shown for every item with an EAN. */
+export function openFoodFactsProductLink(ean: string | null | undefined): SourceLink | null {
+  const link = openFoodFactsLink(ean);
+  return link ? { ...link, label: "Varen på Open Food Facts" } : null;
+}
+
 /** The eTilbudsavis page of a Tjek store (`/{slug}/butikker/{id}`), or null. */
 export function storePageLink(store: {
   chainId: string;

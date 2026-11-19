@@ -1,13 +1,12 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { MemberBadge, MemberPriceTag, VerdictBadge } from "@/components/Badge";
+import { MemberBadge, VerdictBadge } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
-import { ChevronIcon } from "@/components/Icons";
 import { SourceLink } from "@/components/SourceLink";
 import { chainName } from "@/lib/chains";
 import {
-  REFERENCE_KIND_LABELS,
   cleanClassLabel,
+  referenceKindLabel,
   referenceViews,
   verdictReason,
   type EvaluatedDeal,
@@ -24,10 +23,11 @@ import {
   formatUnitPriceRange,
   packSize,
 } from "@/lib/format";
-import { classPath } from "@/lib/routes";
+import { classPath, productPath } from "@/lib/routes";
 import { sourceLink } from "@/lib/sources";
 import { shortStoreName, type NearbyStore } from "@/lib/stores";
 import { LOCATION_INDEPENDENT_KINDS } from "@/lib/verdict";
+import { Comparison, type ComparisonRow, type ComparisonSection } from "./Comparison";
 import { WhereLine } from "./WhereLine";
 
 /** What a card needs to know about the user's surroundings. */
@@ -44,7 +44,7 @@ export interface DealContext {
 
 const sep = <span aria-hidden="true"> · </span>;
 
-/** One Netto offer: price, size, where, verdict and the comparison (docs/ui.md §5.6). */
+/** One offer of any chain: price, size, where, verdict and the comparison (docs/ui.md §5.6). */
 export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealContext }) {
   const { offer, variants } = listing;
   const several = variants.length > 1;
@@ -68,7 +68,7 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
   const link = sourceLink(
     {
       source: offer.source,
-      chainId: "netto",
+      chainId: offer.chainId,
       sourceItemId: offer.sourceItemId,
       catalogId: offer.catalogId,
       validTo: offer.validTo,
@@ -88,10 +88,14 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
         {!several || offer.memberOnly ? (
           <div className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
             {!several ? (
-              <VerdictBadge status={listing.status} memberOnly={offer.memberOnly} />
+              <VerdictBadge
+                status={listing.status}
+                memberOnly={offer.memberOnly}
+                chainId={offer.chainId}
+              />
             ) : null}
             {/* Required: a member price may only be "Godt køb" when marked (lib/deals.ts). */}
-            {offer.memberOnly ? <MemberBadge /> : null}
+            {offer.memberOnly ? <MemberBadge chainId={offer.chainId} /> : null}
           </div>
         ) : null}
       </div>
@@ -108,25 +112,28 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
         ) : null}
       </p>
 
-      <ChainWhere chainId="netto" ctx={ctx} />
+      <ChainWhere chainId={offer.chainId} ctx={ctx} />
 
-      <p className="text-meta text-ink-3">
-        {upcoming ? "Kommer: " : ""}
-        {formatShortPeriod(offer.validFrom, offer.validTo)}
-        {offer.maxPerCustomer ? ` · Max ${offer.maxPerCustomer} pr. kunde` : ""}
-      </p>
+      <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3">
+        <p className="text-meta text-ink-3">
+          {upcoming ? "Kommer: " : ""}
+          {formatShortPeriod(offer.validFrom, offer.validTo)}
+          {offer.maxPerCustomer ? ` · Max ${offer.maxPerCustomer} pr. kunde` : ""}
+        </p>
+        {offer.productKey ? <HistoryLink productKey={offer.productKey} /> : null}
+      </div>
 
       {several ? (
         <ul className="mt-3 space-y-2 border-t border-line pt-3" aria-label="Varer i tilbuddet">
           {variants.map((v) => (
             <li key={v.variantIndex} className="flex items-start justify-between gap-3">
               <span className="min-w-0 text-meta text-ink-2">{cleanClassLabel(v.classLabel)}</span>
-              <VerdictBadge status={v.status} memberOnly={v.memberOnly} />
+              <VerdictBadge status={v.status} memberOnly={v.memberOnly} chainId={v.chainId} />
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-meta text-ink-2">
+        <p className="text-meta text-ink-2">
           {verdictReason(variants[0] as EvaluatedDeal, ctx.nearbyChains, nearestKm)}
         </p>
       )}
@@ -134,19 +141,14 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
       {hasReferences || link ? (
         <div className="relative mt-3 border-t border-line">
           {hasReferences ? (
-            <details className="group">
-              <summary className="flex h-11 items-center gap-1 pr-44 text-meta font-medium text-ink">
-                Sammenlign ({counted})
-                <ChevronIcon className="details-chevron text-ink-3" />
-              </summary>
-              <div className="space-y-4 pb-1">
-                {variants.map((v) =>
-                  v.status === "pending" ? null : (
-                    <Comparison key={v.variantIndex} deal={v} ctx={ctx} labelled={several} />
-                  ),
-                )}
-              </div>
-            </details>
+            <Comparison
+              count={counted}
+              radiusKm={ctx.radiusKm}
+              reserveRight={link != null}
+              sections={variants.flatMap((v) =>
+                v.status === "pending" ? [] : [comparisonSection(v, ctx, several)],
+              )}
+            />
           ) : null}
           {link ? (
             <div
@@ -158,6 +160,18 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
         </div>
       ) : null}
     </article>
+  );
+}
+
+/** "Prishistorik": the price history of one item (`/produkt/[productKey]`). */
+function HistoryLink({ productKey, className = "" }: { productKey: string; className?: string }) {
+  return (
+    <Link
+      href={productPath(productKey) as Route}
+      className={`inline-flex min-h-11 items-center text-meta ${className}`}
+    >
+      Prishistorik
+    </Link>
   );
 }
 
@@ -205,74 +219,29 @@ function ChainWhere({ chainId, ctx }: { chainId: string; ctx: DealContext }) {
   );
 }
 
-/** The comparison list of one variant: counted rows, then the ones that do not count. */
-function Comparison({
-  deal,
-  ctx,
-  labelled,
-}: {
-  deal: EvaluatedDeal;
-  ctx: DealContext;
-  labelled: boolean;
-}) {
+/** The comparison of one variant as plain data for the client {@link Comparison}. */
+function comparisonSection(
+  deal: EvaluatedDeal,
+  ctx: DealContext,
+  labelled: boolean,
+): ComparisonSection {
   const views = referenceViews(deal, ctx.nearbyChains);
-  const counted = views.filter((r) => r.counts);
-  const ignored = views.filter((r) => !r.counts);
-  return (
-    <section aria-label={cleanClassLabel(deal.classLabel)}>
-      {labelled ? (
-        <h4 className="text-meta font-semibold text-ink">{cleanClassLabel(deal.classLabel)}</h4>
-      ) : null}
-      {counted.length > 0 ? (
-        <ul className="divide-y divide-line">
-          {counted.map((ref, i) => (
-            <ReferenceRow
-              key={`${ref.listing_id ?? ""}-${i}`}
-              refView={ref}
-              deal={deal}
-              ctx={ctx}
-            />
-          ))}
-        </ul>
-      ) : (
-        <p className="py-2 text-meta text-ink-3">Ingen sammenligning tæller med.</p>
-      )}
-      {ignored.length > 0 ? (
-        <details className="mt-1">
-          <summary className="flex min-h-11 items-center gap-1 text-meta text-ink-2">
-            {ignored.length} tæller ikke med – ingen butik inden for {ctx.radiusKm} km
-            <ChevronIcon className="details-chevron text-ink-3" />
-          </summary>
-          <ul className="divide-y divide-line opacity-80">
-            {ignored.map((ref, i) => (
-              <ReferenceRow
-                key={`${ref.listing_id ?? ""}-${i}`}
-                refView={ref}
-                deal={deal}
-                ctx={ctx}
-              />
-            ))}
-          </ul>
-        </details>
-      ) : null}
-      <p className="mt-1">
-        <Link href={classPath(deal.classKey) as Route} className="text-meta">
-          Prishistorik →
-        </Link>
-      </p>
-    </section>
-  );
+  const rows = views.map((ref, i) => comparisonRow(ref, i, deal, ctx));
+  return {
+    key: String(deal.variantIndex),
+    label: labelled ? cleanClassLabel(deal.classLabel) : null,
+    counted: rows.filter((_, i) => views[i]?.counts),
+    ignored: rows.filter((_, i) => !views[i]?.counts),
+    classHref: classPath(deal.classKey),
+  };
 }
 
-function ReferenceRow({
-  refView: ref,
-  deal,
-  ctx,
-}: {
-  refView: ReferenceView;
-  deal: EvaluatedDeal;
-  ctx: DealContext;
-}) {
+function comparisonRow(
+  ref: ReferenceView,
+  index: number,
+  deal: EvaluatedDeal,
+  ctx: DealContext,
+): ComparisonRow {
   const detail = ref.listing_id ? ctx.details.get(ref.listing_id) : undefined;
   const km = LOCATION_INDEPENDENT_KINDS.has(ref.kind)
     ? null
@@ -287,7 +256,7 @@ function ReferenceRow({
       })
     : null;
   const facts = [
-    REFERENCE_KIND_LABELS[ref.kind],
+    referenceKindLabel(ref.kind, deal.chainId),
     size && size.origin !== "unknown" ? size.text : null,
     detail?.price != null ? formatDkk(detail.price) : null,
     ref.valid_from || ref.valid_to ? formatShortPeriod(ref.valid_from, ref.valid_to) : null,
@@ -304,33 +273,17 @@ function ReferenceRow({
         ctx.now,
       )
     : null;
-  return (
-    <li className="py-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="flex min-w-0 items-center gap-1.5 text-meta">
-          <ChainDot chainId={ref.chain_id} size="xs" />
-          <span className={ref.isCheapest ? "font-semibold text-ink" : "text-ink"}>
-            {chainName(ref.chain_id)}
-          </span>
-          {km != null ? <span className="text-ink-3 tabular">· {formatDistance(km)}</span> : null}
-        </span>
-        <span
-          className={`text-meta whitespace-nowrap tabular ${ref.isCheapest ? "font-bold text-ink" : "text-ink-2"}`}
-        >
-          {formatUnitPrice(ref.unit_price, ref.unit ?? deal.unit)}
-          {ref.isCheapest ? <span className="font-semibold"> billigst</span> : null}
-        </span>
-      </div>
-      {ref.title ? <p className="truncate text-meta text-ink-2">{ref.title}</p> : null}
-      <p className="text-meta text-ink-3">
-        {facts.join(" · ")}
-        {ref.member_only ? (
-          <span className="ml-1.5 align-middle">
-            <MemberPriceTag />
-          </span>
-        ) : null}
-      </p>
-      <SourceLink link={link} />
-    </li>
-  );
+  return {
+    key: `${ref.listing_id ?? ref.kind}-${index}`,
+    chainId: ref.chain_id,
+    chainName: chainName(ref.chain_id),
+    distance: km != null ? formatDistance(km) : null,
+    unitPrice: formatUnitPrice(ref.unit_price, ref.unit ?? deal.unit),
+    isCheapest: ref.isCheapest,
+    title: ref.title ?? null,
+    facts: facts.join(" · "),
+    memberOnly: ref.member_only === true,
+    link,
+    historyHref: detail?.productKey ? productPath(detail.productKey) : null,
+  };
 }

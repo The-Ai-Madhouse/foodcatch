@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  competitorBadge,
   foodWastePackSize,
   foodWasteUnitPrice,
   latestSeen,
   shownDiscount,
+  sortedReferences,
   type FoodWasteItem,
 } from "./foodwaste";
 
@@ -38,6 +40,16 @@ function item(overrides: Partial<FoodWasteItem> = {}): FoodWasteItem {
     productNetQuantity: null,
     productNetUnit: null,
     lastSeenAt: "2026-11-18T12:37:00Z",
+    productKey: "ean:5701234000011",
+    sourceItemId: "store-1:2900000000001",
+    sallingStoreId: "store-1",
+    sourceFetchedAt: "2026-11-18T12:37:00Z",
+    sallingPercentDiscount: 80,
+    offerEan: "2900000000001",
+    productCode: "5701234000011",
+    classKey: "hakket_oksekød|fedt=8-12%",
+    references: [],
+    beatsCompetitors: null,
     ...overrides,
   };
 }
@@ -69,5 +81,40 @@ describe("food-waste sizes and unit prices", () => {
       ]),
     ).toBe("2026-11-18T13:00:00.000Z");
     expect(latestSeen([])).toBeNull();
+  });
+});
+
+describe("competitorBadge", () => {
+  const rema = { kind: "regular" as const, chain_id: "rema1000", unit_price: 89.9 };
+  const lidl = { kind: "offer" as const, chain_id: "lidl", unit_price: 79 };
+
+  it("names one chain and kind, or says it is the cheapest of several chains", () => {
+    expect(competitorBadge(item({ beatsCompetitors: true, references: [rema] }))).toBe(
+      "Billigere end REMA 1000s normalpris",
+    );
+    expect(competitorBadge(item({ beatsCompetitors: true, references: [lidl] }))).toBe(
+      "Billigere end Lidls tilbud",
+    );
+    expect(
+      competitorBadge(
+        item({ beatsCompetitors: true, references: [rema, { ...rema, kind: "offer" }] }),
+      ),
+    ).toBe("Billigere end REMA 1000");
+    expect(competitorBadge(item({ beatsCompetitors: true, references: [rema, lidl] }))).toBe(
+      "Billigst blandt kæderne",
+    );
+  });
+
+  it("shows nothing when it is not cheaper or cannot be judged", () => {
+    expect(competitorBadge(item({ beatsCompetitors: false, references: [rema] }))).toBeNull();
+    expect(competitorBadge(item({ beatsCompetitors: null, references: [] }))).toBeNull();
+    expect(competitorBadge(item({ beatsCompetitors: true, references: [] }))).toBeNull();
+  });
+
+  it("sorts references cheapest first", () => {
+    expect(sortedReferences(item({ references: [rema, lidl] })).map((r) => r.chain_id)).toEqual([
+      "lidl",
+      "rema1000",
+    ]);
   });
 });

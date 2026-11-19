@@ -56,15 +56,18 @@ export function Badge({
 export function VerdictBadge({
   status,
   memberOnly = false,
+  chainId = "netto",
   className = "",
 }: {
   status: DealStatus;
   memberOnly?: boolean;
+  /** The offer's chain (names the membership of a member price). */
+  chainId?: string;
   className?: string;
 }) {
   return (
     <Badge tone={STATUS_META[status].tone} className={className}>
-      {verdictBadgeLabel(status, memberOnly)}
+      {verdictBadgeLabel(status, memberOnly, chainId)}
     </Badge>
   );
 }

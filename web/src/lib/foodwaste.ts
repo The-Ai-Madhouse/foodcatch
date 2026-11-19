@@ -3,7 +3,10 @@
  * unit price and the facts behind them (docs/ui.md §5.3 and §6.2). Pure and unit tested.
  */
 
+import { chainName } from "./chains";
+import { genitive } from "./deals";
 import { packSize, type PackSize } from "./format";
+import type { Reference } from "./verdict";
 
 /** One row of `api.food_waste_near` with its distance from the user. */
 export interface FoodWasteItem {
@@ -39,6 +42,25 @@ export interface FoodWasteItem {
   productNetUnit: string | null;
   /** When the latest food-waste run last saw the clearance (stock snapshot time). */
   lastSeenAt: string | null;
+  /** The item's key in `api.product_price_history` (its price history page). */
+  productKey: string | null;
+  /** `{salling store}:{label ean}`. */
+  sourceItemId: string | null;
+  /** Salling's own store id. */
+  sallingStoreId: string | null;
+  /** When the latest Salling response carrying the clearance was fetched. */
+  sourceFetchedAt: string | null;
+  /** Salling's `percentDiscount` as sent. */
+  sallingPercentDiscount: number | null;
+  /** The clearance label code (Salling `offer.ean`). */
+  offerEan: string | null;
+  /** The product code as Salling sent it (`ean` is set only for real GTINs). */
+  productCode: string | null;
+  classKey: string | null;
+  /** Same-class prices of other chains (offers and shelf prices), in the deal shape. */
+  references: Reference[];
+  /** Cheaper than every reference; null when it cannot be judged. */
+  beatsCompetitors: boolean | null;
 }
 
 /** The pack size of a clearance: from the Salling name, Open Food Facts, or unknown. */
@@ -78,4 +100,29 @@ export function latestSeen(items: readonly Pick<FoodWasteItem, "lastSeenAt">[]):
     if (Number.isFinite(t) && (best == null || t > best)) best = t;
   }
   return best == null ? null : new Date(best).toISOString();
+}
+
+/** The references of a clearance, cheapest first. */
+export function sortedReferences(item: Pick<FoodWasteItem, "references">): Reference[] {
+  return [...item.references].sort((a, b) => a.unit_price - b.unit_price);
+}
+
+/**
+ * The badge of a clearance that is cheaper than every same-class price of the other chains
+ * (`beats_competitors`): "Billigere end REMA 1000s normalpris" for one chain and kind,
+ * "Billigere end Lidls tilbud", "Billigere end MENY", or "Billigst blandt kæderne" when several
+ * chains were compared. Nothing when it is not cheaper or cannot be judged.
+ */
+export function competitorBadge(
+  item: Pick<FoodWasteItem, "beatsCompetitors" | "references">,
+): string | null {
+  if (item.beatsCompetitors !== true || item.references.length === 0) return null;
+  const chains = new Set(item.references.map((r) => r.chain_id));
+  if (chains.size > 1) return "Billigst blandt kæderne";
+  const chain = chainName(item.references[0]?.chain_id ?? "");
+  const kinds = new Set(item.references.map((r) => r.kind));
+  if (kinds.size === 1 && kinds.has("regular"))
+    return `Billigere end ${genitive(chain)} normalpris`;
+  if (kinds.size === 1 && kinds.has("offer")) return `Billigere end ${genitive(chain)} tilbud`;
+  return `Billigere end ${chain}`;
 }

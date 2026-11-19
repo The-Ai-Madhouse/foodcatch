@@ -5,6 +5,11 @@ export function classPath(classKey: string): `/vare/${string}` {
   return `/vare/${encodeURIComponent(classKey)}`;
 }
 
+/** The path of one item's price history page (`api.product_price_history`). */
+export function productPath(productKey: string): `/produkt/${string}` {
+  return `/produkt/${encodeURIComponent(productKey)}`;
+}
+
 /** Characters `encodeURIComponent` leaves as they are, plus `%` escapes. */
 const ENCODED_SEGMENT = /^[A-Za-z0-9\-_.!~*'()%]*$/;
 
@@ -27,4 +32,14 @@ export function classKeyFromSegment(segment: string): string | null {
     }
   }
   return key.trim() ? key : null;
+}
+
+/**
+ * The product key from the `[productKey]` route segment, by the same rule as
+ * {@link classKeyFromSegment}: a decoded key always contains `:` (`ean:…`, `rema:…`), which an
+ * encoded segment never does.
+ */
+export function productKeyFromSegment(segment: string): string | null {
+  const key = classKeyFromSegment(segment);
+  return key && key.includes(":") ? key : null;
 }

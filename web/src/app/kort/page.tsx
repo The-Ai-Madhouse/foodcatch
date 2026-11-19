@@ -8,7 +8,7 @@ import { sourceLink } from "@/lib/sources";
 import { nearestByChain, shortStoreName, toMapStore } from "@/lib/stores";
 import { getUserLocation } from "@/server/location";
 import {
-  getCurrentNettoDeals,
+  getCurrentDeals,
   getFoodWasteNear,
   getNearbyStores,
   getReferenceDetails,
@@ -31,7 +31,7 @@ export default async function MapPage({ searchParams }: PageProps<"/kort">) {
   const [stores, items, rows] = await Promise.all([
     getNearbyStores(location),
     getFoodWasteNear(location),
-    getCurrentNettoDeals(),
+    getCurrentDeals("netto"),
   ]);
   const now = new Date();
   const nearbyChains = new Set(nearestByChain(stores).keys());
@@ -67,7 +67,7 @@ export default async function MapPage({ searchParams }: PageProps<"/kort">) {
           .filter(Boolean)
           .join(" · "),
         netto:
-          formatUnitPriceRange(deal.nettoUnitPriceBest, deal.nettoUnitPriceWorst, deal.unit) ??
+          formatUnitPriceRange(deal.targetUnitPriceBest, deal.targetUnitPriceWorst, deal.unit) ??
           "ukendt",
         link: detail
           ? sourceLink(

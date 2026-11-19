@@ -1,49 +1,68 @@
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { Notice } from "@/components/Notice";
 import { Segmented } from "@/components/Segmented";
+import { ChainChips } from "@/components/deals/ChainChips";
 import { DealCard, type DealContext } from "@/components/deals/DealCard";
 import { OpenLocationButton } from "@/components/location/LocationControl";
 import { MapFocusProvider } from "@/components/map/MapFocus";
 import { SideMap } from "@/components/map/SideMap";
 import {
+  dealsHref,
   evaluateDeals,
   filterListings,
   groupByListing,
   groupListings,
+  nearbyDeals,
+  parseChainFilter,
   parseDealFilter,
   referenceListingIds,
 } from "@/lib/deals";
-import { formatDistance } from "@/lib/format";
-import { nearestByChain, shortStoreName, toMapStore, type NearbyStore } from "@/lib/stores";
+import { nearestByChain, toMapStore } from "@/lib/stores";
 import { getUserLocation } from "@/server/location";
-import {
-  getCurrentNettoDeals,
-  getNearbyStores,
-  getNearestStore,
-  getReferenceDetails,
-} from "@/server/queries";
+import { getCurrentDeals, getNearbyStores, getReferenceDetails } from "@/server/queries";
 
-export const metadata: Metadata = { title: "Ugens tilbud i Netto" };
+export const metadata: Metadata = { title: "Ugens tilbud" };
 
 export default async function HomePage({ searchParams }: PageProps<"/">) {
-  const filter = parseDealFilter((await searchParams).vis);
+  const params = await searchParams;
+  const filter = parseDealFilter(params.vis);
   const location = await getUserLocation();
-  const [stores, rows] = await Promise.all([getNearbyStores(location), getCurrentNettoDeals()]);
+  const [stores, allRows] = await Promise.all([getNearbyStores(location), getCurrentDeals()]);
   const storesByChain = nearestByChain(stores);
   const nearbyChains = new Set(storesByChain.keys());
-  const [details, nettoOutside] = await Promise.all([
-    getReferenceDetails(referenceListingIds(rows)),
-    nearbyChains.has("netto") ? Promise.resolve(null) : getNearestStore(location, "netto"),
-  ]);
+  // Only chains with a store within the radius; a filter on other chains is ignored.
+  const nearbyRows = nearbyDeals(allRows, nearbyChains);
+  const offerChains = [...storesByChain.keys()].filter((c) =>
+    nearbyRows.some((r) => r.chainId === c),
+  );
+  const selected = parseChainFilter(params.kaede).filter((c) => offerChains.includes(c));
+  const rows = nearbyDeals(nearbyRows, nearbyChains, selected);
+  const details = await getReferenceDetails(referenceListingIds(rows));
 
-  const listings = groupByListing(evaluateDeals(rows, nearbyChains));
+  const allListings = groupByListing(evaluateDeals(nearbyRows, nearbyChains));
+  const listings = allListings.filter(
+    (l) => selected.length === 0 || selected.includes(l.offer.chainId),
+  );
   const goodCount = listings.filter((l) => l.status === "good_deal").length;
   const groups = groupListings(filterListings(listings, filter));
+  // Chips for chains with something to show in this view (and any selected one).
+  const chainCounts = offerChains
+    .map((chainId) => ({
+      chainId,
+      count: filterListings(
+        allListings.filter((l) => l.offer.chainId === chainId),
+        filter,
+      ).length,
+    }))
+    .filter((c) => c.count > 0 || selected.includes(c.chainId))
+    // Selected chains first, so they are visible in the scrolling row on a phone.
+    .sort((a, b) => Number(selected.includes(b.chainId)) - Number(selected.includes(a.chainId)));
+  const chainParam = selected.length ? selected.join(",") : null;
   const ctx: DealContext = {
     nearbyChains,
     storesByChain,
-    nearestOutside: new Map<string, NearbyStore | null>([["netto", nettoOutside]]),
+    nearestOutside: new Map(),
     radiusKm: location.radiusKm,
     details,
     now: new Date(),
@@ -57,28 +76,34 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     <MapFocusProvider>
       <div className="lg:grid lg:grid-cols-[minmax(0,640px)_minmax(0,1fr)] lg:gap-8">
         <div className="min-w-0">
-          <h1 className="text-title font-bold text-ink">Ugens tilbud i Netto</h1>
+          <h1 className="text-title font-bold text-ink">Ugens tilbud</h1>
           <div className="mt-3">
             <Segmented
               label="Vis tilbud"
               items={[
-                { href: "/", label: `Gode køb (${goodCount})`, active: filter === "gode" },
                 {
-                  href: "/?vis=alle",
+                  href: dealsHref("gode", chainParam) as Route,
+                  label: `Gode køb (${goodCount})`,
+                  active: filter === "gode",
+                },
+                {
+                  href: dealsHref("alle", chainParam) as Route,
                   label: `Alle (${listings.length})`,
                   active: filter === "alle",
                 },
               ]}
             />
           </div>
+          {chainCounts.length > 1 || selected.length > 0 ? (
+            <div className="mt-3">
+              <ChainChips chains={chainCounts} selected={selected} filter={filter} />
+            </div>
+          ) : null}
 
-          {!nearbyChains.has("netto") ? (
+          {allRows.length > 0 && nearbyRows.length === 0 ? (
             <div className="mt-4">
               <Notice tone="warn">
-                Der er ingen Netto inden for {location.radiusKm} km.
-                {nettoOutside
-                  ? ` Nærmeste er ${shortStoreName(nettoOutside.name, "netto")}, ${formatDistance(nettoOutside.distanceKm)}.`
-                  : ""}
+                Ingen af kæderne med tilbud har en butik inden for {location.radiusKm} km.
                 <div>
                   <OpenLocationButton>Skift afstand</OpenLocationButton>
                 </div>
@@ -87,18 +112,18 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           ) : null}
 
           <div className="mt-4 space-y-8">
-            {listings.length === 0 ? (
+            {allRows.length === 0 ? (
               <Notice title="Ingen tilbud lige nu">
-                Vi har ingen aktuelle Netto-tilbud på sunde basisvarer. Se{" "}
+                Vi har ingen aktuelle tilbud på sunde basisvarer. Se{" "}
                 <Link href="/status">Datastatus</Link> for, hvornår data sidst blev hentet.
               </Notice>
-            ) : groups.length === 0 ? (
+            ) : listings.length === 0 ? null : groups.length === 0 ? (
               <Notice title="Ingen sikre gode køb i denne uge">
                 Ingen af ugens {listings.length} tilbud er dokumenteret billigere end samme vare i
                 nærheden.
                 <div>
                   <Link
-                    href="/?vis=alle"
+                    href={dealsHref("alle", chainParam) as Route}
                     className="mt-2 inline-flex h-11 items-center rounded-[10px] border border-line-strong bg-surface px-4 font-medium text-ink no-underline hover:bg-surface-2"
                   >
                     Se alle tilbud
@@ -132,16 +157,17 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
             </summary>
             <ul className="list-disc space-y-1.5 pb-4 pl-5 text-meta text-ink-2">
               <li>
-                <strong className="text-ink">Godt køb</strong> betyder, at Nettos pris er
+                <strong className="text-ink">Godt køb</strong> betyder, at tilbudsprisen er
                 dokumenteret mindst lige så lav som præcis samme vare i butikkerne omkring dig.
               </li>
               <li>
                 Vi sammenligner kun præcis samme vare: type, fedtprocent, økologi, laktosefri og
                 forarbejdning.
               </li>
-              <li>Nettos dyreste pakning sammenlignes med den billigste pris andre steder.</li>
+              <li>Tilbuddets dyreste pakning sammenlignes med den billigste pris andre steder.</li>
               <li>
-                Andre kæders priser tæller kun, hvis kæden har en butik inden for din afstand.
+                Vi viser kun tilbud fra kæder med en butik inden for din afstand, og andre kæders
+                priser tæller kun, hvis kæden har en butik der.
               </li>
               <li>
                 Tilbudsaviser gælder i hele kæden. Vi viser de nærmeste butikker, men ved ikke, om

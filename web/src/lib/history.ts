@@ -39,6 +39,8 @@ export interface PriceHistoryRow {
   description: string | null;
   sizeMin: number | null;
   sizeMax: number | null;
+  /** The listing's item key (its own price history page). */
+  productKey: string | null;
 }
 
 export type SeriesKey = "netto_offer" | "other_offer" | "regular";

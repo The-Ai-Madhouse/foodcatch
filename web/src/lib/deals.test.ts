@@ -7,8 +7,14 @@ import {
   filterListings,
   groupByListing,
   groupListings,
+  dealsHref,
+  genitive,
   memberPriceLabel,
+  nearbyDeals,
+  parseChainFilter,
   parseDealFilter,
+  referenceKindLabel,
+  toggleChain,
   parseReferences,
   referenceListingIds,
   referenceViews,
@@ -21,6 +27,8 @@ function row(overrides: Partial<DealRow> = {}): DealRow {
   return {
     listingId: "00000000-0000-0000-0000-000000000001",
     variantIndex: 0,
+    chainId: "netto",
+    chainName: "Netto",
     title: "Hakket grisekød 8-12%",
     description: "",
     price: 25,
@@ -37,8 +45,8 @@ function row(overrides: Partial<DealRow> = {}): DealRow {
     isExact: true,
     notes: [],
     priceApplies: true,
-    nettoUnitPriceWorst: 33.33,
-    nettoUnitPriceBest: 33.33,
+    targetUnitPriceWorst: 33.33,
+    targetUnitPriceBest: 33.33,
     references: [
       { kind: "offer", chain_id: "superbrugsen", unit_price: 39 },
       { kind: "regular", chain_id: "rema1000", unit_price: 49.9 },
@@ -47,6 +55,7 @@ function row(overrides: Partial<DealRow> = {}): DealRow {
     source: "tjek",
     sourceItemId: "quPV2BQEWPxpWQGWNTYwj",
     catalogId: "40K-WXWp",
+    productKey: "offer:netto:hakket grisekød 8 12",
     sizeMin: 0.3,
     sizeMax: 0.3,
     maxPerCustomer: null,
@@ -120,7 +129,7 @@ describe("evaluateDeals", () => {
   });
 
   it("marks uncomputed deals as pending", () => {
-    const [deal] = evaluateDeals([row({ priceApplies: null, nettoUnitPriceWorst: null })], []);
+    const [deal] = evaluateDeals([row({ priceApplies: null, targetUnitPriceWorst: null })], []);
     expect(deal?.status).toBe("pending");
     expect(deal?.result).toBeNull();
   });
@@ -136,8 +145,8 @@ describe("referenceViews", () => {
             { kind: "offer", chain_id: "lidl", unit_price: 30 },
             { kind: "history", chain_id: "netto", unit_price: 35 },
           ],
-          nettoUnitPriceWorst: 34,
-          nettoUnitPriceBest: 34,
+          targetUnitPriceWorst: 34,
+          targetUnitPriceBest: 34,
         }),
       ],
       ["rema1000"],
@@ -160,8 +169,8 @@ describe("listings, filtering and grouping", () => {
         title: "Hakket oksekød 14-18%",
         typeId: "hakket_oksekød",
         typeLabel: "Hakket oksekød",
-        nettoUnitPriceWorst: 72,
-        nettoUnitPriceBest: 54,
+        targetUnitPriceWorst: 72,
+        targetUnitPriceBest: 54,
         references: [{ kind: "offer", chain_id: "meny", unit_price: 49.9 }],
       }),
       row({ listingId: "3", title: "Æg 10 stk", typeId: "æg", groupName: "Æg", unit: "stk" }),
@@ -248,7 +257,7 @@ describe("verdictReason", () => {
 
   it("names the cheaper chain and its distance", () => {
     const [deal] = evaluateDeals(
-      [row({ nettoUnitPriceWorst: 60, nettoUnitPriceBest: 50 })],
+      [row({ targetUnitPriceWorst: 60, targetUnitPriceBest: 50 })],
       nearby,
     );
     expect(deal?.status).toBe("cheaper_elsewhere");
@@ -259,7 +268,7 @@ describe("verdictReason", () => {
 
   it("explains an undecided deal by the pack size", () => {
     const [deal] = evaluateDeals(
-      [row({ nettoUnitPriceWorst: 60, nettoUnitPriceBest: 30 })],
+      [row({ targetUnitPriceWorst: 60, targetUnitPriceBest: 30 })],
       nearby,
     );
     expect(plain(verdictReason(deal!, nearby, km))).toBe(
@@ -271,8 +280,8 @@ describe("verdictReason", () => {
     const [deal] = evaluateDeals(
       [
         row({
-          nettoUnitPriceWorst: 60,
-          nettoUnitPriceBest: 50,
+          targetUnitPriceWorst: 60,
+          targetUnitPriceBest: 50,
           references: [{ kind: "history", chain_id: "netto", unit_price: 35 }],
         }),
       ],
@@ -286,7 +295,7 @@ describe("verdictReason", () => {
   it("has a fixed reason for every other status", () => {
     const deals = evaluateDeals(
       [
-        row({ nettoUnitPriceWorst: null }),
+        row({ targetUnitPriceWorst: null }),
         row({ priceApplies: false }),
         row({ isExact: false }),
         row({ references: [] }),
@@ -318,8 +327,8 @@ describe("cheaperByChain", () => {
         row({
           listingId: "a",
           title: "B-vare",
-          nettoUnitPriceWorst: 60,
-          nettoUnitPriceBest: 50,
+          targetUnitPriceWorst: 60,
+          targetUnitPriceBest: 50,
           references: [
             { kind: "regular", chain_id: "rema1000", unit_price: 40, listing_id: "r1" },
             { kind: "offer", chain_id: "lidl", unit_price: 45 },
@@ -328,8 +337,8 @@ describe("cheaperByChain", () => {
         row({
           listingId: "b",
           title: "A-vare",
-          nettoUnitPriceWorst: 60,
-          nettoUnitPriceBest: 30,
+          targetUnitPriceWorst: 60,
+          targetUnitPriceBest: 30,
           references: [{ kind: "offer", chain_id: "rema1000", unit_price: 40 }],
         }),
         // A good deal is not listed.
@@ -337,8 +346,8 @@ describe("cheaperByChain", () => {
         // The cheapest is Netto's own past offer: not "here".
         row({
           listingId: "d",
-          nettoUnitPriceWorst: 60,
-          nettoUnitPriceBest: 50,
+          targetUnitPriceWorst: 60,
+          targetUnitPriceBest: 50,
           references: [{ kind: "history", chain_id: "netto", unit_price: 20 }],
         }),
       ],
@@ -380,5 +389,76 @@ describe("member prices", () => {
     expect(memberPriceLabel("superbrugsen")).toBe("Kræver Coop-medlem");
     expect(memberPriceLabel("365discount")).toBe("Kræver Coop-medlem");
     expect(memberPriceLabel("lidl")).toBe("Medlemspris");
+  });
+});
+
+describe("all chains", () => {
+  it("keeps only offers of chains with a nearby store, and of the selected chains", () => {
+    const rows = [
+      row({ listingId: "a", chainId: "netto" }),
+      row({ listingId: "b", chainId: "lidl" }),
+      row({ listingId: "c", chainId: "meny" }),
+    ];
+    const nearby = new Set(["netto", "lidl"]);
+    expect(nearbyDeals(rows, nearby).map((r) => r.listingId)).toEqual(["a", "b"]);
+    expect(nearbyDeals(rows, nearby, ["lidl", "meny"]).map((r) => r.listingId)).toEqual(["b"]);
+  });
+
+  it("parses and toggles the chain filter", () => {
+    expect(parseChainFilter(undefined)).toEqual([]);
+    expect(parseChainFilter("lidl, netto,lidl,Bad!")).toEqual(["lidl", "netto"]);
+    expect(parseChainFilter(["lidl"])).toEqual([]);
+    expect(toggleChain([], "lidl")).toBe("lidl");
+    expect(toggleChain(["lidl"], "netto")).toBe("lidl,netto");
+    expect(toggleChain(["lidl", "netto"], "lidl")).toBe("netto");
+    expect(toggleChain(["lidl"], "lidl")).toBeNull();
+  });
+
+  it("builds shareable hrefs", () => {
+    expect(dealsHref("gode", null)).toBe("/");
+    expect(dealsHref("alle", null)).toBe("/?vis=alle");
+    expect(dealsHref("gode", "lidl,netto")).toBe("/?kaede=lidl,netto");
+    expect(dealsHref("alle", "lidl")).toBe("/?vis=alle&kaede=lidl");
+  });
+
+  it("sorts within a group by unit price, per unit", () => {
+    const listings = groupByListing(
+      evaluateDeals(
+        [
+          row({ listingId: "dyr", title: "B", unitPriceMin: 60, unitPriceMax: 70 }),
+          row({ listingId: "billig", title: "C", unitPriceMin: 40, unitPriceMax: 50 }),
+          row({ listingId: "liter", title: "A", unit: "l", unitPriceMin: 10, unitPriceMax: 10 }),
+          row({ listingId: "ukendt", title: "D", unitPriceMin: null, unitPriceMax: null }),
+        ],
+        ["superbrugsen", "rema1000"],
+      ),
+    );
+    const [group] = groupListings(listings);
+    expect(group?.listings.map((l) => l.listingId)).toEqual(["billig", "dyr", "ukendt", "liter"]);
+  });
+
+  it("names the offer's own chain in history reasons and labels", () => {
+    const [deal] = evaluateDeals(
+      [
+        row({
+          chainId: "lidl",
+          chainName: "Lidl",
+          references: [{ kind: "history", chain_id: "lidl", unit_price: 20 }],
+        }),
+      ],
+      [],
+    );
+    expect(verdictReason(deal!, new Set(), () => null)).toBe(
+      "Lidl havde den til 20,00\u00a0kr./kg i et tidligere tilbud.",
+    );
+    expect(referenceKindLabel("history", "lidl")).toBe("Tidligere Lidl-tilbud");
+    expect(referenceKindLabel("regular", "lidl")).toBe("Normalpris");
+    expect(genitive("Netto")).toBe("Nettos");
+    expect(genitive("føtex")).toBe("føtex'");
+  });
+
+  it("labels a marked member price of other chains", () => {
+    expect(verdictBadgeLabel("good_deal", true, "kvickly")).toBe("Godt køb for Coop-medlemmer");
+    expect(verdictBadgeLabel("good_deal", true, "lidl")).toBe("Godt køb for medlemmer");
   });
 });

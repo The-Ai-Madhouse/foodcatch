@@ -36,6 +36,7 @@ function row(overrides: Partial<PriceHistoryRow> = {}): PriceHistoryRow {
     description: null,
     sizeMin: null,
     sizeMax: null,
+    productKey: null,
     ...overrides,
   };
 }

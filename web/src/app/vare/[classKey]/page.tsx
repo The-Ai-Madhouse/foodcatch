@@ -1,4 +1,5 @@
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MemberPriceTag } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
@@ -14,7 +15,7 @@ import {
   unitLabel,
 } from "@/lib/format";
 import { KIND_LABELS, buildPriceChart, type PriceHistoryRow } from "@/lib/history";
-import { classKeyFromSegment } from "@/lib/routes";
+import { classKeyFromSegment, productPath } from "@/lib/routes";
 import { sourceLink } from "@/lib/sources";
 import { storeDisplayName } from "@/lib/stores";
 import { getClassPriceHistory, getStoresByIds } from "@/server/queries";
@@ -110,18 +111,28 @@ export default async function ClassHistoryPage({ params }: PageProps<"/vare/[cla
                     {row.priceApplies ? null : (
                       <p className="text-meta text-ink-3">Gælder flere varer – ikke i grafen</p>
                     )}
-                    <SourceLink
-                      link={sourceLink(
-                        {
-                          source: row.source,
-                          chainId: row.chainId,
-                          sourceItemId: row.sourceItemId,
-                          catalogId: row.catalogId,
-                          validTo: row.validTo,
-                        },
-                        now,
-                      )}
-                    />
+                    <div className="flex flex-wrap items-center gap-x-4">
+                      <SourceLink
+                        link={sourceLink(
+                          {
+                            source: row.source,
+                            chainId: row.chainId,
+                            sourceItemId: row.sourceItemId,
+                            catalogId: row.catalogId,
+                            validTo: row.validTo,
+                          },
+                          now,
+                        )}
+                      />
+                      {row.productKey ? (
+                        <Link
+                          href={productPath(row.productKey) as Route}
+                          className="inline-flex min-h-11 items-center text-meta"
+                        >
+                          Prishistorik for varen
+                        </Link>
+                      ) : null}
+                    </div>
                   </li>
                 );
               })}

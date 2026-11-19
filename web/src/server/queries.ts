@@ -6,6 +6,7 @@ import { parseReferences } from "@/lib/deals";
 import { EARTH_RADIUS_KM, boundingBox, type Coordinates } from "@/lib/geo";
 import type { FoodWasteItem } from "@/lib/foodwaste";
 import type { PriceHistoryRow } from "@/lib/history";
+import type { ProductHistoryRow, ProductInfo } from "@/lib/product";
 import type { PipelineRun } from "@/lib/status";
 import type { ReferenceDetail } from "@/lib/deals";
 import { dedupeStores, type NearbyStore } from "@/lib/stores";
@@ -125,6 +126,8 @@ export async function getStoresByIds(ids: readonly string[]): Promise<Map<string
 interface DealSqlRow {
   listingId: string;
   variantIndex: number;
+  chainId: string;
+  chainName: string;
   title: string;
   description: string | null;
   price: number;
@@ -141,8 +144,8 @@ interface DealSqlRow {
   isExact: boolean;
   notes: string[] | null;
   priceApplies: boolean | null;
-  nettoUnitPriceWorst: number | null;
-  nettoUnitPriceBest: number | null;
+  targetUnitPriceWorst: number | null;
+  targetUnitPriceBest: number | null;
   references: unknown;
   memberOnly: boolean;
   source: string | null;
@@ -151,32 +154,40 @@ interface DealSqlRow {
   sizeMin: number | null;
   sizeMax: number | null;
   maxPerCustomer: number | null;
+  productKey: string | null;
 }
 
-/** Current and upcoming Netto offers of healthy staples (one row per recognized variant). */
-export async function getCurrentNettoDeals(): Promise<DealRow[]> {
+/**
+ * Current and upcoming offers of healthy staples of every chain (one row per recognized
+ * variant), optionally of one chain only.
+ */
+export async function getCurrentDeals(chainId?: string): Promise<DealRow[]> {
   await connection();
   const sql = await readOnlyDb();
   const rows = await sql<DealSqlRow[]>`
-    SELECT listing_id AS "listingId", variant_index::int AS "variantIndex", title, description,
+    SELECT listing_id::text AS "listingId", variant_index::int AS "variantIndex",
+           chain_id AS "chainId", chain_name AS "chainName", title, description,
            price::float8 AS price, unit,
            unit_price_min::float8 AS "unitPriceMin", unit_price_max::float8 AS "unitPriceMax",
            valid_from AS "validFrom", valid_to AS "validTo",
            type_id AS "typeId", type_label AS "typeLabel", group_name AS "groupName",
            class_key AS "classKey", class_label AS "classLabel", is_exact AS "isExact", notes,
            price_applies AS "priceApplies",
-           netto_unit_price_worst::float8 AS "nettoUnitPriceWorst",
-           netto_unit_price_best::float8 AS "nettoUnitPriceBest",
+           target_unit_price_worst::float8 AS "targetUnitPriceWorst",
+           target_unit_price_best::float8 AS "targetUnitPriceBest",
            "references", member_only AS "memberOnly", source,
            source_item_id AS "sourceItemId", catalog_id AS "catalogId",
            size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax",
-           max_per_customer::int AS "maxPerCustomer"
-    FROM api.current_netto_deals
+           max_per_customer::int AS "maxPerCustomer", product_key AS "productKey"
+    FROM api.current_deals
+    ${chainId ? sql`WHERE chain_id = ${chainId}` : sql``}
     ORDER BY valid_from, title, variant_index
   `;
   return rows.map((r) => ({
     listingId: r.listingId,
     variantIndex: r.variantIndex,
+    chainId: r.chainId,
+    chainName: r.chainName,
     title: r.title,
     description: r.description ?? "",
     price: r.price,
@@ -193,8 +204,8 @@ export async function getCurrentNettoDeals(): Promise<DealRow[]> {
     isExact: r.isExact,
     notes: r.notes ?? [],
     priceApplies: r.priceApplies,
-    nettoUnitPriceWorst: r.nettoUnitPriceWorst,
-    nettoUnitPriceBest: r.nettoUnitPriceBest,
+    targetUnitPriceWorst: r.targetUnitPriceWorst,
+    targetUnitPriceBest: r.targetUnitPriceBest,
     references: parseReferences(r.references),
     memberOnly: r.memberOnly,
     source: r.source,
@@ -203,12 +214,18 @@ export async function getCurrentNettoDeals(): Promise<DealRow[]> {
     sizeMin: r.sizeMin,
     sizeMax: r.sizeMax,
     maxPerCustomer: r.maxPerCustomer,
+    productKey: r.productKey,
   }));
 }
 
-interface FoodWasteSqlRow extends Omit<FoodWasteItem, "validTo" | "lastSeenAt"> {
+interface FoodWasteSqlRow extends Omit<
+  FoodWasteItem,
+  "validTo" | "lastSeenAt" | "sourceFetchedAt" | "references"
+> {
   validTo: Date | null;
   lastSeenAt: Date | null;
+  sourceFetchedAt: Date | null;
+  references: unknown;
 }
 
 /** Food-waste clearances of healthy staples within the radius, largest discount first. */
@@ -227,7 +244,12 @@ export async function getFoodWasteNear(area: SearchArea, limit = 300): Promise<F
              lat::float8 AS lat, lon::float8 AS lon, size::float8 AS size,
              image_url AS "imageUrl", product_quantity_text AS "productQuantityText",
              product_net_quantity::float8 AS "productNetQuantity",
-             product_net_unit AS "productNetUnit", last_seen_at AS "lastSeenAt"
+             product_net_unit AS "productNetUnit", last_seen_at AS "lastSeenAt",
+             product_key AS "productKey", source_item_id AS "sourceItemId",
+             salling_store_id AS "sallingStoreId", source_fetched_at AS "sourceFetchedAt",
+             salling_percent_discount::float8 AS "sallingPercentDiscount",
+             offer_ean AS "offerEan", product_code AS "productCode", class_key AS "classKey",
+             food_waste_references AS "references", beats_competitors AS "beatsCompetitors"
       FROM api.food_waste_near
       WHERE ${withinBox(area)}
     ) f
@@ -235,7 +257,13 @@ export async function getFoodWasteNear(area: SearchArea, limit = 300): Promise<F
     ORDER BY "discountPct" DESC NULLS LAST, "distanceKm", title
     LIMIT ${limit}::int
   `;
-  return rows.map((r) => ({ ...r, validTo: toIso(r.validTo), lastSeenAt: toIso(r.lastSeenAt) }));
+  return rows.map((r) => ({
+    ...r,
+    validTo: toIso(r.validTo),
+    lastSeenAt: toIso(r.lastSeenAt),
+    sourceFetchedAt: toIso(r.sourceFetchedAt),
+    references: parseReferences(r.references),
+  }));
 }
 
 interface HistorySqlRow extends Omit<PriceHistoryRow, "validFrom" | "validTo"> {
@@ -254,7 +282,8 @@ export async function getClassPriceHistory(classKey: string): Promise<PriceHisto
            valid_from AS "validFrom", valid_to AS "validTo", price_applies AS "priceApplies",
            member_only AS "memberOnly", source, source_item_id AS "sourceItemId",
            catalog_id AS "catalogId", store_id::text AS "storeId", price::float8 AS price,
-           description, size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax"
+           description, size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax",
+           product_key AS "productKey"
     FROM api.class_price_history
     WHERE class_key = ${classKey}
     ORDER BY valid_from, chain_name, title
@@ -264,6 +293,64 @@ export async function getClassPriceHistory(classKey: string): Promise<PriceHisto
     validFrom: toIsoRequired(r.validFrom),
     validTo: toIso(r.validTo),
   }));
+}
+
+interface ProductHistorySqlRow extends Omit<ProductHistoryRow, "validFrom" | "validTo"> {
+  validFrom: Date;
+  validTo: Date | null;
+}
+
+/** Every price of one item (`api.product_price_history`), oldest first. */
+export async function getProductHistory(productKey: string): Promise<ProductHistoryRow[]> {
+  await connection();
+  const sql = await readOnlyDb();
+  const rows = await sql<ProductHistorySqlRow[]>`
+    SELECT product_key AS "productKey", product_label AS "productLabel", chain_id AS "chainId",
+           kind, price::float8 AS price, unit,
+           unit_price_min::float8 AS "unitPriceMin", unit_price_max::float8 AS "unitPriceMax",
+           size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax",
+           valid_from AS "validFrom", valid_to AS "validTo", source,
+           source_item_id AS "sourceItemId", catalog_id AS "catalogId",
+           store_id::text AS "storeId", coalesce(member_only, false) AS "memberOnly",
+           listing_id::text AS "listingId", title
+    FROM api.product_price_history
+    WHERE product_key = ${productKey}
+    ORDER BY valid_from, kind, chain_id
+  `;
+  return rows.map((r) => ({
+    ...r,
+    validFrom: toIsoRequired(r.validFrom),
+    validTo: toIso(r.validTo),
+  }));
+}
+
+interface ProductSqlRow extends Omit<ProductInfo, "latestValidFrom" | "latestValidTo"> {
+  latestValidFrom: Date | null;
+  latestValidTo: Date | null;
+}
+
+/** One item (`api.products`), or null when the key is unknown. */
+export async function getProduct(productKey: string): Promise<ProductInfo | null> {
+  await connection();
+  const sql = await readOnlyDb();
+  const rows = await sql<ProductSqlRow[]>`
+    SELECT product_key AS "productKey", label, chain_id AS "chainId", chain_name AS "chainName",
+           class_key AS "classKey", class_label AS "classLabel", is_exact AS "isExact", ean,
+           latest_source AS "latestSource", latest_price::float8 AS "latestPrice",
+           latest_unit AS "latestUnit", latest_size_min::float8 AS "latestSizeMin",
+           latest_size_max::float8 AS "latestSizeMax", latest_valid_from AS "latestValidFrom",
+           latest_valid_to AS "latestValidTo"
+    FROM api.products
+    WHERE product_key = ${productKey}
+  `;
+  const row = rows[0];
+  return row
+    ? {
+        ...row,
+        latestValidFrom: toIso(row.latestValidFrom),
+        latestValidTo: toIso(row.latestValidTo),
+      }
+    : null;
 }
 
 interface PipelineSqlRow {
@@ -323,7 +410,7 @@ export async function getReferenceDetails(
            listing_id::text AS "listingId", source, source_item_id AS "sourceItemId",
            catalog_id AS "catalogId", chain_id AS "chainId", price::float8 AS price,
            description, unit, size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax",
-           valid_to AS "validTo"
+           valid_to AS "validTo", product_key AS "productKey"
     FROM api.class_price_history
     WHERE listing_id = ANY(${ids}::uuid[])
     ORDER BY listing_id

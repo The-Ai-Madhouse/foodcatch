@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classKeyFromSegment, classPath } from "./routes";
+import { classKeyFromSegment, classPath, productKeyFromSegment, productPath } from "./routes";
 
 const KEY = "hakket_grisekød|fedt=8-12%|øko=nej|forarbejdet=nej";
 
@@ -29,5 +29,21 @@ describe("classKeyFromSegment", () => {
     expect(classKeyFromSegment("")).toBeNull();
     expect(classKeyFromSegment("%20")).toBeNull();
     expect(classKeyFromSegment("abc%E0%A4%A")).toBeNull();
+  });
+});
+
+describe("productPath / productKeyFromSegment", () => {
+  it("round-trips product keys", () => {
+    for (const key of ["ean:5701234000011", "rema:400554", "offer:netto:hakket grisekød 8 12"]) {
+      const segment = productPath(key).slice("/produkt/".length);
+      expect(segment).not.toContain(":");
+      expect(productKeyFromSegment(segment)).toBe(key);
+      expect(productKeyFromSegment(key)).toBe(key);
+    }
+  });
+
+  it("rejects segments that are not product keys", () => {
+    expect(productKeyFromSegment("")).toBeNull();
+    expect(productKeyFromSegment("havregryn")).toBeNull();
   });
 });
