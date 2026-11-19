@@ -87,7 +87,7 @@ test.describe("location", () => {
 });
 
 test("home shows where to buy each offer, its size and its source", async ({ page }) => {
-  await page.goto("/?vis=alle");
+  await page.goto("/?vis=alle&kaede=netto");
   const card = page.locator("article").first();
   await expect(card).toBeVisible();
   await expect(card).toContainText(/Nærmeste butik: Netto .+ · \d+(?:,\d)?\u00a0(?:m|km)/);
@@ -103,6 +103,50 @@ test("home shows where to buy each offer, its size and its source", async ({ pag
   // Every card states a size (or says it is unknown).
   const cards = await page.locator("article").allInnerTexts();
   for (const text of cards) expect(text).toMatch(SIZE);
+});
+
+test("offers of every chain can be filtered by chain", async ({ page }) => {
+  await page.goto("/?vis=alle");
+  const chips = page.getByRole("navigation", { name: "Kæder" }).getByRole("link");
+  await expect(chips.first()).toHaveText("Alle kæder");
+  expect(await chips.count()).toBeGreaterThan(2); // "Alle kæder" and at least two chains
+  // Offers of more than one chain are listed.
+  const chains = await page
+    .locator('article a[href^="/kort?kaede="]')
+    .evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+  expect(new Set(chains).size).toBeGreaterThan(1);
+
+  const chip = chips.filter({ hasNotText: /Alle kæder|Netto/ }).first();
+  const kaede = new URL((await chip.getAttribute("href")) ?? "", "http://x").searchParams.get(
+    "kaede",
+  );
+  expect(kaede).toMatch(/^[a-z0-9]+$/);
+  await chip.click();
+  await expect(page).toHaveURL(new RegExp(`[?&]kaede=${kaede}`));
+  await expect(chips.filter({ has: page.locator('[aria-current="true"]') })).toHaveCount(0);
+  await expect(page.locator(`nav[aria-label="Kæder"] a[aria-current="true"]`)).toHaveCount(1);
+  // Every card is an offer of that chain (its where line opens the map filtered to it).
+  const where = page.locator('article a[href^="/kort?kaede="]');
+  await expect(where.first()).toBeVisible();
+  for (const href of await where.evaluateAll((els) => els.map((e) => e.getAttribute("href")))) {
+    expect(href).toBe(`/kort?kaede=${kaede}`);
+  }
+});
+
+test("an offer links to its item's price history with a chart and a table", async ({ page }) => {
+  await page.goto("/?vis=alle");
+  const link = page.locator("article").getByRole("link", { name: "Prishistorik" }).first();
+  const href = await link.getAttribute("href");
+  expect(href).toMatch(/^\/produkt\/[^/]+$/);
+  await link.click();
+  await expect(page).toHaveURL(/\/produkt\//);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  const chart = page.locator("figure svg[role=img]:visible");
+  await expect(chart).toHaveAttribute("aria-label", /over tid fra/);
+  expect(await chart.locator("path, line, circle, rect").count()).toBeGreaterThan(3);
+  const table = page.getByRole("table");
+  await expect(table.getByRole("columnheader", { name: "Pris" })).toBeVisible();
+  expect(await table.locator("tbody tr").count()).toBeGreaterThan(0);
 });
 
 test("the map renders store markers with attribution", async ({ page }) => {
@@ -142,19 +186,42 @@ test("a food-waste item shows its store, weight and source", async ({ page }) =>
     "href",
     /google\.com\/maps\/dir/,
   );
-  const item = group.locator("details").first();
+  const row = group.locator("li").first();
+  const item = row.locator("details");
   await expect(item).toContainText(SIZE);
+  // Visible without expanding: the item on Open Food Facts (by EAN) and its price history.
+  const off = row.getByRole("link", { name: /Varen på Open Food Facts/ });
+  await expect(off).toBeVisible();
+  await expect(off).toHaveAttribute("href", /^https:\/\/world\.openfoodfacts\.org\/product\/\d+$/);
+  await expect(row.getByRole("link", { name: "Prishistorik" })).toHaveAttribute(
+    "href",
+    /^\/produkt\//,
+  );
+  // Expanded: the "Kilde" facts.
   await item.locator("summary").click();
-  await expect(item).toContainText("Fra Salling Groups madspildsdata – ingen vareside");
-  const off = item.getByRole("link", { name: /Open Food Facts/ });
-  if ((await off.count()) > 0) {
-    await expect(off).toHaveAttribute("href", /^https:\/\/world\.openfoodfacts\.org\/product\//);
-  }
+  const source = item.getByRole("region", { name: "Kilde" });
+  await expect(source).toContainText("Fra Salling Groups madspildsdata – ingen vareside");
+  await expect(source).toContainText(/Hentet\s*\d+\./);
+  await expect(source).toContainText("EAN");
+});
+
+test("a clearance cheaper than the other chains says so", async ({ page }) => {
+  await page.goto("/madspild?sorter=rabat");
+  const summary = page
+    .locator("summary")
+    .filter({ hasText: /Billigere end|Billigst blandt kæderne/ })
+    .first();
+  test.skip((await summary.count()) === 0, "no clearance beats the other chains right now");
+  await summary.click();
+  const item = summary.locator("xpath=..");
+  await expect(item.getByRole("region", { name: "Sammenligning" })).toContainText("Billigere end");
 });
 
 test("no horizontal page scroll on phones", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile", "phone layout only");
   await page.goto("/");
+  const productHref = await page.locator('a[href^="/produkt/"]').first().getAttribute("href");
+  await page.locator("summary", { hasText: "Sammenlign" }).first().click();
   const classLink = page.locator('a[href^="/vare/"]').first();
   const href = await classLink.getAttribute("href");
   for (const path of [
@@ -164,6 +231,7 @@ test("no horizontal page scroll on phones", async ({ page }, testInfo) => {
     "/kort",
     "/status",
     href ?? "/",
+    productHref ?? "/",
   ]) {
     await page.goto(path);
     const overflow = await page.evaluate(
