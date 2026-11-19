@@ -924,3 +924,38 @@ The visual system (§4) is unchanged.
   "Billigere end alle {n} priser på samme vare i andre kæder" (or "Samme vare i andre kæder"),
   "Her: {unit price}", and the references cheapest first (chain, kind, member tag, unit price).
   References count regardless of distance (architecture §6), the more conservative reading.
+
+## 13. Meal ideas, "Madideer" (2026-11-19)
+
+The owner's request: after choosing an address, when offers and food waste are shown, suggest
+2–5 things to cook from those items and how much that saves.
+
+- Route `/madideer`, fourth tab "Madideer" (pot icon) between "Madspild" and "Kort". It uses the
+  saved location like `/` and `/madspild`: offers of chains with a store within the radius
+  (`nearbyDeals`) and clearances within the radius (`getFoodWasteNear`).
+- Ideas come from a **fixed catalogue** of ~25 everyday dishes in `web/src/lib/meals.ts`
+  (`RECIPES`), not from a language model: deterministic, free, testable. Each dish has
+  ingredient slots of taxonomy type ids (pipeline `matching/taxonomy.py`; a unit test fails on
+  an unknown id) and a pantry list. A **core** slot must be on offer or cleared for the dish to
+  be suggested; other slots are filled when possible and otherwise listed under "Du skal også
+  bruge" with the pantry.
+- Which items may be used: clearances with a class; offers that are valid now, whose price
+  applies (`price_applies`), that are not `cheaper_elsewhere`, and that are either `good_deal` or
+  cheaper than the normal price. Per slot the item with the largest known saving wins (then the
+  cheaper pack, then the nearer clearance); an item fills at most one slot of a dish.
+- Saving per item, from our data only:
+  - clearance: `reference_price − price` (Salling's price before the markdown);
+  - offer: cheapest normal unit price of exactly the same class for this user (`regular` of a
+    nearby chain, or `ean_reference`) × the offer's **smallest** pack − the offer price, at least
+    0, in whole øre. No normal price → saving unknown (`null`), shown as "godt køb, normalpris
+    ukendt" and as "+" after the dish total; it adds nothing to the total.
+- Selection: dishes sorted by total known saving, then by filled slots, then by mixing offers
+  and food waste; at most 5, and each built around a **different main item** (its first core
+  slot), so the ideas do not all hinge on one pack of mince. One idea → a notice suggesting a
+  larger radius; none → "Ingen madideer lige nu".
+- Card: dish name, saving badge ("Spar 17,95 kr.", good tone; "Besparelse ukendt" otherwise), a
+  one-line method, then one row per cheap item: slot label, title, "Tilbud"/"Madspild" pill,
+  price with the struck-through normal price ("normalpris" / "før"), pack size, "spar X kr.",
+  where (the clearance's store, or the offer chain's nearest store), member badge, the
+  clearance's end, and the leaflet link (offers) or "Prishistorik". A `<details>` at the bottom
+  explains the calculation.

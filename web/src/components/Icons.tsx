@@ -54,6 +54,17 @@ export function ClockLeafIcon(props: IconProps) {
   );
 }
 
+/** A cooking pot: meal ideas. */
+export function PotIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M4 10h16v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5v-5Z" />
+      <path d="M2 10h20" />
+      <path d="M9 6c0-1 1-1.5 1-2.5M14 6c0-1 1-1.5 1-2.5" />
+    </Svg>
+  );
+}
+
 export function MapIcon(props: IconProps) {
   return (
     <Svg {...props}>

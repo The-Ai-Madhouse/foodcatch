@@ -9,6 +9,7 @@ Tailwind CSS, Vitest. The app runs locally only for now (see
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/`                     | "Tilbud": this week's offers of every chain with a store nearby, one card per offer with where to buy, pack size, verdict and source link (`?vis=alle`, `?kaede=lidl,netto`) |
 | `/madspild`             | "Madspild": clearances within your radius grouped by store, nearest first (`?sorter=rabat` for one list by discount)                                                         |
+| `/madideer`             | "Madideer": 2–5 dishes from this week's cheap offers and nearby food waste, with what the cheap items save (fixed recipe catalogue, `lib/meals.ts`; docs/ui.md §13)          |
 | `/kort`                 | "Kort": every nearby store on a map, coloured by chain; a store shows its food waste or what is cheaper there than in Netto (`?kaede=netto,lidl&butik={id}`)                 |
 | `/vare/[classKey]`      | Price history of one product class across chains (chart and a list with source links)                                                                                        |
 | `/produkt/[productKey]` | Price history of one item: shelf prices, offers, clearances and Salling's EAN normal price (chart and table; `?pris=enhed`, `?periode=alt`)                                  |

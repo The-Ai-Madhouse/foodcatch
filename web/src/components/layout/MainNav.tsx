@@ -3,11 +3,12 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClockLeafIcon, MapIcon, TagIcon } from "@/components/Icons";
+import { ClockLeafIcon, MapIcon, PotIcon, TagIcon } from "@/components/Icons";
 
 const ITEMS: readonly { href: Route; label: string; Icon: typeof TagIcon }[] = [
   { href: "/", label: "Tilbud", Icon: TagIcon },
   { href: "/madspild", label: "Madspild", Icon: ClockLeafIcon },
+  { href: "/madideer", label: "Madideer", Icon: PotIcon },
   { href: "/kort", label: "Kort", Icon: MapIcon },
 ];
 
@@ -44,7 +45,7 @@ export function MainNav({ variant }: { variant: "header" | "tabs" }) {
       aria-label="Faner"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
     >
-      <ul className="grid h-14 grid-cols-3">
+      <ul className="grid h-14 grid-cols-4">
         {ITEMS.map(({ href, label, Icon }) => (
           <li key={href}>
             <Link

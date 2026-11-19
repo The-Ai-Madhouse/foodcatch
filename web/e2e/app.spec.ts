@@ -217,6 +217,21 @@ test("a clearance cheaper than the other chains says so", async ({ page }) => {
   await expect(item.getByRole("region", { name: "Sammenligning" })).toContainText("Billigere end");
 });
 
+test("meal ideas combine offers and food waste and show the saving", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Madideer" }).first().click();
+  await expect(page.getByRole("heading", { level: 1, name: "Madideer" })).toBeVisible();
+  const cards = page.locator("main article");
+  const count = await cards.count();
+  expect(count).toBeGreaterThanOrEqual(2);
+  expect(count).toBeLessThanOrEqual(5);
+  // The seed's minced beef, eggs, tomatoes and clearances give savings on at least one dish.
+  await expect(cards.first().getByText(/^Spar \d+,\d{2}/)).toBeVisible();
+  await expect(page.locator("main").getByText("Madspild", { exact: true }).first()).toBeVisible();
+  await expect(page.locator("main").getByText("Tilbud", { exact: true }).first()).toBeVisible();
+  await expect(cards.first().getByText("Du skal også bruge:")).toBeVisible();
+});
+
 test("no horizontal page scroll on phones", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile", "phone layout only");
   await page.goto("/");
@@ -228,6 +243,7 @@ test("no horizontal page scroll on phones", async ({ page }, testInfo) => {
     "/",
     "/madspild",
     "/madspild?sorter=rabat",
+    "/madideer",
     "/kort",
     "/status",
     href ?? "/",
