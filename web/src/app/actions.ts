@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { isValidCoordinate } from "@/lib/geo";
 import { normalizeQuery } from "@/lib/geocode";
@@ -15,6 +16,7 @@ import {
   type StoredLocation,
   type UserLocation,
 } from "@/lib/location";
+import { STAPLES_COOKIE, serializeStaples } from "@/lib/staples";
 import { GeocodingError, geocodeAddress } from "@/server/geocode";
 
 /** The result of a location action, shown in the location sheet. */
@@ -138,4 +140,21 @@ export async function restoreLocation(entry: unknown): Promise<{ restored: boole
 export async function resetLocation(): Promise<void> {
   const store = await cookies();
   store.delete(LOCATION_COOKIE);
+}
+
+/** Save the staples picked on the offers page ("Dine basisvarer"); an empty pick clears them. */
+export async function saveStaples(formData: FormData): Promise<void> {
+  const value = serializeStaples(formData.getAll("basisvare"));
+  const store = await cookies();
+  if (value) {
+    store.set(STAPLES_COOKIE, value, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: COOKIE_MAX_AGE_S,
+    });
+  } else {
+    store.delete(STAPLES_COOKIE);
+  }
+  revalidatePath("/");
 }

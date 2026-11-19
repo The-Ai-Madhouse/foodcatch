@@ -1,9 +1,11 @@
 import type { Metadata, Route } from "next";
 import Link from "next/link";
+import { CategoryOverview, CollapsibleCategory } from "@/components/CategoryOverview";
 import { Notice } from "@/components/Notice";
 import { Segmented } from "@/components/Segmented";
 import { ChainChips } from "@/components/deals/ChainChips";
 import { DealCard, type DealContext } from "@/components/deals/DealCard";
+import { StaplesSection } from "@/components/deals/StaplesSection";
 import { OpenLocationButton } from "@/components/location/LocationControl";
 import { MapFocusProvider } from "@/components/map/MapFocus";
 import { SideMap } from "@/components/map/SideMap";
@@ -18,17 +20,29 @@ import {
   parseDealFilter,
   referenceListingIds,
 } from "@/lib/deals";
+import { groupSlug } from "@/lib/groups";
 import { nearestByChain, toMapStore } from "@/lib/stores";
-import { getUserLocation } from "@/server/location";
-import { getCurrentDeals, getNearbyStores, getReferenceDetails } from "@/server/queries";
+import { stapleMatches } from "@/lib/staples";
+import { getUserLocation, getUserStaples } from "@/server/location";
+import {
+  getCurrentDeals,
+  getFoodWasteNear,
+  getNearbyStores,
+  getReferenceDetails,
+} from "@/server/queries";
 
 export const metadata: Metadata = { title: "Ugens tilbud" };
 
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
   const filter = parseDealFilter(params.vis);
-  const location = await getUserLocation();
-  const [stores, allRows] = await Promise.all([getNearbyStores(location), getCurrentDeals()]);
+  const [location, staples] = await Promise.all([getUserLocation(), getUserStaples()]);
+  const [stores, allRows, foodWaste] = await Promise.all([
+    getNearbyStores(location),
+    getCurrentDeals(),
+    // Clearances are only needed for the chosen staples.
+    staples.length ? getFoodWasteNear(location) : Promise.resolve([]),
+  ]);
   const storesByChain = nearestByChain(stores);
   const nearbyChains = new Set(storesByChain.keys());
   // Only chains with a store within the radius; a filter on other chains is ignored.
@@ -45,6 +59,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     (l) => selected.length === 0 || selected.includes(l.offer.chainId),
   );
   const goodCount = listings.filter((l) => l.status === "good_deal").length;
+  // Staples ignore the chain filter: they are about the item, wherever it is cheap.
+  const staplesFound = stapleMatches(staples, allListings, foodWaste);
   const groups = groupListings(filterListings(listings, filter));
   // Chips for chains with something to show in this view (and any selected one).
   const chainCounts = offerChains
@@ -77,6 +93,9 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       <div className="lg:grid lg:grid-cols-[minmax(0,640px)_minmax(0,1fr)] lg:gap-8">
         <div className="min-w-0">
           <h1 className="text-title font-bold text-ink">Ugens tilbud</h1>
+          <div className="mt-3">
+            <StaplesSection selected={staples} matches={staplesFound} />
+          </div>
           <div className="mt-3">
             <Segmented
               label="Vis tilbud"
@@ -111,7 +130,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
             </div>
           ) : null}
 
-          <div className="mt-4 space-y-8">
+          <div className="mt-4 space-y-4">
             {allRows.length === 0 ? (
               <Notice title="Ingen tilbud lige nu">
                 Vi har ingen aktuelle tilbud på sunde basisvarer. Se{" "}
@@ -131,23 +150,34 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
                 </div>
               </Notice>
             ) : (
-              groups.map((group) => (
-                <section key={group.groupName} aria-labelledby={`gruppe-${group.groupName}`}>
-                  <h2
-                    id={`gruppe-${group.groupName}`}
-                    className="mb-2 text-meta font-semibold text-ink-3"
+              <>
+                {groups.length > 1 ? (
+                  <CategoryOverview
+                    label="Kategorier"
+                    links={groups.map((g) => ({
+                      label: g.groupName,
+                      count: g.listings.length,
+                      href: `#gruppe-${groupSlug(g.groupName)}`,
+                    }))}
+                  />
+                ) : null}
+                {groups.map((group) => (
+                  <CollapsibleCategory
+                    key={group.groupName}
+                    id={`gruppe-${groupSlug(group.groupName)}`}
+                    title={group.groupName}
+                    count={group.listings.length}
                   >
-                    {group.groupName}
-                  </h2>
-                  <ul className="space-y-3">
-                    {group.listings.map((listing) => (
-                      <li key={listing.listingId}>
-                        <DealCard listing={listing} ctx={ctx} />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))
+                    <ul className="space-y-3">
+                      {group.listings.map((listing) => (
+                        <li key={listing.listingId}>
+                          <DealCard listing={listing} ctx={ctx} />
+                        </li>
+                      ))}
+                    </ul>
+                  </CollapsibleCategory>
+                ))}
+              </>
             )}
           </div>
 
