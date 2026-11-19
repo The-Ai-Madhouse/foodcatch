@@ -148,6 +148,7 @@ _DATA_TABLES = (
     "listing",
     "product_reference_price",
     "product",
+    "tjek_catalog_fetch",
     "store",
     "raw_object",
     "fetch_run",

@@ -389,6 +389,18 @@ deal = Table(
     Index(None, "matcher_version", "class_key"),
 )
 
+tjek_catalog_fetch = Table(
+    # Scheduling state of the tjek-offers job (not written by ingest): when the offers of a
+    # catalog were last fetched in full, and the fingerprint of the catalog fields then.
+    "tjek_catalog_fetch",
+    metadata,
+    Column("catalog_id", Text, primary_key=True),
+    Column("chain_id", Text, ForeignKey("chain.id"), nullable=False),
+    Column("fingerprint", Text, nullable=False),
+    Column("offer_count", Integer),
+    Column("offers_fetched_at", DateTime(timezone=True), nullable=False),
+)
+
 __all__ = [
     "FETCH_RUN_STATUSES",
     "LISTING_KINDS",
@@ -412,4 +424,5 @@ __all__ = [
     "raw_object",
     "review_item",
     "store",
+    "tjek_catalog_fetch",
 ]

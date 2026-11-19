@@ -82,7 +82,7 @@ def test_migrations_match_table_definitions(db_engine: Engine) -> None:
 
 
 def test_single_head() -> None:
-    assert migrate.current_head() == "0008"
+    assert migrate.current_head() == "0009"
 
 
 def test_seed_data(db_engine: Engine) -> None:
@@ -317,5 +317,28 @@ def test_0008_backfills_kinds_keys_and_deal_columns_and_back(empty_database: str
         migrate.upgrade(empty_database, "0008")  # and back up again
         with engine.connect() as conn:
             assert api_columns(conn) == API_COLUMNS
+    finally:
+        engine.dispose()
+
+
+def test_0009_adds_tjek_catalog_fetch_and_back(empty_database: str) -> None:
+    engine = create_engine(normalize_database_url(empty_database))
+    try:
+        migrate.upgrade(empty_database, "0008")
+        assert "tjek_catalog_fetch" not in _public_tables(engine)
+        migrate.upgrade(empty_database, "0009")
+        assert "tjek_catalog_fetch" in _public_tables(engine)
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO tjek_catalog_fetch"
+                    " (catalog_id, chain_id, fingerprint, offer_count, offers_fetched_at)"
+                    " VALUES ('c1', 'netto', 'abc', 10, now())"
+                )
+            )
+        migrate.downgrade(empty_database, "0008")
+        assert "tjek_catalog_fetch" not in _public_tables(engine)
+        migrate.upgrade(empty_database, "0009")  # and back up again
+        assert "tjek_catalog_fetch" in _public_tables(engine)
     finally:
         engine.dispose()
