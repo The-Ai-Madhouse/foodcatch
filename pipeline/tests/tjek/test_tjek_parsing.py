@@ -12,6 +12,7 @@ import pytest
 from foodcatch.ingest.tjek import (
     ParsedOffer,
     UnitQuantity,
+    is_fixed_low_price,
     is_member_price,
     parse_amount,
     parse_max_per_customer,
@@ -422,3 +423,19 @@ def test_offer_period_can_differ_from_catalog(fixture_bytes: Callable[[str], byt
     oil = parse_offer(next(o for o in offers if o.id == "eTqWIdeNJh0dzGhhY65wb"))
     assert oil.valid_from == datetime(2026, 10, 31, 23, tzinfo=UTC)
     assert oil.valid_to == datetime(2026, 11, 30, 22, 59, 59, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("chain_id", "text", "expected"),
+    [
+        ("lidl", "Hakket kalkunkød\n500 g / pk. Pr. kg 55,90 Fast lav pris", True),
+        ("lidl", "Baguette\nFast lav pris 250 g. Pr. kg 20,00", True),
+        ("lidl", "Grødris\nNyhed FAST  LAV\nPRIS 450 g.", True),
+        ("lidl", "Smør\n200 g. Pr. kg 99,75", False),
+        ("lidl", "Faste lavpriser", False),
+        ("lidl", None, False),
+        ("netto", "Smør\nFast lav pris", False),  # the rule is Lidl's wording only
+    ],
+)
+def test_is_fixed_low_price(chain_id: str, text: str | None, expected: bool) -> None:
+    assert is_fixed_low_price(chain_id, text) is expected

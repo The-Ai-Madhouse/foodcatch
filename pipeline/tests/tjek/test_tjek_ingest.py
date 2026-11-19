@@ -172,6 +172,34 @@ def test_member_offer_is_flagged(
     assert row.member_only is True
 
 
+def test_lidl_fast_lav_pris_is_a_regular_price(
+    db_conn: Connection,
+    raw_payload: RawPayloadFactory,
+    settings: Settings,
+    load_fixture: Callable[[str], Any],
+) -> None:
+    """Lidl's "Fast lav pris" items are shelf prices (kind ``regular``); others are offers."""
+    template = load_fixture("tjek/offers_superbrugsen.json")[0]
+    lidl = {**template, "dealer_id": "71c90"}
+    offers = [
+        {**lidl, "id": "flp", "description": "500 g / pk. Pr. kg 55,90 Fast lav pris"},
+        {**lidl, "id": "flp-heading", "heading": "FAST LAV PRIS: Havregryn", "description": ""},
+        {**lidl, "id": "campaign", "description": "500 g / pk. Pr. kg 39,90"},
+        {**lidl, "id": "word", "description": "Faste lavpriser hele året"},
+        {**template, "id": "coop", "description": "Fast lav pris"},  # not Lidl
+    ]
+    ingest_payload(db_conn, raw_payload("tjek", "offers", offers), settings=settings)
+
+    kinds = dict(db_conn.execute(select(listing.c.source_item_id, listing.c.kind)).all())
+    assert kinds == {
+        "flp": "regular",
+        "flp-heading": "regular",
+        "campaign": "offer",
+        "word": "offer",
+        "coop": "offer",
+    }
+
+
 def test_offer_ingest_is_idempotent(
     db_conn: Connection,
     raw_payload: RawPayloadFactory,

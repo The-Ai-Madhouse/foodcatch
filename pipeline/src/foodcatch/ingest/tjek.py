@@ -22,6 +22,8 @@ Offer normalization (ported from ``poc/foodcatch_poc.py::parse_tjek_offer``):
 * **Reference price** - ``pricing.pre_price``, else "Normalpris 19,95" in the description.
 * **Membership** (:func:`is_member_price`) and **purchase limits**
   (:func:`parse_max_per_customer`) are read from the offer text; see those functions.
+* **Kind** - ``offer``, except Lidl items marked "Fast lav pris" (:func:`is_fixed_low_price`),
+  which are Lidl's everyday shelf prices printed in the leaflet: kind ``regular``.
 
 Entry point: :func:`ingest_payload` (see :mod:`foodcatch.ingest` for the rules).
 """
@@ -71,6 +73,10 @@ from foodcatch.sources.tjek import (
 
 SOURCE: Final = "tjek"
 KIND: Final = "offer"
+REGULAR_KIND: Final = "regular"
+
+FIXED_LOW_PRICE_CHAINS: Final = frozenset({"lidl"})
+"""Chains whose "Fast lav pris" items are shelf prices (:func:`is_fixed_low_price`)."""
 
 type Unit = Literal["kg", "l", "stk"]
 
@@ -114,6 +120,24 @@ _NON_MEMBER_AMOUNT = re.compile(
     r"ikke-medlem\w*\s*:?\s*(?:op\s+til\s+)?" + _AMOUNT,
     re.IGNORECASE,
 )
+
+
+# Lidl's "Fast lav pris" ("permanently low price") marks an everyday shelf price in the leaflet.
+# Mirrored by migration 0008's backfill (PostgreSQL ``~*`` with ``\m``/``\M`` word bounds).
+_FIXED_LOW_PRICE = re.compile(r"\bfast\s+lav\s+pris\b", re.IGNORECASE)
+
+
+def is_fixed_low_price(chain_id: str, text: str | None) -> bool:
+    """Whether a leaflet item of ``chain_id`` is a regular shelf price, not a campaign.
+
+    Detection rule: the chain is in :data:`FIXED_LOW_PRICE_CHAINS` (Lidl) and the heading or
+    description contains the phrase "Fast lav pris" (any case, any whitespace between the
+    words). Lidl prints these items in every leaflet with a validity until the end of a long
+    period; they are its shelf prices, so they are stored as ``kind = 'regular'``: no deal of
+    their own ("Ugens tilbud"), and a ``regular`` reference for other offers (architecture §6).
+    Other chains' texts are never read this way.
+    """
+    return chain_id in FIXED_LOW_PRICE_CHAINS and bool(_FIXED_LOW_PRICE.search(text or ""))
 
 
 def parse_amount(text: str) -> Decimal:
@@ -355,7 +379,11 @@ def _listing_row(offer: ParsedOffer, chain_id: str, raw_object_id: UUID) -> dict
     return {
         **row,
         "source": SOURCE,
-        "kind": KIND,
+        "kind": (
+            REGULAR_KIND
+            if is_fixed_low_price(chain_id, f"{offer.title}\n{offer.description}")
+            else KIND
+        ),
         "chain_id": chain_id,
         "raw_object_id": raw_object_id,
     }
