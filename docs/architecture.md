@@ -354,7 +354,8 @@ CREATEDB or write access to pipeline tables). Column changes are breaking change
   source_item_id, catalog_id, size_min, size_max, max_per_customer, product_key`. `source` is `tjek`
   or `rema` (an in-store REMA 1000 campaign; `source_item_id` is then the Rema product id). Since
   0008 `api.current_netto_deals` is its Netto part (`target_unit_price_*` exposed under the old
-  `netto_unit_price_*` names) plus `product_key`.
+  `netto_unit_price_*` names) plus `product_key`. The web reads `api.current_deals` only (also for its Netto
+  part); `api.current_netto_deals` is kept for compatibility and can be dropped later.
 * `api.food_waste_near` – current clearances with healthy classification:
   `listing_id, store_id, chain_id, store_name, street, zip, city, lat, lon, title, ean, price, reference_price,
   discount_pct, unit, unit_price, valid_to, stock, stock_unit, type_label, class_label, is_exact, size,

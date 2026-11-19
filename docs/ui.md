@@ -1,6 +1,7 @@
 # FoodCatch – UI specification
 
-Status: accepted for implementation (2026-11-18). Owner of this document: the web app (`web/`).
+Status: accepted for implementation (2026-11-18); all-chain offers, item price history and
+food-waste sources added 2026-11-19 (§12). Owner of this document: the web app (`web/`).
 
 This is the implementation-ready redesign of the web UI. It replaces the current layout; the
 deal logic (architecture §6) and its conservative verdicts are unchanged. Everything a user sees
@@ -178,15 +179,18 @@ Honest answer to "where can I buy this":
 
 | Route | Danish name | Purpose |
 |---|---|---|
-| `/` | "Tilbud" | This week's Netto offers on healthy staples, good buys first, each with where, size, verdict and source. |
+| `/` | "Tilbud" | This week's offers on healthy staples from **every chain with a store within the radius**, good buys first, each with where, size, verdict and source (§12.1). |
 | `/madspild` | "Madspild" | Clearances in nearby stores, grouped by store, nearest first. Desktop: list + map. |
 | `/kort` | "Kort" | **New.** All nearby stores on a map, coloured by chain; tap a store to see what to buy there. |
-| `/vare/[classKey]` | – | Price history of one product (reached from a card). |
+| `/vare/[classKey]` | – | Price history of one product class across chains (reached from a comparison). |
+| `/produkt/[productKey]` | – | **New.** Price history of one item (`product_key`, URL-encoded), §12.2. |
 | `/status` | "Datastatus" | Pipeline health. Linked from the footer and from the stale-data banner, not from the main navigation. |
 
 Query parameters (all optional, shareable):
 
 * `/?vis=alle` – show all offers (default: only "Gode køb").
+* `/?kaede=lidl,netto` – only offers of these chains (combinable with `vis=alle`).
+* `/produkt/{key}?pris=enhed&periode=alt` – unit price instead of pack price; whole history.
 * `/madspild?sorter=rabat` – sort by discount (default: nearest store first).
 * `/kort?kaede=netto,lidl&butik={store_id}` – chain filter and selected store.
 
@@ -830,3 +834,93 @@ comparison.
    "Billigere her end i Netto".
 6. No horizontal page scroll on any page at 390 px; light and dark screenshots of every page at
    390×844 and 1440×900 reviewed.
+
+---
+
+## 12. All chains, item price history and food-waste sources (2026-11-19)
+
+The owner asked for (1) "Ugens tilbud" from all chains, not only Netto, (2) a price history per
+individual item and (3) for food waste an always-visible Open Food Facts link, a "Kilde" view and
+a marker when a clearance also beats the other chains. Data: migration 0008 (architecture §7).
+The visual system (§4) is unchanged.
+
+### 12.1 `/` Tilbud for every chain
+
+* Reads `api.current_deals` (`api.current_netto_deals` is no longer read by the web; `/kort`
+  takes the Netto part of `api.current_deals` for "Billigere her end i Netto"). The verdict is
+  the same function (`lib/verdict.ts`); the row's `target_unit_price_*` is passed as the
+  verdict's `netto_*` input, which then means "the offer's own chain".
+* Only offers of chains with a store within the radius are shown (`nearbyDeals`); a chain-wide
+  leaflet is no use without a store nearby. The "no Netto nearby" notice is replaced by a warn
+  notice when no chain with offers has a store within the radius: "Ingen af kæderne med tilbud
+  har en butik inden for {r} km." + "Skift afstand".
+* Title "Ugens tilbud". Under the segmented control: **chain chips** (`ChainChips`, links, so the
+  view is shareable): "Alle kæder" then one chip per chain with offers in the current view
+  (monogram dot + name + count, e.g. "Lidl 13"), nearest chain first, selected chains first.
+  Each chip toggles its chain in `?kaede=`; selected chips are filled `--ink` and carry
+  `aria-current="true"` and a hidden "(valgt)". Phones: one horizontally scrolling row (the chip
+  is `position: relative`, so its hidden text cannot widen the page); desktop: wrapped.
+* Groups as before; within a group: verdict, then unit price (per kg, then per l, then per piece,
+  unknown last – prices in different units do not compare), then title.
+* Card: the where line names the offer's chain and its nearest store; the member badge names
+  that chain's membership ("Kræver Coop-medlem"; a marked good member price reads "Godt køb med
+  Netto+" / "Godt køb for Coop-medlemmer" / "Godt køb for medlemmer"). The period line carries
+  "**Prishistorik**" at the right (link to `/produkt/{product_key}`, 44 px target). History
+  references read "Tidligere {chain}-tilbud" and reasons "Lidl havde den til … i et tidligere
+  tilbud".
+* "Sammenlign (n)" is a client component (`deals/Comparison.tsx`) that receives its rows as
+  compact JSON and renders them only once opened: with ~250 offers the markup of every
+  comparison would otherwise make the page several MB. Each comparison row ends with its source
+  link and "Prishistorik" (the reference listing's `product_key`, from
+  `api.class_price_history`); the list ends with "Prishistorik for varetypen →" (`/vare/…`).
+
+### 12.2 `/produkt/[productKey]` Prishistorik for one item
+
+* Data: `api.products` (label, chain, class, EAN) and `api.product_price_history` (every price
+  of the item). The key is URL-encoded (`productPath`); `productKeyFromSegment` decodes it once
+  (a decoded key always contains `:`).
+* Header: title (the label, sentence case when the source shouts), meta "● {chain} · EAN {ean} ·
+  {n} priser registreret", then links "Varetypen {class} i alle kæder →" (`/vare/…`) and, with an
+  EAN, "Varen på Open Food Facts ↗".
+* Segmented control "Pakkepris | Kilopris" (`?pris=enhed`; "Literpris"/"Stykpris" by unit),
+  only when some row has a unit price. Default pack price: Salling's EAN normal price has a pack
+  price only.
+* Chart (`ProductPriceChart`, `lib/product.ts`): colour = chain (§4.3 fills, legend with
+  monograms), shape = kind – regular shelf price a **step line** per chain (joined when the next
+  price starts within two days), Salling's EAN normal price a **dashed step line**, offers
+  **segments** over their period (a band for a unit-price range), clearances **points**. Every
+  mark has a 1 px `--dot-ring` halo so Netto's yellow stays visible. A price without an end runs
+  to the right edge; "i dag" is a dashed vertical line; the y axis has 8 % headroom. Default
+  window one year; "Vis hele historikken (fra {date})" (`?periode=alt`) when older rows exist
+  (REMA 1000 prices can go back years). `role="img"` with a summary (`chartSummary`) and a
+  `<title>` per mark; the table is the accessible equivalent.
+* Short history: except for `rema:` keys, when the history is under 60 days or has fewer than
+  three prices: "Historik indsamles fra 18. nov. 2026." No chartable price: neutral notice "Ingen
+  priser at vise i grafen".
+* Table "Alle priser" (newest first; `<caption>` for screen readers), three columns that fit
+  390 px: "Periode" · "Kæde og type" (chain, kind, store of a clearance, the listing title when it
+  differs, source link) · "Pris" (pack price, size, unit price). A footnote explains "Normalpris
+  ifølge Salling".
+* `/vare/[classKey]` rows link "Prishistorik for varen" to `/produkt/…`, so the two pages link
+  both ways.
+
+### 12.3 Food waste: Open Food Facts, "Kilde" and competitor badge
+
+* Below every item row, always visible (outside the `<details>`, so no link sits inside a
+  `<summary>`): "Varen på Open Food Facts ↗" when the EAN is valid
+  (`https://world.openfoodfacts.org/product/{ean}`, `openFoodFactsProductLink`) and
+  "Prishistorik" (`/produkt/{product_key}`). Indented under the text from 640 px; on a phone the
+  row starts at the image edge so both links fit on one line.
+* Badge (good tone, ✓) under the meta line only when `beats_competitors` is true
+  (`competitorBadge`): one chain and kind → "Billigere end REMA 1000s normalpris" / "Billigere end
+  Lidls tilbud", one chain, several kinds → "Billigere end MENY", several chains → "Billigst
+  blandt kæderne". Nothing when false or null.
+* Expanded row, section "Kilde" (a definition list): "Pris nu" (newPrice), "Normalpris"
+  (originalPrice), "Rabat" (Salling's percentDiscount, one decimal), "Hentet"
+  (`source_fetched_at`), "Lager set" (`last_seen_at`), "EAN", "Varekode" (product code when it
+  differs from the EAN), "Etiketkode" (`offer_ean`), "Butik" (name + Salling id), then "Fra
+  Salling Groups madspildsdata – ingen vareside".
+* Section "Sammenligning" when references exist and the clearance has a unit price: heading
+  "Billigere end alle {n} priser på samme vare i andre kæder" (or "Samme vare i andre kæder"),
+  "Her: {unit price}", and the references cheapest first (chain, kind, member tag, unit price).
+  References count regardless of distance (architecture §6), the more conservative reading.

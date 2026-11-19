@@ -5,13 +5,14 @@ clearances, price history per product and pipeline health. Next.js (App Router, 
 Tailwind CSS, Vitest. The app runs locally only for now (see
 [ADR 0003](../docs/decisions/0003-local-only-web.md)).
 
-| Route              | Shows                                                                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/`                | "Tilbud": this week's Netto offers on healthy staples, one card per offer with where to buy, pack size, verdict and source link (`?vis=alle` for all)        |
-| `/madspild`        | "Madspild": clearances within your radius grouped by store, nearest first (`?sorter=rabat` for one list by discount)                                         |
-| `/kort`            | "Kort": every nearby store on a map, coloured by chain; a store shows its food waste or what is cheaper there than in Netto (`?kaede=netto,lidl&butik={id}`) |
-| `/vare/[classKey]` | Price history of one product (chart and a list with source links)                                                                                            |
-| `/status`          | "Datastatus": freshness of every pipeline job and the review queue (footer link)                                                                             |
+| Route                   | Shows                                                                                                                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                     | "Tilbud": this week's offers of every chain with a store nearby, one card per offer with where to buy, pack size, verdict and source link (`?vis=alle`, `?kaede=lidl,netto`) |
+| `/madspild`             | "Madspild": clearances within your radius grouped by store, nearest first (`?sorter=rabat` for one list by discount)                                                         |
+| `/kort`                 | "Kort": every nearby store on a map, coloured by chain; a store shows its food waste or what is cheaper there than in Netto (`?kaede=netto,lidl&butik={id}`)                 |
+| `/vare/[classKey]`      | Price history of one product class across chains (chart and a list with source links)                                                                                        |
+| `/produkt/[productKey]` | Price history of one item: shelf prices, offers, clearances and Salling's EAN normal price (chart and table; `?pris=enhed`, `?periode=alt`)                                  |
+| `/status`               | "Datastatus": freshness of every pipeline job and the review queue (footer link)                                                                                             |
 
 The design is specified in [docs/ui.md](../docs/ui.md). Phones are the primary target (bottom tab
 bar, full-screen map); from 1024 px `/` and `/madspild` show a map column next to the list.
@@ -33,6 +34,14 @@ bar, full-screen map); from 1024 px `/` and `/madspild` show a map column next t
   user typed. The client keeps a backup in `localStorage` (`foodcatch.location.v1`) and restores
   the cookie from it when the cookie is gone; "Glem" removes both. Without either the app uses
   `FOODCATCH_DEFAULT_LOCATION` (`lat,lon`; default Rådhuspladsen, Copenhagen).
+- Deals come from `api.current_deals` (every chain). Only offers of chains with a store within
+  the radius are shown; the verdict (`lib/verdict.ts`) takes the row's `target_unit_price_*`.
+  Comparisons are sent as compact JSON and rendered on the client when opened, which keeps the
+  page small with hundreds of offers.
+- Item price history (`/produkt/[productKey]`) reads `api.products` and
+  `api.product_price_history`; the chart model is the pure `lib/product.ts`.
+- Food-waste items show their Open Food Facts page (by EAN), a "Kilde" view of what Salling's API
+  said, and a badge when `beats_competitors` is true (`lib/foodwaste.ts`).
 - Nearby stores are the rows of `api.stores` within the radius (haversine in SQL), one per
   physical store (`lib/stores.ts`: Salling rows for Netto, føtex and Bilka, Tjek rows otherwise).
   The verdict of each deal is computed per request from the deal's references and the chains of
@@ -114,11 +123,15 @@ Pages never touch the database at build time, so `pnpm build` works without one.
 390×844 and 1440×900: the location survives reloads and is restored from `localStorage` without
 the cookie, "Brug min position" saves a (faked) browser position, cards show the store and pack
 size and link to the leaflet, the map renders markers with attribution, the nearest store's
-marker can be clicked (and stays above the bottom sheet on a phone), a clearance shows its
-store, weight and source, and no page scrolls sideways on a phone. No test geocodes an address,
+marker can be clicked (and stays above the bottom sheet on a phone), the chain chips filter the
+offers of every chain, an offer links to its item's price history with a chart and a table, a
+clearance shows its store, weight, Open Food Facts link and "Kilde" (and its competitor
+comparison when it has a badge), and no page scrolls sideways on a phone. No test geocodes an address,
 so Nominatim is never called.
 
-They need a database with real data (`WEB_DATABASE_URL` in `.env.local`) and reuse a running
+The development seed (`pnpm db:seed`, migrated to head) covers every test, including food
+waste; a production-like database without food waste fails the food-waste tests. They need a
+database with data (`WEB_DATABASE_URL` in `.env.local`) and reuse a running
 `pnpm dev` on port 3000 (or start one); set `E2E_BASE_URL` to test another server, e.g.
 `pnpm build && pnpm start -p 3100` and `E2E_BASE_URL=http://127.0.0.1:3100 pnpm e2e`. They are
 **local only**: CI has neither a database with data nor Chrome, so they are not part of the CI
