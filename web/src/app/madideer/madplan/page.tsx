@@ -31,7 +31,8 @@ import {
   type PlanShopping,
 } from "@/lib/meal-plan";
 import { RECIPES, mealCatalogue } from "@/lib/meals";
-import { nearestByChain, shortStoreName } from "@/lib/stores";
+import { chainPins, nearestByChain, shortStoreName } from "@/lib/stores";
+import { StoreInfo } from "@/components/StoreInfo";
 import { getMealPlan, getUserLocation } from "@/server/location";
 import { getCurrentDeals, getFoodWasteNear, getNearbyStores } from "@/server/queries";
 
@@ -151,7 +152,18 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madidee
   let rows: ChecklistRow[] = [];
   if (chosen) {
     groups = [
-      ...chosen.chains.map((c) => ({ group: c, title: storeTitle(c), hint: "tilbud og madspild" })),
+      ...chosen.chains.map((c) => {
+        const { pins, total } = chainPins(storesByChain, c);
+        return {
+          group: c,
+          title: (
+            <StoreInfo chainId={c} stores={pins} total={total}>
+              {storeTitle(c)}
+            </StoreInfo>
+          ),
+          hint: "tilbud og madspild",
+        };
+      }),
       {
         group: "normal",
         title: "Ikke på tilbud",

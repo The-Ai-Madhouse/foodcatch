@@ -10,7 +10,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "FoodCatch", template: "%s · FoodCatch" },
   description:
-    "Find sunde basisvarer, der er dokumenteret billige nær dig: Netto-tilbud sammenlignet med andre butikker, madspild og prishistorik.",
+    "Find sunde basisvarer, der er dokumenteret billige nær dig: ugens tilbud fra alle kæder sammenlignet med andre butikker, madspild og prishistorik.",
   robots: { index: false, follow: false },
 };
 

@@ -156,7 +156,7 @@ export interface MapStore {
   distanceKm: number;
   /** Food-waste clearances in this store. */
   foodWasteCount: number;
-  /** This week's compared Netto offers that this store's chain has cheaper. */
+  /** This week's compared offers of other chains that this store's chain has cheaper. */
   cheaperCount: number;
   source: string | null;
   sourceStoreId: string | null;
@@ -182,4 +182,52 @@ export function toMapStore(
     source: store.source,
     sourceStoreId: store.sourceStoreId,
   };
+}
+
+/**
+ * A store as shown in the store popover ({@link storePin}): plain JSON for client components.
+ * `name` includes the chain ({@link storeDisplayName}).
+ */
+export interface StorePin {
+  id: string;
+  chainId: string;
+  name: string;
+  street: string | null;
+  zip: string | null;
+  city: string | null;
+  lat: number;
+  lon: number;
+  distanceKm: number;
+}
+
+/** The popover form of a store. */
+export function storePin(
+  store: Pick<
+    NearbyStore,
+    "id" | "chainId" | "name" | "street" | "zip" | "city" | "lat" | "lon" | "distanceKm"
+  >,
+): StorePin {
+  return {
+    id: store.id,
+    chainId: store.chainId,
+    name: storeDisplayName(store.name, store.chainId),
+    street: store.street,
+    zip: store.zip,
+    city: store.city,
+    lat: store.lat,
+    lon: store.lon,
+    distanceKm: store.distanceKm,
+  };
+}
+
+/** How many of a chain's nearest stores the popover lists. */
+export const POPOVER_STORES = 3;
+
+/** The popover stores of a chain: its nearest few within the radius (empty when none). */
+export function chainPins(
+  storesByChain: ReadonlyMap<string, readonly NearbyStore[]>,
+  chainId: string,
+): { pins: StorePin[]; total: number } {
+  const list = storesByChain.get(chainId) ?? [];
+  return { pins: list.slice(0, POPOVER_STORES).map(storePin), total: list.length };
 }

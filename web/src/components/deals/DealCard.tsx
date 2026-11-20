@@ -2,7 +2,8 @@ import type { Route } from "next";
 import Link from "next/link";
 import { MemberBadge, VerdictBadge } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
-import { ExternalLink, SourceLink } from "@/components/SourceLink";
+import { SourceLink } from "@/components/SourceLink";
+import { StoreInfo } from "@/components/StoreInfo";
 import { chainName } from "@/lib/chains";
 import {
   cleanClassLabel,
@@ -24,11 +25,10 @@ import {
   packSize,
 } from "@/lib/format";
 import { classPath, productPath } from "@/lib/routes";
-import { sourceLink, storeMapsLink } from "@/lib/sources";
-import { shortStoreName, type NearbyStore } from "@/lib/stores";
+import { sourceLink } from "@/lib/sources";
+import { chainPins, shortStoreName, storePin, type NearbyStore } from "@/lib/stores";
 import { LOCATION_INDEPENDENT_KINDS } from "@/lib/verdict";
 import { Comparison, type ComparisonRow, type ComparisonSection } from "./Comparison";
-import { WhereLine } from "./WhereLine";
 
 /** What a card needs to know about the user's surroundings. */
 export interface DealContext {
@@ -175,34 +175,36 @@ function HistoryLink({ productKey, className = "" }: { productKey: string; class
   );
 }
 
-/** "Maps ↗": the store in Google Maps in a new tab. */
-export function MapsLink({ store }: { store: NearbyStore }) {
-  return (
-    <ExternalLink
-      href={storeMapsLink(store)}
-      iconSize={14}
-      className="min-h-11 shrink-0 text-meta whitespace-nowrap"
-    >
-      Maps<span className="sr-only">: {store.name}</span>
-    </ExternalLink>
-  );
-}
-
 /** The chain's nearest store within the radius, or how far the nearest one is. */
 function ChainWhere({ chainId, ctx }: { chainId: string; ctx: DealContext }) {
   const stores = ctx.storesByChain.get(chainId) ?? [];
   const nearest = stores[0];
+  const chain = chainName(chainId);
   if (nearest) {
+    const { pins, total } = chainPins(ctx.storesByChain, chainId);
+    const more = stores.length - 1;
     return (
-      <div className="flex items-center justify-between gap-3">
-        <WhereLine
-          chainId={chainId}
-          nearestName={shortStoreName(nearest.name, chainId)}
-          nearestDistance={formatDistance(nearest.distanceKm)}
-          moreCount={stores.length - 1}
-        />
-        <MapsLink store={nearest} />
-      </div>
+      // One line on a phone: "Netto Rådhuspladsen · 80 m · +22 andre".
+      <p className="flex min-h-11 items-center gap-2 text-meta text-ink-2">
+        <ChainDot chainId={chainId} />
+        <span className="min-w-0">
+          <span className="sr-only">Nærmeste butik: </span>
+          <StoreInfo chainId={chainId} stores={pins} total={total}>
+            <span>
+              <strong className="font-semibold text-ink">{chain}</strong>{" "}
+              {shortStoreName(nearest.name, chainId)}
+            </span>
+          </StoreInfo>
+          <span className="whitespace-nowrap tabular"> · {formatDistance(nearest.distanceKm)}</span>
+          {more > 0 ? (
+            <span className="whitespace-nowrap">
+              {" "}
+              · +{more} {more === 1 ? "anden" : "andre"}
+              <span className="sr-only"> {chain}-butikker i nærheden</span>
+            </span>
+          ) : null}
+        </span>
+      </p>
     );
   }
   // The page explains it in a notice; the card only says where the nearest store is.
@@ -212,13 +214,17 @@ function ChainWhere({ chainId, ctx }: { chainId: string; ctx: DealContext }) {
       <ChainDot chainId={chainId} />
       <span>
         <span className="sr-only">
-          Ingen {chainName(chainId)} inden for {ctx.radiusKm} km.
+          Ingen {chain} inden for {ctx.radiusKm} km.
           {outside ? " Nærmeste butik: " : ""}
         </span>
         {outside ? (
           <>
-            <strong className="font-semibold">{chainName(chainId)}</strong>{" "}
-            {shortStoreName(outside.name, chainId)}
+            <StoreInfo chainId={chainId} stores={[storePin(outside)]}>
+              <span>
+                <strong className="font-semibold">{chain}</strong>{" "}
+                {shortStoreName(outside.name, chainId)}
+              </span>
+            </StoreInfo>
             <span className="whitespace-nowrap tabular">
               {" "}
               · {formatDistance(outside.distanceKm)}
@@ -227,7 +233,7 @@ function ChainWhere({ chainId, ctx }: { chainId: string; ctx: DealContext }) {
           </>
         ) : (
           <span aria-hidden="true">
-            Ingen {chainName(chainId)} inden for {ctx.radiusKm} km
+            Ingen {chain} inden for {ctx.radiusKm} km
           </span>
         )}
       </span>
@@ -259,9 +265,9 @@ function comparisonRow(
   ctx: DealContext,
 ): ComparisonRow {
   const detail = ref.listing_id ? ctx.details.get(ref.listing_id) : undefined;
-  const km = LOCATION_INDEPENDENT_KINDS.has(ref.kind)
-    ? null
-    : (ctx.storesByChain.get(ref.chain_id)?.[0]?.distanceKm ?? null);
+  const located = !LOCATION_INDEPENDENT_KINDS.has(ref.kind);
+  const km = located ? (ctx.storesByChain.get(ref.chain_id)?.[0]?.distanceKm ?? null) : null;
+  const { pins, total } = chainPins(ctx.storesByChain, ref.chain_id);
   const size = detail
     ? packSize({
         unit: detail.unit,
@@ -301,5 +307,7 @@ function comparisonRow(
     memberOnly: ref.member_only === true,
     link,
     historyHref: detail?.productKey ? productPath(detail.productKey) : null,
+    stores: located ? pins : null,
+    storeTotal: total,
   };
 }

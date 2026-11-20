@@ -56,13 +56,13 @@ export function Badge({
 export function VerdictBadge({
   status,
   memberOnly = false,
-  chainId = "netto",
+  chainId,
   className = "",
 }: {
   status: DealStatus;
   memberOnly?: boolean;
   /** The offer's chain (names the membership of a member price). */
-  chainId?: string;
+  chainId: string;
   className?: string;
 }) {
   return (
@@ -73,7 +73,7 @@ export function VerdictBadge({
 }
 
 /** "★ Kræver Netto+": the price needs a membership of the chain's customer club. */
-export function MemberBadge({ chainId = "netto" }: { chainId?: string }) {
+export function MemberBadge({ chainId }: { chainId: string }) {
   return (
     <Badge tone="warn" icon="★" title="Prisen gælder kun for medlemmer af kædens kundeklub">
       {memberPriceLabel(chainId)}

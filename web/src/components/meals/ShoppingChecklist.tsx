@@ -25,7 +25,8 @@ export interface ChecklistRow {
 
 export interface ChecklistGroup {
   group: string;
-  title: string;
+  /** Heading of the group (may hold a store popover). */
+  title: React.ReactNode;
   hint?: string;
 }
 

@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
 import { MapExplorer, type CheaperRow } from "@/components/map/MapExplorer";
 import { chainName } from "@/lib/chains";
-import { cheaperByChain, evaluateDeals, groupByListing, referenceListingIds } from "@/lib/deals";
+import {
+  cheaperByChain,
+  evaluateDeals,
+  groupByListing,
+  isUpcoming,
+  nearbyDeals,
+  referenceListingIds,
+} from "@/lib/deals";
 import type { FoodWasteItem } from "@/lib/foodwaste";
 import { formatDkk, formatUnitPrice, formatUnitPriceRange, packSize } from "@/lib/format";
 import { sourceLink } from "@/lib/sources";
@@ -31,13 +38,24 @@ export default async function MapPage({ searchParams }: PageProps<"/kort">) {
   const [stores, items, rows] = await Promise.all([
     getNearbyStores(location),
     getFoodWasteNear(location),
-    getCurrentDeals("netto"),
+    getCurrentDeals(),
   ]);
   const now = new Date();
   const nearbyChains = new Set(nearestByChain(stores).keys());
-  const deals = evaluateDeals(rows, nearbyChains);
-  const details = await getReferenceDetails(referenceListingIds(rows));
-  const nettoGoodCount = groupByListing(deals).filter((l) => l.status === "good_deal").length;
+  // This week's offers of every chain with a store nearby (upcoming leaflets not yet).
+  const current = new Set(
+    groupByListing(evaluateDeals(rows, nearbyChains))
+      .filter((l) => !isUpcoming(l, now))
+      .map((l) => l.listingId),
+  );
+  const nearbyRows = nearbyDeals(rows, nearbyChains).filter((r) => current.has(r.listingId));
+  const deals = evaluateDeals(nearbyRows, nearbyChains);
+  const details = await getReferenceDetails(referenceListingIds(nearbyRows));
+  const goodCounts: Record<string, number> = {};
+  for (const l of groupByListing(deals)) {
+    if (l.status === "good_deal")
+      goodCounts[l.offer.chainId] = (goodCounts[l.offer.chainId] ?? 0) + 1;
+  }
 
   const cheaper: Record<string, CheaperRow[]> = {};
   for (const [chainId, list] of cheaperByChain(deals, nearbyChains)) {
@@ -66,7 +84,8 @@ export default async function MapPage({ searchParams }: PageProps<"/kort">) {
         ]
           .filter(Boolean)
           .join(" · "),
-        netto:
+        offerChain: chainName(deal.chainId),
+        offerPrice:
           formatUnitPriceRange(deal.targetUnitPriceBest, deal.targetUnitPriceWorst, deal.unit) ??
           "ukendt",
         link: detail
@@ -104,7 +123,7 @@ export default async function MapPage({ searchParams }: PageProps<"/kort">) {
         radiusKm={location.radiusKm}
         foodWaste={foodWaste}
         cheaper={cheaper}
-        nettoGoodCount={nettoGoodCount}
+        goodCounts={goodCounts}
         initialChains={parseChains(params.kaede)}
         initialStoreId={butik && mapStores.some((s) => s.id === butik) ? butik : null}
         now={now.toISOString()}

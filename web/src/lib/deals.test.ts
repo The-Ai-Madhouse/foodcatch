@@ -363,15 +363,45 @@ describe("cheaperByChain", () => {
     ]);
     expect(referenceListingIds(deals)).toEqual(["r1"]);
   });
+
+  it("works for offers of any chain, but never lists the offer's own chain", () => {
+    const nearby = new Set(["netto", "rema1000", "lidl"]);
+    const deals = evaluateDeals(
+      [
+        row({
+          listingId: "l1",
+          chainId: "lidl",
+          chainName: "Lidl",
+          title: "Lidl-vare",
+          targetUnitPriceWorst: 60,
+          targetUnitPriceBest: 50,
+          references: [{ kind: "offer", chain_id: "netto", unit_price: 40 }],
+        }),
+        row({
+          listingId: "l2",
+          chainId: "lidl",
+          chainName: "Lidl",
+          title: "Egen normalpris",
+          targetUnitPriceWorst: 60,
+          targetUnitPriceBest: 50,
+          references: [{ kind: "regular", chain_id: "lidl", unit_price: 40 }],
+        }),
+      ],
+      nearby,
+    );
+    const byChain = cheaperByChain(deals, nearby);
+    expect([...byChain.keys()]).toEqual(["netto"]);
+    expect(byChain.get("netto")?.map((e) => e.deal.title)).toEqual(["Lidl-vare"]);
+  });
 });
 
 describe("member prices", () => {
   it("a marked Netto member price can be a good deal and the badge says so", () => {
     const [deal] = evaluateDeals([row({ memberOnly: true })], ["superbrugsen", "rema1000"]);
     expect(deal?.status).toBe("good_deal");
-    expect(verdictBadgeLabel(deal!.status, deal!.memberOnly)).toBe("Godt køb med Netto+");
-    expect(verdictBadgeLabel("good_deal", false)).toBe("Godt køb");
-    expect(verdictBadgeLabel("undecided", true)).toBe("Uafklaret");
+    expect(verdictBadgeLabel(deal!.status, deal!.memberOnly, "netto")).toBe("Godt køb med Netto+");
+    expect(verdictBadgeLabel("good_deal", false, "netto")).toBe("Godt køb");
+    expect(verdictBadgeLabel("undecided", true, "netto")).toBe("Uafklaret");
   });
 
   it("a competitor member price counts like any other price", () => {

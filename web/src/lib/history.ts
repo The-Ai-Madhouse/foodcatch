@@ -43,7 +43,7 @@ export interface PriceHistoryRow {
   productKey: string | null;
 }
 
-export type SeriesKey = "netto_offer" | "other_offer" | "regular";
+export type SeriesKey = "offer" | "regular";
 
 export interface SeriesMeta {
   key: SeriesKey;
@@ -54,8 +54,7 @@ export interface SeriesMeta {
 
 /** Fixed series order and colors: color follows the series, never its rank. */
 export const SERIES: readonly SeriesMeta[] = [
-  { key: "netto_offer", label: "Netto-tilbud", slot: 1 },
-  { key: "other_offer", label: "Andre kæders tilbud", slot: 2 },
+  { key: "offer", label: "Tilbud", slot: 1 },
   { key: "regular", label: "Normalpris", slot: 3 },
 ];
 
@@ -105,7 +104,7 @@ export const MAX_WINDOW_DAYS = 365;
 /** The series a row belongs to, or null when it is not charted (e.g. clearances). */
 export function seriesOf(row: Pick<PriceHistoryRow, "kind" | "chainId">): SeriesKey | null {
   if (row.kind === "regular") return "regular";
-  if (row.kind === "offer") return row.chainId === "netto" ? "netto_offer" : "other_offer";
+  if (row.kind === "offer") return "offer";
   return null;
 }
 

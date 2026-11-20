@@ -19,8 +19,24 @@ import {
 import { productPath } from "@/lib/routes";
 import { STAPLE_OPTIONS, resolveStaple } from "@/lib/staple-catalogue";
 import type { StapleMatches, TextOffer } from "@/lib/staples";
+import { StoreInfo } from "@/components/StoreInfo";
+import { itemStore } from "@/components/foodwaste/FoodWasteItemRow";
+import { chainPins, storeDisplayName, type NearbyStore } from "@/lib/stores";
 import { StapleSearch } from "./StapleSearch";
-import { storeDisplayName } from "@/lib/stores";
+import { StaplesFold } from "./StaplesFold";
+
+type StoresByChain = ReadonlyMap<string, readonly NearbyStore[]>;
+
+/** The chain's name as a store-popover trigger (its nearest stores). */
+function ChainStores({ chainId, stores }: { chainId: string; stores: StoresByChain }) {
+  const { pins, total } = chainPins(stores, chainId);
+  return (
+    <StoreInfo chainId={chainId} stores={pins} total={total}>
+      <ChainDot chainId={chainId} size="xs" />
+      <span>{chainName(chainId)}</span>
+    </StoreInfo>
+  );
+}
 
 const sep = <span aria-hidden="true"> · </span>;
 
@@ -35,7 +51,15 @@ function startsLater(validFrom: string, now: Date) {
 }
 
 /** One offer of a staple in one line: title, chain, price, size, unit price and verdict. */
-function OfferRow({ listing, now }: { listing: ListingDeal; now: Date }) {
+function OfferRow({
+  listing,
+  now,
+  stores,
+}: {
+  listing: ListingDeal;
+  now: Date;
+  stores: StoresByChain;
+}) {
   const { offer } = listing;
   const size = packSize({
     unit: offer.unit,
@@ -57,8 +81,7 @@ function OfferRow({ listing, now }: { listing: ListingDeal; now: Date }) {
       <div className="min-w-0">
         <p className="font-medium text-ink">{title}</p>
         <p className="flex flex-wrap items-center gap-x-1 text-meta text-ink-2">
-          <ChainDot chainId={offer.chainId} size="xs" />
-          <span>{chainName(offer.chainId)}</span>
+          <ChainStores chainId={offer.chainId} stores={stores} />
           {sep}
           <span className="font-bold text-ink tabular">{formatDkk(offer.price)}</span>
           {sep}
@@ -85,7 +108,15 @@ function OfferRow({ listing, now }: { listing: ListingDeal; now: Date }) {
 }
 
 /** An offer of a free-text staple: like {@link OfferRow}, but without a verdict. */
-function TextOfferRow({ offer, now }: { offer: TextOffer; now: Date }) {
+function TextOfferRow({
+  offer,
+  now,
+  stores,
+}: {
+  offer: TextOffer;
+  now: Date;
+  stores: StoresByChain;
+}) {
   const size = packSize({
     unit: offer.unit,
     sizeMin: offer.sizeMin,
@@ -106,8 +137,7 @@ function TextOfferRow({ offer, now }: { offer: TextOffer; now: Date }) {
       <div className="min-w-0">
         <p className="font-medium text-ink">{title}</p>
         <p className="flex flex-wrap items-center gap-x-1 text-meta text-ink-2">
-          <ChainDot chainId={offer.chainId} size="xs" />
-          <span>{chainName(offer.chainId)}</span>
+          <ChainStores chainId={offer.chainId} stores={stores} />
           {offer.price != null ? (
             <>
               {sep}
@@ -141,8 +171,10 @@ function ClearanceRow({ item }: { item: FoodWasteItem }) {
       <div className="min-w-0">
         <p className="font-medium text-ink">{displayTitle(item.title)}</p>
         <p className="flex flex-wrap items-center gap-x-1 text-meta text-ink-2">
-          <ChainDot chainId={item.chainId} size="xs" />
-          <span>{storeDisplayName(item.storeName, item.chainId)}</span>
+          <StoreInfo chainId={item.chainId} stores={[itemStore(item)]}>
+            <ChainDot chainId={item.chainId} size="xs" />
+            <span>{storeDisplayName(item.storeName, item.chainId)}</span>
+          </StoreInfo>
           <span className="whitespace-nowrap tabular">· {formatDistance(item.distanceKm)}</span>
           {sep}
           <span className="font-bold text-ink tabular">{formatDkk(item.price)}</span>
@@ -242,71 +274,95 @@ function StaplePicker({ selected, open }: { selected: readonly string[]; open: b
 
 /**
  * "Dine basisvarer" (docs/ui.md §15) at the top of the offers page: the staples the user picked
- * that are on offer or cleared nearby, and the picker.
+ * that are on offer or cleared nearby, and the picker. It can be folded away (remembered), and
+ * a long list scrolls inside the box, so it never pushes the week's offers far down.
  */
 export function StaplesSection({
   selected,
   matches,
   now,
+  storesByChain,
+  folded,
 }: {
   selected: readonly string[];
   matches: readonly StapleMatches[];
   now: Date;
+  storesByChain: StoresByChain;
+  /** The user folded the section away last time. */
+  folded: boolean;
 }) {
   const onSale = matches.filter((m) => m.offerCount + m.clearanceCount > 0);
   const quiet = matches.filter((m) => m.offerCount + m.clearanceCount === 0);
+  const summary =
+    selected.length === 0
+      ? null
+      : onSale.length === 0
+        ? "intet på tilbud"
+        : `${onSale.length} af ${matches.length} på tilbud`;
   return (
     <section
       aria-labelledby="basisvarer"
-      className="rounded-xl border border-line bg-surface px-4 pt-3 lg:px-5"
+      className="rounded-xl border border-line bg-surface px-4 pt-1 lg:px-5"
     >
-      <h2 id="basisvarer" className="text-heading font-semibold text-ink">
-        Dine basisvarer
-      </h2>
-      {selected.length === 0 ? (
-        <p className="text-meta text-ink-2">
-          Vælg fx æg, havregryn og mælk, så ser du dem her, når de er billige.
-        </p>
-      ) : onSale.length === 0 ? (
-        <p className="text-meta text-ink-2">Ingen af dine basisvarer er på tilbud lige nu.</p>
-      ) : (
-        <div className="divide-y divide-line">
-          {onSale.map((m) => {
-            const shown = m.offers.length + m.textOffers.length;
-            const more = m.offerCount - shown + (m.clearanceCount - m.clearances.length);
-            return (
-              <div key={m.staple.id} className="py-2">
-                <h3 className="text-meta font-semibold text-ink-3">
-                  {m.staple.label}{" "}
-                  <span className="font-normal tabular">
-                    ({m.offerCount} tilbud
-                    {m.clearanceCount ? `, ${m.clearanceCount} madspild` : ""}
-                    {m.staple.kind === "text" ? ", uden prisdom" : ""})
-                  </span>
-                </h3>
-                <ul className="divide-y divide-line">
-                  {m.offers.map((l) => (
-                    <OfferRow key={l.listingId} listing={l} now={now} />
-                  ))}
-                  {m.textOffers.map((o) => (
-                    <TextOfferRow key={o.listingId} offer={o} now={now} />
-                  ))}
-                  {m.clearances.map((w) => (
-                    <ClearanceRow key={w.listingId} item={w} />
-                  ))}
-                </ul>
-                {more > 0 ? <p className="text-micro text-ink-3">+{more} flere</p> : null}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {quiet.length > 0 && onSale.length > 0 ? (
-        <p className="pb-2 text-micro text-ink-3">
-          Ikke på tilbud: {quiet.map((m) => m.staple.label).join(", ")}
-        </p>
-      ) : null}
-      <StaplePicker selected={selected} open={selected.length === 0} />
+      <StaplesFold
+        // Nothing picked yet: keep it open, the picker is the point.
+        initialOpen={selected.length === 0 || !folded}
+        summary={summary}
+        title={
+          <h2 id="basisvarer" className="text-heading font-semibold text-ink">
+            Dine basisvarer
+          </h2>
+        }
+      >
+        {selected.length === 0 ? (
+          <p className="text-meta text-ink-2">
+            Vælg fx æg, havregryn og mælk, så ser du dem her, når de er billige.
+          </p>
+        ) : onSale.length === 0 ? (
+          <p className="text-meta text-ink-2">Ingen af dine basisvarer er på tilbud lige nu.</p>
+        ) : (
+          <div
+            tabIndex={0}
+            aria-label="Dine basisvarer på tilbud"
+            className="-mx-4 max-h-[min(55vh,28rem)] divide-y divide-line overflow-y-auto overscroll-contain border-y border-line px-4 lg:-mx-5 lg:px-5"
+          >
+            {onSale.map((m) => {
+              const shown = m.offers.length + m.textOffers.length;
+              const more = m.offerCount - shown + (m.clearanceCount - m.clearances.length);
+              return (
+                <div key={m.staple.id} className="py-2">
+                  <h3 className="text-meta font-semibold text-ink-3">
+                    {m.staple.label}{" "}
+                    <span className="font-normal tabular">
+                      ({m.offerCount} tilbud
+                      {m.clearanceCount ? `, ${m.clearanceCount} madspild` : ""}
+                      {m.staple.kind === "text" ? ", uden prisdom" : ""})
+                    </span>
+                  </h3>
+                  <ul className="divide-y divide-line">
+                    {m.offers.map((l) => (
+                      <OfferRow key={l.listingId} listing={l} now={now} stores={storesByChain} />
+                    ))}
+                    {m.textOffers.map((o) => (
+                      <TextOfferRow key={o.listingId} offer={o} now={now} stores={storesByChain} />
+                    ))}
+                    {m.clearances.map((w) => (
+                      <ClearanceRow key={w.listingId} item={w} />
+                    ))}
+                  </ul>
+                  {more > 0 ? <p className="text-micro text-ink-3">+{more} flere</p> : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {quiet.length > 0 && onSale.length > 0 ? (
+          <p className="py-2 text-micro text-ink-3">
+            Ikke på tilbud: {quiet.map((m) => m.staple.label).join(", ")}
+          </p>
+        ) : null}
+        <StaplePicker selected={selected} open={selected.length === 0} />
+      </StaplesFold>
     </section>
   );
 }

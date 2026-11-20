@@ -43,8 +43,8 @@ function row(overrides: Partial<PriceHistoryRow> = {}): PriceHistoryRow {
 
 describe("seriesOf", () => {
   it("splits Netto offers, other offers and shelf prices; skips clearances", () => {
-    expect(seriesOf({ kind: "offer", chainId: "netto" })).toBe("netto_offer");
-    expect(seriesOf({ kind: "offer", chainId: "lidl" })).toBe("other_offer");
+    expect(seriesOf({ kind: "offer", chainId: "netto" })).toBe("offer");
+    expect(seriesOf({ kind: "offer", chainId: "lidl" })).toBe("offer");
     expect(seriesOf({ kind: "regular", chainId: "rema1000" })).toBe("regular");
     expect(seriesOf({ kind: "clearance", chainId: "netto" })).toBeNull();
   });
@@ -116,7 +116,7 @@ describe("buildPriceChart", () => {
     expect(model.unit).toBe("kg");
     expect(model.marks).toHaveLength(2);
     expect(model.excluded).toBe(2);
-    expect(model.series.map((s) => s.key)).toEqual(["netto_offer", "regular"]);
+    expect(model.series.map((s) => s.key)).toEqual(["offer", "regular"]);
     expect(model.yDomain).toEqual([30, 50]);
     const regular = model.marks.find((m) => m.series === "regular");
     expect(regular?.openEnded).toBe(true);

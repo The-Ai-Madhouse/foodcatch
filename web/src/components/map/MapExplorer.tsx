@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChainDot } from "@/components/ChainDot";
@@ -16,11 +17,11 @@ import { storeAddress, type MapStore } from "@/lib/stores";
 import { LazyStoreMap } from "./LazyStoreMap";
 import { useIsDesktop } from "./MapFocus";
 
-/** A Netto offer that a store's chain has cheaper, prepared on the server. */
+/** An offer of another chain that a store's chain has cheaper, prepared on the server. */
 export interface CheaperRow {
   key: string;
   title: string;
-  /** `cheaper`: clearly cheaper; `maybe`: depends on Netto's pack size. */
+  /** `cheaper`: clearly cheaper; `maybe`: depends on the offer's pack size. */
   verdict: "cheaper" | "maybe";
   /** The chain that has it cheaper ("REMA 1000"). */
   chain: string;
@@ -28,8 +29,10 @@ export interface CheaperRow {
   name: string | null;
   /** "500 g · 20,00 kr. · 40,00 kr./kg" (pack size, pack price, unit price). */
   facts: string;
-  /** Netto's unit price (range). */
-  netto: string;
+  /** The chain whose offer it is ("Netto"). */
+  offerChain: string;
+  /** The offer's unit price (range). */
+  offerPrice: string;
   link: SourceLinkData | null;
 }
 
@@ -49,8 +52,8 @@ function syncUrl(chains: ReadonlySet<string> | null, storeId: string | null) {
 
 /**
  * /kort (docs/ui.md §6.3): every nearby store on the map, coloured by chain, with a chain filter
- * and a store list. Selecting a store shows its food waste, or what is cheaper there than in
- * Netto. Phones: full-screen map with a bottom sheet; desktop: sidebar and map.
+ * and a store list. Selecting a store shows its food waste, its chain's good buys this week,
+ * and what is cheaper there than this week's offers of other chains. Phones: full-screen map with a bottom sheet; desktop: sidebar and map.
  */
 export function MapExplorer({
   stores,
@@ -58,7 +61,7 @@ export function MapExplorer({
   radiusKm,
   foodWaste,
   cheaper,
-  nettoGoodCount,
+  goodCounts,
   initialChains,
   initialStoreId,
   now,
@@ -68,7 +71,8 @@ export function MapExplorer({
   radiusKm: number;
   foodWaste: Record<string, FoodWasteItem[]>;
   cheaper: Record<string, CheaperRow[]>;
-  nettoGoodCount: number;
+  /** This week's good buys per chain. */
+  goodCounts: Record<string, number>;
   initialChains: string[] | null;
   initialStoreId: string | null;
   now: string;
@@ -132,7 +136,7 @@ export function MapExplorer({
       store={selected}
       items={foodWaste[selected.id] ?? []}
       cheaper={cheaper[selected.chainId] ?? []}
-      nettoGoodCount={nettoGoodCount}
+      goodCount={goodCounts[selected.chainId] ?? 0}
       now={now}
       onClose={() => select(null)}
     />
@@ -288,7 +292,7 @@ function StoreList({
       {stores.map((store) => {
         const facts = [
           store.foodWasteCount > 0 ? `${store.foodWasteCount} madspild` : null,
-          store.cheaperCount > 0 ? `${store.cheaperCount} billigere end Netto` : null,
+          store.cheaperCount > 0 ? `${store.cheaperCount} billigere end tilbud` : null,
         ].filter(Boolean);
         return (
           <li key={store.id}>
@@ -319,21 +323,21 @@ function StoreDetail({
   store,
   items,
   cheaper,
-  nettoGoodCount,
+  goodCount,
   now,
   onClose,
 }: {
   store: MapStore;
   items: readonly FoodWasteItem[];
   cheaper: readonly CheaperRow[];
-  nettoGoodCount: number;
+  goodCount: number;
   now: string;
   onClose: () => void;
 }) {
   const address = storeAddress(store);
   const page = storePageLink(store);
   const salling = store.source === "salling";
-  const isNetto = store.chainId === "netto";
+  const chain = chainName(store.chainId);
   const sorted = [...items].sort(
     (a, b) => (b.discountPct ?? -1) - (a.discountPct ?? -1) || a.title.localeCompare(b.title),
   );
@@ -401,47 +405,48 @@ function StoreDetail({
         </section>
       ) : null}
 
-      {isNetto ? (
-        <section className="mt-5" aria-labelledby={`tilbud-${store.id}`}>
-          <h3 id={`tilbud-${store.id}`} className="text-meta font-semibold text-ink-3">
-            Ugens tilbud i Netto
-          </h3>
-          <Link href="/" className="mt-1 inline-flex min-h-11 items-center">
-            {nettoGoodCount > 0
-              ? `${nettoGoodCount} ${nettoGoodCount === 1 ? "godt køb gælder" : "gode køb gælder"} også her →`
-              : "Se ugens tilbud →"}
-          </Link>
-        </section>
-      ) : (
-        <section className="mt-5" aria-labelledby={`billigere-${store.id}`}>
-          <h3 id={`billigere-${store.id}`} className="text-meta font-semibold text-ink-3">
-            Billigere her end i Netto
-          </h3>
-          {cheaper.length > 0 ? (
-            <ul className="divide-y divide-line">
-              {cheaper.map((row) => (
-                <li key={row.key} className="py-2">
-                  <p className="font-medium text-ink">{row.title}</p>
-                  <p className="text-meta text-ink">
-                    <span className="font-semibold">{row.chain}:</span>{" "}
-                    {row.name ? <span className="text-ink-2">{row.name} · </span> : null}
-                    <span className="tabular">{row.facts}</span>
-                  </p>
-                  <p className="text-meta text-ink-2">
-                    Netto: <span className="tabular">{row.netto}</span>
-                    {row.verdict === "maybe" ? " · afhænger af pakningen" : ""}
-                  </p>
-                  <SourceLink link={row.link} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-1 text-meta text-ink-2">
-              Ingen af ugens sammenlignede varer er billigere her.
-            </p>
-          )}
-        </section>
-      )}
+      <section className="mt-5" aria-labelledby={`tilbud-${store.id}`}>
+        <h3 id={`tilbud-${store.id}`} className="text-meta font-semibold text-ink-3">
+          Ugens tilbud i {chain}
+        </h3>
+        <Link
+          href={`/?kaede=${encodeURIComponent(store.chainId)}` as Route}
+          className="mt-1 inline-flex min-h-11 items-center"
+        >
+          {goodCount > 0
+            ? `${goodCount} ${goodCount === 1 ? "godt køb gælder" : "gode køb gælder"} også her →`
+            : `Se ugens tilbud i ${chain} →`}
+        </Link>
+      </section>
+
+      <section className="mt-5" aria-labelledby={`billigere-${store.id}`}>
+        <h3 id={`billigere-${store.id}`} className="text-meta font-semibold text-ink-3">
+          Billigere her end ugens tilbud
+        </h3>
+        {cheaper.length > 0 ? (
+          <ul className="divide-y divide-line">
+            {cheaper.map((row) => (
+              <li key={row.key} className="py-2">
+                <p className="font-medium text-ink">{row.title}</p>
+                <p className="text-meta text-ink">
+                  <span className="font-semibold">{row.chain}:</span>{" "}
+                  {row.name ? <span className="text-ink-2">{row.name} · </span> : null}
+                  <span className="tabular">{row.facts}</span>
+                </p>
+                <p className="text-meta text-ink-2">
+                  Tilbud i {row.offerChain}: <span className="tabular">{row.offerPrice}</span>
+                  {row.verdict === "maybe" ? " · afhænger af pakningen" : ""}
+                </p>
+                <SourceLink link={row.link} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1 text-meta text-ink-2">
+            Ingen af ugens sammenlignede tilbud er billigere her.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

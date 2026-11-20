@@ -221,7 +221,7 @@ export function memberPriceLabel(chainId: string): string {
 export function verdictBadgeLabel(
   status: DealStatus,
   memberOnly: boolean,
-  chainId = "netto",
+  chainId: string,
 ): string {
   if (status === "good_deal" && memberOnly) {
     if (chainId === "netto") return `Godt køb med ${membershipName(chainId)}`;
@@ -541,7 +541,7 @@ export function referenceListingIds(deals: readonly DealRow[]): string[] {
   return [...ids];
 }
 
-/** A compared Netto offer that another chain has cheaper (or possibly cheaper). */
+/** A compared offer that another chain has cheaper (or possibly cheaper). */
 export interface CheaperElsewhere {
   deal: EvaluatedDeal;
   /** The cheapest counted reference, from the chain that has it cheaper. */
@@ -549,10 +549,10 @@ export interface CheaperElsewhere {
 }
 
 /**
- * This week's compared Netto offers per competing chain (docs/ui.md §6.3 "Billigere her end i
- * Netto"): deals whose verdict is `cheaper_elsewhere` or `undecided` and whose cheapest counted
- * reference is a price from that chain (Netto's own past offers are not "here"). Clearly cheaper
- * offers first, then by title.
+ * This week's compared offers (of any chain) per competing chain (docs/ui.md §6.3 "Billigere
+ * her end ugens tilbud"): deals whose verdict is `cheaper_elsewhere` or `undecided` and whose
+ * cheapest counted reference is a price from another chain (the offer's own chain is not
+ * "elsewhere"). Clearly cheaper offers first, then by title.
  */
 export function cheaperByChain(
   deals: readonly EvaluatedDeal[],
@@ -563,7 +563,7 @@ export function cheaperByChain(
   for (const deal of deals) {
     if (deal.status !== "cheaper_elsewhere" && deal.status !== "undecided") continue;
     const ref = cheapestReference(deal, nearbyChains);
-    if (!ref || LOCATION_INDEPENDENT_KINDS.has(ref.kind) || ref.chain_id === "netto") continue;
+    if (!ref || LOCATION_INDEPENDENT_KINDS.has(ref.kind) || ref.chain_id === deal.chainId) continue;
     const key = `${ref.chain_id}|${deal.listingId}|${ref.listing_id ?? ref.unit_price}`;
     if (seen.has(key)) continue;
     seen.add(key);

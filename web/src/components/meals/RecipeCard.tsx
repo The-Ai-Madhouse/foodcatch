@@ -4,7 +4,7 @@ import { Badge, MemberBadge } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
 import { Disclosure } from "@/components/Disclosure";
 import { ChevronIcon } from "@/components/Icons";
-import { ExternalLink, SourceLink } from "@/components/SourceLink";
+import { SourceLink } from "@/components/SourceLink";
 import { chainName } from "@/lib/chains";
 import { foodWastePackSize } from "@/lib/foodwaste";
 import {
@@ -18,8 +18,10 @@ import {
 } from "@/lib/format";
 import { itemChain, type MealIdea, type MealItem, type SlotRow } from "@/lib/meals";
 import { productPath } from "@/lib/routes";
-import { sourceLink, storeMapsLink } from "@/lib/sources";
-import { shortStoreName, storeDisplayName, type NearbyStore } from "@/lib/stores";
+import { sourceLink } from "@/lib/sources";
+import { chainPins, shortStoreName, storeDisplayName, type NearbyStore } from "@/lib/stores";
+import { StoreInfo } from "@/components/StoreInfo";
+import { itemStore } from "@/components/foodwaste/FoodWasteItemRow";
 import { AddToPlanForm } from "./AddToPlanForm";
 import { LikeButton } from "./LikeButton";
 import { RecipeDetails } from "./RecipeDetails";
@@ -60,36 +62,34 @@ function Stat({
   );
 }
 
-/** The store an item is bought in, linking to Google Maps in a new tab. */
+/** The store an item is bought in; a tap or hover shows its address and Google Maps. */
 function Where({ item, ctx }: { item: MealItem; ctx: MealContext }) {
   if (item.kind === "foodwaste") {
     const w = item.item;
-    const name = storeDisplayName(w.storeName, w.chainId);
     return (
       <span className="flex min-w-0 items-center gap-1.5">
-        <ChainDot chainId={w.chainId} size="xs" />
-        <ExternalLink href={storeMapsLink({ ...w, name })} iconSize={14} className="min-h-9">
-          {name}
-        </ExternalLink>
+        <StoreInfo chainId={w.chainId} stores={[itemStore(w)]} className="min-h-9">
+          <ChainDot chainId={w.chainId} size="xs" />
+          {storeDisplayName(w.storeName, w.chainId)}
+        </StoreInfo>
         <span className="whitespace-nowrap tabular">· {formatDistance(w.distanceKm)}</span>
       </span>
     );
   }
   const chainId = item.deal.chainId;
   const nearest = ctx.storesByChain.get(chainId)?.[0];
+  const { pins, total } = chainPins(ctx.storesByChain, chainId);
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      <ChainDot chainId={chainId} size="xs" />
+      <StoreInfo chainId={chainId} stores={pins} total={total} className="min-h-9">
+        <ChainDot chainId={chainId} size="xs" />
+        {nearest
+          ? `${chainName(chainId)} ${shortStoreName(nearest.name, chainId)}`
+          : chainName(chainId)}
+      </StoreInfo>
       {nearest ? (
-        <>
-          <ExternalLink href={storeMapsLink(nearest)} iconSize={14} className="min-h-9">
-            {chainName(chainId)} {shortStoreName(nearest.name, chainId)}
-          </ExternalLink>
-          <span className="whitespace-nowrap tabular">· {formatDistance(nearest.distanceKm)}</span>
-        </>
-      ) : (
-        <span>{chainName(chainId)}</span>
-      )}
+        <span className="whitespace-nowrap tabular">· {formatDistance(nearest.distanceKm)}</span>
+      ) : null}
     </span>
   );
 }

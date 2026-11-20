@@ -26,7 +26,7 @@ import { formatDayDate } from "@/lib/format";
 import { groupSlug } from "@/lib/groups";
 import { nearestByChain, toMapStore } from "@/lib/stores";
 import { stapleMatches, textStapleTerms } from "@/lib/staples";
-import { getUserLocation, getUserStaples } from "@/server/location";
+import { getStaplesFolded, getUserLocation, getUserStaples } from "@/server/location";
 import {
   getCurrentDeals,
   getFoodWasteNear,
@@ -40,7 +40,11 @@ export const metadata: Metadata = { title: "Ugens tilbud" };
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
   const filter = parseDealFilter(params.vis);
-  const [location, staples] = await Promise.all([getUserLocation(), getUserStaples()]);
+  const [location, staples, staplesFolded] = await Promise.all([
+    getUserLocation(),
+    getUserStaples(),
+    getStaplesFolded(),
+  ]);
   const [stores, allRows, foodWaste, textOffers] = await Promise.all([
     getNearbyStores(location),
     getCurrentDeals(),
@@ -111,7 +115,13 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         <div className="min-w-0">
           <h1 className="text-title font-bold text-ink">Ugens tilbud</h1>
           <div className="mt-3">
-            <StaplesSection selected={staples} matches={staplesFound} now={now} />
+            <StaplesSection
+              selected={staples}
+              matches={staplesFound}
+              now={now}
+              storesByChain={storesByChain}
+              folded={staplesFolded}
+            />
           </div>
           <div className="mt-3">
             <Segmented

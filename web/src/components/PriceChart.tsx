@@ -9,8 +9,7 @@ const SIZES = {
 } as const;
 
 const SERIES_COLOR: Readonly<Record<SeriesKey, string>> = {
-  netto_offer: "var(--series-1)",
-  other_offer: "var(--series-2)",
+  offer: "var(--series-1)",
   regular: "var(--series-3)",
 };
 

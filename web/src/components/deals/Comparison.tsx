@@ -7,7 +7,9 @@ import { MemberPriceTag } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
 import { ChevronIcon } from "@/components/Icons";
 import { SourceLink } from "@/components/SourceLink";
+import { StoreInfo } from "@/components/StoreInfo";
 import type { SourceLink as SourceLinkData } from "@/lib/sources";
+import type { StorePin } from "@/lib/stores";
 
 /** One comparison row, prepared on the server (plain JSON). */
 export interface ComparisonRow {
@@ -25,6 +27,10 @@ export interface ComparisonRow {
   link: SourceLinkData | null;
   /** The reference item's price history page. */
   historyHref: string | null;
+  /** The chain's nearest stores for the store popover; null for location-independent kinds. */
+  stores: StorePin[] | null;
+  /** All of the chain's stores within the radius. */
+  storeTotal: number;
 }
 
 /** The comparison of one variant: counted rows, then the ones that do not count. */
@@ -112,9 +118,17 @@ function Row({ row }: { row: ComparisonRow }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="flex min-w-0 items-center gap-1.5 text-meta">
           <ChainDot chainId={row.chainId} size="xs" />
-          <span className={row.isCheapest ? "font-semibold text-ink" : "text-ink"}>
-            {row.chainName}
-          </span>
+          {row.stores ? (
+            <StoreInfo chainId={row.chainId} stores={row.stores} total={row.storeTotal}>
+              <span className={row.isCheapest ? "font-semibold text-ink" : "text-ink"}>
+                {row.chainName}
+              </span>
+            </StoreInfo>
+          ) : (
+            <span className={row.isCheapest ? "font-semibold text-ink" : "text-ink"}>
+              {row.chainName}
+            </span>
+          )}
           {row.distance ? <span className="text-ink-3 tabular">· {row.distance}</span> : null}
         </span>
         <span

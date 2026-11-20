@@ -27,7 +27,13 @@ import {
 } from "@/lib/format";
 import { productPath } from "@/lib/routes";
 import { FOOD_WASTE_SOURCE_TEXT, openFoodFactsProductLink } from "@/lib/sources";
-import { storeDisplayName } from "@/lib/stores";
+import { storeDisplayName, storePin, type StorePin } from "@/lib/stores";
+import { StoreInfo } from "@/components/StoreInfo";
+
+/** The store of a clearance, for the store popover. */
+export function itemStore(item: FoodWasteItem): StorePin {
+  return storePin({ ...item, id: item.storeId, name: item.storeName });
+}
 
 const sep = <span aria-hidden="true"> · </span>;
 
@@ -142,8 +148,10 @@ export function FoodWasteItemRow({
             ) : null}
             {showStore ? (
               <span className="mt-0.5 flex items-center gap-1.5 text-meta text-ink-2">
-                <ChainDot chainId={item.chainId} size="xs" />
-                {storeDisplayName(item.storeName, item.chainId)}
+                <StoreInfo chainId={item.chainId} stores={[itemStore(item)]}>
+                  <ChainDot chainId={item.chainId} size="xs" />
+                  {storeDisplayName(item.storeName, item.chainId)}
+                </StoreInfo>
                 {sep}
                 <span className="tabular">{formatDistance(item.distanceKm)}</span>
               </span>
@@ -191,7 +199,9 @@ export function FoodWasteItemRow({
                 </Fact>
               ) : null}
               <Fact term="Butik">
-                {storeDisplayName(item.storeName, item.chainId)}
+                <StoreInfo chainId={item.chainId} stores={[itemStore(item)]}>
+                  {storeDisplayName(item.storeName, item.chainId)}
+                </StoreInfo>
                 {item.sallingStoreId ? (
                   <span className="text-ink-3"> (Salling-id {item.sallingStoreId})</span>
                 ) : null}
