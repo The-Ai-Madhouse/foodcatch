@@ -18,11 +18,11 @@ const OVERALL_TEXT = {
   good: { title: "Alt kører", body: "Alle datakilder er opdateret inden for deres tidsplan." },
   warn: {
     title: "Noget kræver opmærksomhed",
-    body: "Mindst én kilde er forringet eller har aldrig kørt.",
+    body: "Mindst én kilde er forsinket, forringet eller har aldrig kørt. Priserne er stadig brugbare.",
   },
   bad: {
     title: "Data er forældede eller fejlede",
-    body: "Mindst én kilde er fejlet, hænger eller er ikke opdateret til tiden. Priserne nedenfor kan være gamle.",
+    body: "Mindst én kilde er fejlet, hænger eller har ikke kørt i flere planlagte omgange. Priserne kan være gamle.",
   },
   neutral: { title: "Ingen kørsler endnu", body: "Pipelinen har ikke registreret nogen kørsler." },
 } as const;
@@ -56,6 +56,11 @@ export default async function StatusPage() {
             </li>
           ))}
         </ul>
+        <p className="mt-3 text-micro text-ink-3">
+          Kørslerne startes af GitHubs planlægger, der ofte er flere timer forsinket og indimellem
+          springer en kørsel over. En kilde kaldes derfor først forsinket, når en hel planlagt
+          kørsel mangler, og forældet, når flere mangler.
+        </p>
       </section>
 
       <section aria-labelledby="review-overskrift" className="mt-10">

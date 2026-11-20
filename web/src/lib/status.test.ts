@@ -9,7 +9,7 @@ import {
 } from "./status";
 
 const now = new Date("2026-11-18T12:00:00Z");
-const daily = { job: "tjek-offers", label: "Tilbudsaviser", maxAgeHours: 30 };
+const daily = { job: "tjek-offers", label: "Tilbudsaviser", lateAfterHours: 36, maxAgeHours: 60 };
 
 function run(overrides: Partial<PipelineRun> = {}): PipelineRun {
   return {
@@ -35,8 +35,30 @@ describe("assessJob", () => {
   });
 
   it("flags stale data even when the last run succeeded", () => {
-    const old = run({ startedAt: "2026-11-16T04:07:00Z", finishedAt: "2026-11-16T04:12:00Z" });
+    const old = run({ startedAt: "2026-11-15T04:07:00Z", finishedAt: "2026-11-15T04:12:00Z" });
     expect(assessJob(daily, old, now).health).toBe("stale");
+  });
+
+  it("calls one missed run late, not stale (GitHub delays and skips schedules)", () => {
+    const delayed = run({ startedAt: "2026-11-17T12:44:00Z", finishedAt: "2026-11-17T12:50:00Z" });
+    expect(assessJob(daily, delayed, now).health).toBe("ok");
+    const missed = run({ startedAt: "2026-11-16T22:00:00Z", finishedAt: "2026-11-16T22:05:00Z" });
+    const late = assessJob(daily, missed, now);
+    expect(late.health).toBe("late");
+    expect(overallTone([late])).toBe("warn");
+  });
+
+  it("keeps the food-waste job ok when one of its two daily runs is skipped", () => {
+    const def = JOBS.find((j) => j.job === "salling-food-waste")!;
+    const at = new Date("2026-11-20T13:35:00Z");
+    const last = run({
+      job: def.job,
+      startedAt: "2026-11-19T14:39:00Z",
+      finishedAt: "2026-11-19T14:45:00Z",
+    });
+    expect(assessJob(def, last, at).health).toBe("ok");
+    expect(assessJob(def, last, new Date("2026-11-20T17:00:00Z")).health).toBe("late");
+    expect(assessJob(def, last, new Date("2026-11-21T17:00:00Z")).health).toBe("stale");
   });
 
   it("reports failures and degraded runs", () => {

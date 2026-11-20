@@ -9,27 +9,59 @@ export interface JobDefinition {
   job: string;
   label: string;
   schedule: string;
-  /** Older than this (since the last finished run) counts as stale. */
+  /** Older than this (since the last finished run) counts as late: one scheduled run is missing. */
+  lateAfterHours: number;
+  /** Older than this counts as stale: several scheduled runs are missing. */
   maxAgeHours: number;
 }
 
-/** Jobs and schedules from architecture §4; max ages allow for delayed GitHub schedules. */
+/**
+ * Jobs and schedules from architecture §4. GitHub starts scheduled runs up to ~10 hours late and
+ * sometimes skips one (observed November 2026), so a job only counts as late after one whole
+ * missed run plus that delay, and as stale (prices may be old) after two.
+ */
 export const JOBS: readonly JobDefinition[] = [
-  { job: "tjek-offers", label: "Tilbudsaviser (Tjek)", schedule: "Dagligt", maxAgeHours: 30 },
+  {
+    job: "tjek-offers",
+    label: "Tilbudsaviser (Tjek)",
+    schedule: "Dagligt",
+    lateAfterHours: 36,
+    maxAgeHours: 60,
+  },
   {
     job: "salling-food-waste",
     label: "Madspild (Salling Group)",
     schedule: "To gange dagligt",
-    maxAgeHours: 18,
+    lateAfterHours: 26,
+    maxAgeHours: 50,
   },
-  { job: "rema-products", label: "REMA 1000-sortiment", schedule: "Dagligt", maxAgeHours: 30 },
-  { job: "off-enrich", label: "Open Food Facts", schedule: "Dagligt", maxAgeHours: 30 },
-  { job: "tjek-stores", label: "Butikker (Tjek)", schedule: "Ugentligt", maxAgeHours: 8 * 24 },
+  {
+    job: "rema-products",
+    label: "REMA 1000-sortiment",
+    schedule: "Dagligt",
+    lateAfterHours: 36,
+    maxAgeHours: 60,
+  },
+  {
+    job: "off-enrich",
+    label: "Open Food Facts",
+    schedule: "Dagligt",
+    lateAfterHours: 36,
+    maxAgeHours: 60,
+  },
+  {
+    job: "tjek-stores",
+    label: "Butikker (Tjek)",
+    schedule: "Ugentligt",
+    lateAfterHours: 8 * 24,
+    maxAgeHours: 15 * 24,
+  },
   {
     job: "salling-stores",
     label: "Butikker (Salling Group)",
     schedule: "Ugentligt",
-    maxAgeHours: 8 * 24,
+    lateAfterHours: 8 * 24,
+    maxAgeHours: 15 * 24,
   },
 ];
 
@@ -45,12 +77,14 @@ export interface PipelineRun {
   error: string | null;
 }
 
-export type JobHealth = "ok" | "running" | "degraded" | "stale" | "stuck" | "failed" | "never";
+export type JobHealth =
+  "ok" | "running" | "degraded" | "late" | "stale" | "stuck" | "failed" | "never";
 
 export const HEALTH_META: Readonly<Record<JobHealth, { label: string; tone: Tone }>> = {
   ok: { label: "OK", tone: "good" },
   running: { label: "Kører", tone: "neutral" },
   degraded: { label: "Forringet", tone: "warn" },
+  late: { label: "Forsinket", tone: "warn" },
   stale: { label: "Forældet", tone: "bad" },
   stuck: { label: "Hænger", tone: "bad" },
   failed: { label: "Fejlet", tone: "bad" },
@@ -100,6 +134,8 @@ export function assessJob(
     health = "failed";
   } else if (def.maxAgeHours != null && ageHours > def.maxAgeHours) {
     health = "stale";
+  } else if (def.lateAfterHours != null && ageHours > def.lateAfterHours) {
+    health = "late";
   } else if (run.status === "degraded") {
     health = "degraded";
   } else {

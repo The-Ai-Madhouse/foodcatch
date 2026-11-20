@@ -213,7 +213,9 @@ above the tab bar spacer.
 
 **Stale-data banner (all pages)**, shown only when `overallTone(jobs) === "bad"` (same rule as
 `/status`): warn tone, one line: "Priserne er måske forældede – data blev sidst hentet
-{formatRelative}." + link "Se status".
+{formatRelative}." + link "Se status". A job is "Forsinket" (warn, no banner) once one whole
+scheduled run is missing and "Forældet" (bad, banner) once two are (`lib/status.ts` `JOBS`; GitHub
+starts schedules up to ~10 hours late and sometimes skips one).
 
 ---
 
