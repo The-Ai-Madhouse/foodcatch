@@ -15,11 +15,14 @@ import {
   filterListings,
   groupByListing,
   groupListings,
+  groupUpcoming,
+  isUpcoming,
   nearbyDeals,
   parseChainFilter,
   parseDealFilter,
   referenceListingIds,
 } from "@/lib/deals";
+import { formatDayDate } from "@/lib/format";
 import { groupSlug } from "@/lib/groups";
 import { nearestByChain, toMapStore } from "@/lib/stores";
 import { stapleMatches } from "@/lib/staples";
@@ -54,10 +57,16 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const rows = nearbyDeals(nearbyRows, nearbyChains, selected);
   const details = await getReferenceDetails(referenceListingIds(rows));
 
+  const now = new Date();
   const allListings = groupByListing(evaluateDeals(nearbyRows, nearbyChains));
-  const listings = allListings.filter(
+  const chainListings = allListings.filter(
     (l) => selected.length === 0 || selected.includes(l.offer.chainId),
   );
+  // Offers of leaflets published ahead of their week get their own section (docs/ui.md §17).
+  const listings = chainListings.filter((l) => !isUpcoming(l, now));
+  const upcoming = chainListings.filter((l) => isUpcoming(l, now));
+  const upcomingShown = filterListings(upcoming, filter);
+  const upcomingDays = groupUpcoming(upcomingShown);
   const goodCount = listings.filter((l) => l.status === "good_deal").length;
   // Staples ignore the chain filter: they are about the item, wherever it is cheap.
   const staplesFound = stapleMatches(staples, allListings, foodWaste);
@@ -81,7 +90,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     nearestOutside: new Map(),
     radiusKm: location.radiusKm,
     details,
-    now: new Date(),
+    now,
   };
   const legend = [...storesByChain.entries()].map(([chainId, list]) => ({
     chainId,
@@ -151,14 +160,19 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
               </Notice>
             ) : (
               <>
-                {groups.length > 1 ? (
+                {groups.length > 1 || (groups.length > 0 && upcomingShown.length > 0) ? (
                   <CategoryOverview
                     label="Kategorier"
-                    links={groups.map((g) => ({
-                      label: g.groupName,
-                      count: g.listings.length,
-                      href: `#gruppe-${groupSlug(g.groupName)}`,
-                    }))}
+                    links={[
+                      ...groups.map((g) => ({
+                        label: g.groupName,
+                        count: g.listings.length,
+                        href: `#gruppe-${groupSlug(g.groupName)}`,
+                      })),
+                      ...(upcomingShown.length
+                        ? [{ label: "Kommende", count: upcomingShown.length, href: "#kommende" }]
+                        : []),
+                    ]}
                   />
                 ) : null}
                 {groups.map((group) => (
@@ -180,6 +194,45 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
               </>
             )}
           </div>
+
+          {upcoming.length > 0 ? (
+            <section aria-labelledby="kommende" className="mt-8">
+              <h2 id="kommende" className="scroll-mt-28 text-heading font-semibold text-ink">
+                Kommende tilbud
+              </h2>
+              <p className="text-meta text-ink-2">
+                Fra aviser, der allerede er udkommet, men først gælder senere.
+                {filter === "gode" && upcomingShown.length < upcoming.length ? (
+                  <>
+                    {" "}
+                    {upcoming.length - upcomingShown.length} af {upcoming.length} er ikke
+                    dokumenteret gode køb (endnu).{" "}
+                    <Link href={`${dealsHref("alle", chainParam)}#kommende` as Route}>
+                      Se alle kommende
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+              <div className="mt-2 space-y-4">
+                {upcomingDays.map((day) => (
+                  <CollapsibleCategory
+                    key={day.day}
+                    id={`kommende-${day.day}`}
+                    title={`Fra ${formatDayDate(day.startsAt)}`}
+                    count={day.listings.length}
+                  >
+                    <ul className="space-y-3">
+                      {day.listings.map((listing) => (
+                        <li key={listing.listingId}>
+                          <DealCard listing={listing} ctx={ctx} />
+                        </li>
+                      ))}
+                    </ul>
+                  </CollapsibleCategory>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <details className="mt-8 rounded-xl border border-line bg-surface px-4">
             <summary className="flex h-11 items-center gap-1 font-medium text-ink">

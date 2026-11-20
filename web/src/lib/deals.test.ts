@@ -7,6 +7,8 @@ import {
   filterListings,
   groupByListing,
   groupListings,
+  groupUpcoming,
+  isUpcoming,
   dealsHref,
   genitive,
   memberPriceLabel,
@@ -460,5 +462,30 @@ describe("all chains", () => {
   it("labels a marked member price of other chains", () => {
     expect(verdictBadgeLabel("good_deal", true, "kvickly")).toBe("Godt køb for Coop-medlemmer");
     expect(verdictBadgeLabel("good_deal", true, "lidl")).toBe("Godt køb for medlemmer");
+  });
+});
+
+describe("upcoming offers", () => {
+  const now = new Date("2026-11-20T12:00:00Z");
+  const listing = (id: string, validFrom: string, extra: Partial<DealRow> = {}) =>
+    groupByListing(
+      evaluateDeals([row({ listingId: id, validFrom, ...extra })], new Set(["superbrugsen"])),
+    )[0]!;
+
+  it("are the listings starting after now", () => {
+    expect(isUpcoming(listing("a", "2026-11-20T11:59:00Z"), now)).toBe(false);
+    expect(isUpcoming(listing("b", "2026-11-21T23:00:00Z"), now)).toBe(true);
+  });
+
+  it("group by Copenhagen start day, earliest first, cheapest first within a day", () => {
+    const days = groupUpcoming([
+      listing("late", "2026-11-26T23:00:00Z"),
+      // Saturday 22 November in Copenhagen (23:00 UTC on the 21st)
+      listing("dear", "2026-11-21T23:00:00Z", { unitPriceMin: 40, unitPriceMax: 40 }),
+      listing("cheap", "2026-11-22T06:00:00Z", { unitPriceMin: 30, unitPriceMax: 30 }),
+    ]);
+    expect(days.map((d) => d.day)).toEqual(["2026-11-22", "2026-11-27"]);
+    expect(days[0]?.listings.map((l) => l.listingId)).toEqual(["cheap", "dear"]);
+    expect(days[0]?.startsAt).toBe("2026-11-21T23:00:00Z");
   });
 });

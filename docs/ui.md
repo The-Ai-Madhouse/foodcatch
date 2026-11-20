@@ -1013,3 +1013,14 @@ costs, and the recipe on demand.
   most recently priced; at most 60.
 - Leaflet items with the same heading but another pack size are separate items (product key
   with size, migration 0010).
+
+## 17. "Kommende tilbud" (2026-11-20)
+
+- Offers whose leaflet is out but whose period starts later (`valid_from` after now; Tjek
+  publishes catalogs days ahead, Rema campaigns are known in advance) leave the week's categories
+  and get their own section "Kommende tilbud" at the end of `/`, one foldable group per
+  Copenhagen start day ("Fra lør. 22. nov."), cheapest first (`groupUpcoming`).
+- The filter applies: in "Gode køb" only upcoming good deals are listed, with the line "N af M er
+  ikke dokumenteret gode køb (endnu). Se alle kommende" (verdicts of upcoming offers may still
+  be pending). The counts on "Gode køb"/"Alle" are this week's offers only; the category
+  overview gets a "Kommende (N)" link.

@@ -5,7 +5,7 @@
  */
 
 import { chainName } from "./chains";
-import { formatDistance, formatUnitPrice } from "./format";
+import { copenhagenParts, formatDistance, formatUnitPrice } from "./format";
 import {
   REFERENCE_KINDS,
   type DealInput,
@@ -391,6 +391,39 @@ export function groupListings(listings: readonly ListingDeal[]): ListingGroup[] 
   return [...groups.entries()]
     .sort(([a], [b]) => groupRank(a) - groupRank(b) || collator.compare(a, b))
     .map(([groupName, list]) => ({ groupName, listings: [...list].sort(compareListings) }));
+}
+
+/** Whether a listing's offer starts after `now` (a leaflet published ahead of its week). */
+export function isUpcoming(listing: ListingDeal, now: Date): boolean {
+  return Date.parse(listing.offer.validFrom) > now.getTime();
+}
+
+/** Upcoming offers starting on one (Copenhagen) day. */
+export interface UpcomingDay {
+  /** `YYYY-MM-DD` of the start day (an anchor id). */
+  day: string;
+  /** The first start time that day (for the heading). */
+  startsAt: string;
+  listings: ListingDeal[];
+}
+
+/** Upcoming offers by start day, earliest first; within a day by verdict, then unit price. */
+export function groupUpcoming(listings: readonly ListingDeal[]): UpcomingDay[] {
+  const days = new Map<string, ListingDeal[]>();
+  for (const listing of listings) {
+    const p = copenhagenParts(listing.offer.validFrom);
+    const day = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+    const list = days.get(day);
+    if (list) list.push(listing);
+    else days.set(day, [listing]);
+  }
+  return [...days.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([day, list]) => ({
+      day,
+      startsAt: list.map((l) => l.offer.validFrom).sort()[0] as string,
+      listings: [...list].sort(compareListings),
+    }));
 }
 
 /** "kilopris" / "literpris" / "stykpris" for a unit. */
