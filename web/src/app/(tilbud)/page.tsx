@@ -25,12 +25,13 @@ import {
 import { formatDayDate } from "@/lib/format";
 import { groupSlug } from "@/lib/groups";
 import { nearestByChain, toMapStore } from "@/lib/stores";
-import { stapleMatches } from "@/lib/staples";
+import { stapleMatches, textStapleTerms } from "@/lib/staples";
 import { getUserLocation, getUserStaples } from "@/server/location";
 import {
   getCurrentDeals,
   getFoodWasteNear,
   getNearbyStores,
+  getOffersMatching,
   getReferenceDetails,
 } from "@/server/queries";
 
@@ -40,11 +41,12 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const params = await searchParams;
   const filter = parseDealFilter(params.vis);
   const [location, staples] = await Promise.all([getUserLocation(), getUserStaples()]);
-  const [stores, allRows, foodWaste] = await Promise.all([
+  const [stores, allRows, foodWaste, textOffers] = await Promise.all([
     getNearbyStores(location),
     getCurrentDeals(),
     // Clearances are only needed for the chosen staples.
     staples.length ? getFoodWasteNear(location) : Promise.resolve([]),
+    getOffersMatching(textStapleTerms(staples)),
   ]);
   const storesByChain = nearestByChain(stores);
   const nearbyChains = new Set(storesByChain.keys());
@@ -69,7 +71,13 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const upcomingDays = groupUpcoming(upcomingShown);
   const goodCount = listings.filter((l) => l.status === "good_deal").length;
   // Staples ignore the chain filter: they are about the item, wherever it is cheap.
-  const staplesFound = stapleMatches(staples, allListings, foodWaste);
+  const staplesFound = stapleMatches(
+    staples,
+    allListings,
+    foodWaste,
+    nearbyDeals(textOffers, nearbyChains),
+    now,
+  );
   const groups = groupListings(filterListings(listings, filter));
   // Chips for chains with something to show in this view (and any selected one).
   const chainCounts = offerChains
@@ -103,7 +111,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         <div className="min-w-0">
           <h1 className="text-title font-bold text-ink">Ugens tilbud</h1>
           <div className="mt-3">
-            <StaplesSection selected={staples} matches={staplesFound} />
+            <StaplesSection selected={staples} matches={staplesFound} now={now} />
           </div>
           <div className="mt-3">
             <Segmented

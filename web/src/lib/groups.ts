@@ -5,6 +5,7 @@
  */
 
 import { typeIdOf } from "./meals";
+import taxonomy from "./taxonomy.json";
 
 /** Product groups in shopping order (as on the offers page). */
 export const GROUP_ORDER = ["Kød", "Fisk", "Æg", "Mejeri", "Frugt og grønt", "Kolonial"] as const;
@@ -12,47 +13,18 @@ export const GROUP_ORDER = ["Kød", "Fisk", "Æg", "Mejeri", "Frugt og grønt", 
 /** The group of rows whose type is unknown. */
 export const OTHER_GROUP = "Andet";
 
-const TYPE_GROUPS: Readonly<Record<string, string>> = {
-  hakket_gris_kalv: "Kød",
-  hakket_okse_gris: "Kød",
-  hakket_oksekød: "Kød",
-  hakket_grisekød: "Kød",
-  hakket_kylling: "Kød",
-  hakket_kalkun: "Kød",
-  kyllingeinderfilet: "Kød",
-  kyllingebryst: "Kød",
-  kyllingelår: "Kød",
-  hel_kylling: "Kød",
-  svinekoteletter: "Kød",
-  svinemørbrad: "Kød",
-  æg: "Æg",
-  kærnemælk: "Mejeri",
-  mælk: "Mejeri",
-  piskefløde: "Mejeri",
-  madlavningsfløde: "Mejeri",
-  creme_fraiche: "Mejeri",
-  smørbar: "Mejeri",
-  smør: "Mejeri",
-  hytteost: "Mejeri",
-  mozzarella: "Mejeri",
-  feta: "Mejeri",
-  fast_ost: "Mejeri",
-  skyr: "Mejeri",
-  græsk_yoghurt: "Mejeri",
-  a38_ymer: "Mejeri",
-  yoghurt: "Mejeri",
-  hakkede_tomater: "Kolonial",
-  flåede_tomater: "Kolonial",
-  passata: "Kolonial",
-  tomatpuré: "Kolonial",
-  kikærter: "Kolonial",
-  kidneybønner: "Kolonial",
-  sorte_bønner: "Kolonial",
-  hvide_bønner: "Kolonial",
-  linser: "Kolonial",
-  tun: "Kolonial",
-  havregryn: "Kolonial",
-};
+/** Taxonomy types (pipeline `matching/taxonomy.py`; a pipeline test keeps the copy equal). */
+export interface TaxonomyType {
+  id: string;
+  label: string;
+  group: string;
+}
+
+export const TAXONOMY_TYPES: readonly TaxonomyType[] = taxonomy;
+
+const TYPE_GROUPS: Readonly<Record<string, string>> = Object.fromEntries(
+  TAXONOMY_TYPES.map((t) => [t.id, t.group]),
+);
 
 /** Every taxonomy type id the web app knows (for tests and the staples picker). */
 export const TYPE_IDS: readonly string[] = Object.keys(TYPE_GROUPS);

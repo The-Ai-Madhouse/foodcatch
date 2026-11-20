@@ -8,6 +8,7 @@ import type { FoodWasteItem } from "@/lib/foodwaste";
 import type { PriceHistoryRow } from "@/lib/history";
 import type { ProductHistoryRow, ProductInfo } from "@/lib/product";
 import { MAX_RESULTS, likePattern, type SearchHit } from "@/lib/search";
+import type { TextOffer } from "@/lib/staples";
 import type { PipelineRun } from "@/lib/status";
 import type { ReferenceDetail } from "@/lib/deals";
 import { dedupeStores, type NearbyStore } from "@/lib/stores";
@@ -401,6 +402,42 @@ export async function searchProducts(terms: readonly string[]): Promise<SearchHi
     latestValidFrom: toIso(r.latestValidFrom),
     latestValidTo: toIso(r.latestValidTo),
     priceCount: counts.get(r.productKey) ?? 0,
+  }));
+}
+
+interface TextOfferSqlRow extends Omit<TextOffer, "validFrom" | "validTo"> {
+  validFrom: Date;
+  validTo: Date | null;
+}
+
+/**
+ * Current and upcoming offers of any item (recognized or not) whose name contains one of the
+ * texts, for free-text staples: the latest version of each source item, at most 400.
+ */
+export async function getOffersMatching(texts: readonly string[]): Promise<TextOffer[]> {
+  if (texts.length === 0) return [];
+  await connection();
+  const sql = await readOnlyDb();
+  const rows = await sql<TextOfferSqlRow[]>`
+    SELECT DISTINCT ON (source, source_item_id)
+           listing_id::text AS "listingId", product_key AS "productKey", chain_id AS "chainId",
+           title, price::float8 AS price, unit,
+           unit_price_min::float8 AS "unitPriceMin", unit_price_max::float8 AS "unitPriceMax",
+           size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax",
+           valid_from AS "validFrom", valid_to AS "validTo",
+           coalesce(member_only, false) AS "memberOnly", source
+    FROM api.product_price_history
+    WHERE kind = 'offer'
+      AND listing_id IS NOT NULL
+      AND (valid_to IS NULL OR valid_to >= now())
+      AND title ILIKE ANY(${texts.map(likePattern)}::text[])
+    ORDER BY source, source_item_id, valid_from DESC
+    LIMIT 400
+  `;
+  return rows.map((r) => ({
+    ...r,
+    validFrom: toIsoRequired(r.validFrom),
+    validTo: toIso(r.validTo),
   }));
 }
 

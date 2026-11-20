@@ -16,7 +16,13 @@ import {
   type StoredLocation,
   type UserLocation,
 } from "@/lib/location";
-import { STAPLES_COOKIE, serializeStaples } from "@/lib/staples";
+import {
+  STAPLES_COOKIE,
+  parseStaples,
+  serializeStaples,
+  textStapleId,
+  withStaple,
+} from "@/lib/staple-catalogue";
 import { GeocodingError, geocodeAddress } from "@/server/geocode";
 
 /** The result of a location action, shown in the location sheet. */
@@ -142,9 +148,8 @@ export async function resetLocation(): Promise<void> {
   store.delete(LOCATION_COOKIE);
 }
 
-/** Save the staples picked on the offers page ("Dine basisvarer"); an empty pick clears them. */
-export async function saveStaples(formData: FormData): Promise<void> {
-  const value = serializeStaples(formData.getAll("basisvare"));
+/** Store the staples cookie (an empty value clears it). */
+async function persistStaples(value: string): Promise<void> {
   const store = await cookies();
   if (value) {
     store.set(STAPLES_COOKIE, value, {
@@ -157,4 +162,22 @@ export async function saveStaples(formData: FormData): Promise<void> {
     store.delete(STAPLES_COOKIE);
   }
   revalidatePath("/");
+}
+
+/** Save the staples picked on the offers page ("Dine basisvarer"); an empty pick clears them. */
+export async function saveStaples(formData: FormData): Promise<void> {
+  await persistStaples(serializeStaples(formData.getAll("basisvare")));
+}
+
+/**
+ * Add one staple from the picker's search: a catalogue id (`basisvare`) or free text
+ * (`fritekst`, stored as `q:<text>`). Invalid input changes nothing.
+ */
+export async function addStaple(formData: FormData): Promise<void> {
+  const raw = formData.get("basisvare");
+  const id = typeof raw === "string" && raw ? raw : textStapleId(formData.get("fritekst"));
+  if (!id) return;
+  const store = await cookies();
+  const current = parseStaples(store.get(STAPLES_COOKIE)?.value);
+  await persistStaples(serializeStaples(withStaple(current, id)));
 }

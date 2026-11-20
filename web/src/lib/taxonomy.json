@@ -1,0 +1,197 @@
+[
+  {
+    "id": "hakket_gris_kalv",
+    "label": "Hakket grise- og kalvekød",
+    "group": "Kød"
+  },
+  {
+    "id": "hakket_okse_gris",
+    "label": "Hakket okse- og grisekød",
+    "group": "Kød"
+  },
+  {
+    "id": "hakket_oksekød",
+    "label": "Hakket oksekød",
+    "group": "Kød"
+  },
+  {
+    "id": "hakket_grisekød",
+    "label": "Hakket grisekød",
+    "group": "Kød"
+  },
+  {
+    "id": "hakket_kylling",
+    "label": "Hakket kylling",
+    "group": "Kød"
+  },
+  {
+    "id": "hakket_kalkun",
+    "label": "Hakket kalkun",
+    "group": "Kød"
+  },
+  {
+    "id": "kyllingeinderfilet",
+    "label": "Kyllingeinderfilet",
+    "group": "Kød"
+  },
+  {
+    "id": "kyllingebryst",
+    "label": "Kyllingebryst(filet)",
+    "group": "Kød"
+  },
+  {
+    "id": "kyllingelår",
+    "label": "Kyllingelår",
+    "group": "Kød"
+  },
+  {
+    "id": "hel_kylling",
+    "label": "Hel kylling",
+    "group": "Kød"
+  },
+  {
+    "id": "svinekoteletter",
+    "label": "Svinekoteletter",
+    "group": "Kød"
+  },
+  {
+    "id": "svinemørbrad",
+    "label": "Svinemørbrad",
+    "group": "Kød"
+  },
+  {
+    "id": "æg",
+    "label": "Æg",
+    "group": "Æg"
+  },
+  {
+    "id": "kærnemælk",
+    "label": "Kærnemælk",
+    "group": "Mejeri"
+  },
+  {
+    "id": "mælk",
+    "label": "Mælk",
+    "group": "Mejeri"
+  },
+  {
+    "id": "piskefløde",
+    "label": "Piskefløde",
+    "group": "Mejeri"
+  },
+  {
+    "id": "madlavningsfløde",
+    "label": "Madlavningsfløde",
+    "group": "Mejeri"
+  },
+  {
+    "id": "creme_fraiche",
+    "label": "Creme fraiche",
+    "group": "Mejeri"
+  },
+  {
+    "id": "smørbar",
+    "label": "Smørbar (blandingsprodukt)",
+    "group": "Mejeri"
+  },
+  {
+    "id": "smør",
+    "label": "Smør",
+    "group": "Mejeri"
+  },
+  {
+    "id": "hytteost",
+    "label": "Hytteost",
+    "group": "Mejeri"
+  },
+  {
+    "id": "mozzarella",
+    "label": "Mozzarella",
+    "group": "Mejeri"
+  },
+  {
+    "id": "feta",
+    "label": "Feta/salatost",
+    "group": "Mejeri"
+  },
+  {
+    "id": "fast_ost",
+    "label": "Fast ost",
+    "group": "Mejeri"
+  },
+  {
+    "id": "skyr",
+    "label": "Skyr",
+    "group": "Mejeri"
+  },
+  {
+    "id": "græsk_yoghurt",
+    "label": "Græsk yoghurt",
+    "group": "Mejeri"
+  },
+  {
+    "id": "a38_ymer",
+    "label": "A38/ymer/tykmælk",
+    "group": "Mejeri"
+  },
+  {
+    "id": "yoghurt",
+    "label": "Yoghurt",
+    "group": "Mejeri"
+  },
+  {
+    "id": "hakkede_tomater",
+    "label": "Hakkede tomater (dåse)",
+    "group": "Kolonial"
+  },
+  {
+    "id": "flåede_tomater",
+    "label": "Flåede tomater (dåse)",
+    "group": "Kolonial"
+  },
+  {
+    "id": "passata",
+    "label": "Passata",
+    "group": "Kolonial"
+  },
+  {
+    "id": "tomatpuré",
+    "label": "Tomatpuré",
+    "group": "Kolonial"
+  },
+  {
+    "id": "kikærter",
+    "label": "Kikærter",
+    "group": "Kolonial"
+  },
+  {
+    "id": "kidneybønner",
+    "label": "Kidneybønner",
+    "group": "Kolonial"
+  },
+  {
+    "id": "sorte_bønner",
+    "label": "Sorte bønner",
+    "group": "Kolonial"
+  },
+  {
+    "id": "hvide_bønner",
+    "label": "Hvide bønner",
+    "group": "Kolonial"
+  },
+  {
+    "id": "linser",
+    "label": "Linser",
+    "group": "Kolonial"
+  },
+  {
+    "id": "tun",
+    "label": "Tun (dåse)",
+    "group": "Kolonial"
+  },
+  {
+    "id": "havregryn",
+    "label": "Havregryn",
+    "group": "Kolonial"
+  }
+]

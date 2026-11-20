@@ -7,46 +7,43 @@ import type { DealStatus, ListingDeal } from "./deals";
 import { STATUS_RANK } from "./deals";
 import type { FoodWasteItem } from "./foodwaste";
 import { typeIdOf } from "./meals";
+import { resolveStaple, type Staple } from "./staple-catalogue";
 
-export const STAPLES_COOKIE = "fc_staples";
-
-export interface StapleOption {
-  id: string;
-  /** Danish label in the picker and the section. */
-  label: string;
-  /** Taxonomy type ids that count as this staple. */
-  types: readonly string[];
-}
+export {
+  STAPLES_COOKIE,
+  STAPLE_OPTIONS,
+  parseStaples,
+  serializeStaples,
+  type StapleOption,
+} from "./staple-catalogue";
 
 /**
- * Staples that can be picked: breakfast and everyday basics among the types the pipeline
- * recognizes. Bread, coffee and fruit are not recognized yet and therefore not offered.
+ * A current or upcoming offer of any item (`api.product_price_history`, kind `offer`), for
+ * free-text staples: no recognition, no verdict.
  */
-export const STAPLE_OPTIONS: readonly StapleOption[] = [
-  { id: "aeg", label: "Æg", types: ["æg"] },
-  { id: "havregryn", label: "Havregryn", types: ["havregryn"] },
-  { id: "maelk", label: "Mælk", types: ["mælk"] },
-  { id: "skyr", label: "Skyr", types: ["skyr"] },
-  { id: "yoghurt", label: "Yoghurt", types: ["yoghurt", "græsk_yoghurt"] },
-  { id: "ymer", label: "A38/ymer", types: ["a38_ymer"] },
-  { id: "smoer", label: "Smør", types: ["smør", "smørbar"] },
-  { id: "ost", label: "Ost", types: ["fast_ost"] },
-  { id: "hytteost", label: "Hytteost", types: ["hytteost"] },
-  { id: "kaernemaelk", label: "Kærnemælk", types: ["kærnemælk"] },
-];
-
-const BY_ID = new Map(STAPLE_OPTIONS.map((o) => [o.id, o]));
-
-/** Parse the cookie (comma-separated ids): known ids in catalogue order, no duplicates. */
-export function parseStaples(value: string | null | undefined): string[] {
-  if (!value) return [];
-  const ids = new Set(value.split(",").map((s) => s.trim()));
-  return STAPLE_OPTIONS.filter((o) => ids.has(o.id)).map((o) => o.id);
+export interface TextOffer {
+  listingId: string;
+  productKey: string | null;
+  chainId: string;
+  title: string;
+  price: number | null;
+  unit: string | null;
+  unitPriceMin: number | null;
+  unitPriceMax: number | null;
+  sizeMin: number | null;
+  sizeMax: number | null;
+  validFrom: string;
+  validTo: string | null;
+  memberOnly: boolean;
+  source: string | null;
 }
 
-/** The cookie value for a selection (only known ids). */
-export function serializeStaples(ids: readonly unknown[]): string {
-  return parseStaples(ids.filter((i): i is string => typeof i === "string").join(",")).join(",");
+/** The texts of the free-text staples in a selection (for the offer query). */
+export function textStapleTerms(selected: readonly string[]): string[] {
+  return selected.flatMap((id) => {
+    const staple = resolveStaple(id);
+    return staple?.kind === "text" ? [staple.text] : [];
+  });
 }
 
 /** At most this many offers and clearances are shown per staple. */
@@ -54,15 +51,20 @@ export const MAX_OFFERS_PER_STAPLE = 3;
 export const MAX_CLEARANCES_PER_STAPLE = 2;
 
 export interface StapleMatches {
-  staple: StapleOption;
+  staple: Staple;
   /** Offers with a variant of the staple, best verdict and lowest unit price first. */
   offers: ListingDeal[];
+  /** Free-text staples: offers whose name contains the text, current and cheapest first. */
+  textOffers: TextOffer[];
   /** Clearances of the staple nearby, largest discount first. */
   clearances: FoodWasteItem[];
   /** All matches before the per-staple limits. */
   offerCount: number;
   clearanceCount: number;
 }
+
+const textUnitPrice = (o: TextOffer) =>
+  o.unitPriceMin ?? o.unitPriceMax ?? Number.POSITIVE_INFINITY;
 
 const unitPrice = (l: ListingDeal) =>
   l.offer.unitPriceMin ?? l.offer.unitPriceMax ?? Number.POSITIVE_INFINITY;
@@ -74,15 +76,42 @@ const unitPrice = (l: ListingDeal) =>
  */
 const WORTH_SHOWING: ReadonlySet<DealStatus> = new Set(["good_deal", "undecided"]);
 
-/** The chosen staples with their offers worth buying and their clearances nearby. */
+/**
+ * The chosen staples with their offers worth buying and their clearances nearby; free-text
+ * staples with the offers (`textOffers`, already limited to nearby chains) whose name contains
+ * the text.
+ */
 export function stapleMatches(
   selected: readonly string[],
   listings: readonly ListingDeal[],
   foodWaste: readonly FoodWasteItem[],
+  textOffers: readonly TextOffer[] = [],
+  now: Date = new Date(),
 ): StapleMatches[] {
-  return selected.flatMap((id) => {
-    const staple = BY_ID.get(id);
+  return selected.flatMap((id): StapleMatches[] => {
+    const staple = resolveStaple(id);
     if (!staple) return [];
+    if (staple.kind === "text") {
+      const started = (o: TextOffer) => Date.parse(o.validFrom) <= now.getTime();
+      const offers = textOffers
+        .filter((o) => o.title.toLocaleLowerCase("da-DK").includes(staple.text))
+        .sort(
+          (a, b) =>
+            Number(started(b)) - Number(started(a)) ||
+            textUnitPrice(a) - textUnitPrice(b) ||
+            (a.price ?? Infinity) - (b.price ?? Infinity),
+        );
+      return [
+        {
+          staple,
+          offers: [],
+          textOffers: offers.slice(0, MAX_OFFERS_PER_STAPLE),
+          clearances: [],
+          offerCount: offers.length,
+          clearanceCount: 0,
+        },
+      ];
+    }
     const types = new Set(staple.types);
     const offers = listings
       .filter((l) => WORTH_SHOWING.has(l.status) && l.variants.some((v) => types.has(v.typeId)))
@@ -102,6 +131,7 @@ export function stapleMatches(
       {
         staple,
         offers: offers.slice(0, MAX_OFFERS_PER_STAPLE),
+        textOffers: [],
         clearances: clearances.slice(0, MAX_CLEARANCES_PER_STAPLE),
         offerCount: offers.length,
         clearanceCount: clearances.length,

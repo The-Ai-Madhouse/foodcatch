@@ -997,10 +997,8 @@ costs, and the recipe on demand.
 - Picker: "Vælg dine basisvarer" (open while nothing is picked) / "Skift basisvarer", a checkbox
   per staple and "Gem basisvarer". A server action (`saveStaples`) stores the ids in the cookie
   `fc_staples` for a year; no JavaScript needed.
-- Staples (`lib/staples.ts`): æg, havregryn, mælk, skyr, yoghurt, A38/ymer, smør, ost, hytteost,
-  kærnemælk. Rugbrød, bread, coffee and fruit are not recognized by the pipeline's taxonomy yet,
-  so they cannot be picked (stated in the picker); adding them needs new taxonomy types, a new
-  `MATCHER_VERSION` and a reclassification.
+- Suggested staples (`lib/staple-catalogue.ts`): æg, havregryn, mælk, skyr, yoghurt, A38/ymer,
+  smør, ost, hytteost, kærnemælk. More through the search (§18).
 
 ## 16. "Søg vare" (2026-11-20)
 
@@ -1024,3 +1022,17 @@ costs, and the recipe on demand.
   ikke dokumenteret gode køb (endnu). Se alle kommende" (verdicts of upcoming offers may still
   be pending). The counts on "Gode køb"/"Alle" are this week's offers only; the category
   overview gets a "Kommende (N)" link.
+
+## 18. More staples through search (2026-11-20)
+
+- Under the suggestions, "Find flere basisvarer" (client component `StapleSearch`) searches every
+  other taxonomy type (`t:<type id>`, labels from `lib/taxonomy.json`, which a pipeline test keeps
+  equal to `matching/taxonomy.py`) and offers "Følg “…” som fritekst" (`q:<text>`). A hit is a
+  form posting to the `addStaple` server action; the picker stays open (`Disclosure`).
+- Free-text staples match the names of **all** current and upcoming offers of nearby chains
+  (`getOffersMatching`, `api.product_price_history`), also items the pipeline does not recognize
+  (rugbrød, kaffe), shown with a neutral "Tilbud" badge and "uden prisdom". Type staples behave
+  like the suggestions (verdicts, clearances).
+- Staples added this way are listed first in the picker as ticked checkboxes; unticking and
+  "Gem basisvarer" removes them. The cookie keeps the order, URI-encodes each id and holds at
+  most 30 staples. Offers that have not started show "fra lør. 22. nov.".

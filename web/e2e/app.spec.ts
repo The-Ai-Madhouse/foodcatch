@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const STORAGE_KEY = "foodcatch.location.v1";
 const SIZE = /\d+(?:,\d+)? (?:g|kg|ml|l|stk\.)|Vægt (?:ukendt|varierer)/;
@@ -243,11 +243,18 @@ test("meal ideas: lunch and dinner, prices, savings and the recipe", async ({ pa
   await expect(card.getByRole("heading", { name: "Sådan gør du" })).toBeVisible();
 });
 
+/** Open the staples picker unless it is open already (it starts open while nothing is picked). */
+async function openPicker(staples: Locator) {
+  const picker = staples.locator("details").first();
+  if ((await picker.getAttribute("open")) === null) await picker.locator("summary").click();
+  await expect(picker).toHaveAttribute("open", "");
+}
+
 test("offers: staples picker and foldable categories", async ({ page }) => {
   await page.goto("/");
   const staples = page.getByRole("region", { name: "Dine basisvarer" });
-  await staples.getByText(/Vælg dine basisvarer|Skift basisvarer/).click();
-  await staples.getByLabel("Æg").check();
+  await openPicker(staples);
+  await staples.getByLabel("Æg", { exact: true }).check();
   await staples.getByRole("button", { name: "Gem basisvarer" }).click();
   await expect(staples.getByRole("heading", { level: 3, name: /^Æg/ })).toBeVisible();
 
@@ -255,8 +262,47 @@ test("offers: staples picker and foldable categories", async ({ page }) => {
   await expect(categories.getByRole("link").first()).toBeVisible();
   const group = page.locator("details[id^=gruppe-]").first();
   await expect(group).toHaveAttribute("open", "");
-  await group.locator("summary").click();
+  await group.locator(":scope > summary").click();
   await expect(group).not.toHaveAttribute("open", "");
+});
+
+test("offers: add a staple through the search and as free text", async ({ page }) => {
+  await page.goto("/");
+  const staples = page.getByRole("region", { name: "Dine basisvarer" });
+  await openPicker(staples);
+  const search = staples.getByLabel("Find flere basisvarer");
+  await search.fill("kylling");
+  await staples.getByRole("button", { name: /Kyllingebryst/ }).click();
+  await expect(staples.getByRole("checkbox", { name: /Kyllingebryst/ })).toBeChecked();
+  await search.fill("danbo");
+  await staples.getByRole("button", { name: /Følg “danbo” som fritekst/ }).click();
+  await expect(
+    staples.getByRole("heading", { level: 3, name: /^Danbo.*uden prisdom/ }),
+  ).toBeVisible();
+  // Unticking and saving removes it again.
+  await staples.getByRole("checkbox", { name: /Danbo/ }).uncheck();
+  await staples.getByRole("button", { name: "Gem basisvarer" }).click();
+  await expect(staples.getByRole("heading", { level: 3, name: /^Danbo/ })).toHaveCount(0);
+});
+
+test("offers: upcoming offers have their own section", async ({ page }) => {
+  await page.goto("/?vis=alle");
+  const upcoming = page.getByRole("region", { name: "Kommende tilbud" });
+  await expect(upcoming.locator("details[id^=kommende-]").first()).toBeVisible();
+  await expect(upcoming.getByText(/^Fra /).first()).toBeVisible();
+});
+
+test("search: find an item and open its price history", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Søg" }).first().click();
+  await expect(page).toHaveURL(/\/soeg$/);
+  await page.getByRole("searchbox", { name: "Varenavn" }).fill("hakket grisekød");
+  await page.getByRole("button", { name: "Søg", exact: true }).click();
+  await expect(page).toHaveURL(/q=hakket\+grisek/);
+  const first = page.locator('a[href^="/produkt/"]').first();
+  await expect(first).toContainText(/pris(er)? →/);
+  await first.click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(/Hakket grisekød/i);
 });
 
 test("food waste: filter by category", async ({ page }) => {
@@ -283,6 +329,7 @@ test("no horizontal page scroll on phones", async ({ page }, testInfo) => {
     "/madspild?sorter=rabat",
     "/madideer",
     "/kort",
+    "/soeg?q=hakket",
     "/status",
     href ?? "/",
     productHref ?? "/",
