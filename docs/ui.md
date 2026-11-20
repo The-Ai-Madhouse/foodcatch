@@ -182,6 +182,7 @@ Honest answer to "where can I buy this":
 | `/` | "Tilbud" | This week's offers on healthy staples from **every chain with a store within the radius**, good buys first, each with where, size, verdict and source (§12.1). |
 | `/madspild` | "Madspild" | Clearances in nearby stores, grouped by store, nearest first. Desktop: list + map. |
 | `/kort` | "Kort" | **New.** All nearby stores on a map, coloured by chain; tap a store to see what to buy there. |
+| `/soeg` | "Søg" | Find any item by name and open its price history (§16). |
 | `/vare/[classKey]` | – | Price history of one product class across chains (reached from a comparison). |
 | `/produkt/[productKey]` | – | **New.** Price history of one item (`product_key`, URL-encoded), §12.2. |
 | `/status` | "Datastatus" | Pipeline health. Linked from the footer and from the stale-data banner, not from the main navigation. |
@@ -192,6 +193,7 @@ Query parameters (all optional, shareable):
 * `/?kaede=lidl,netto` – only offers of these chains (combinable with `vis=alle`).
 * `/produkt/{key}?pris=enhed&periode=alt` – unit price instead of pack price; whole history.
 * `/madspild?sorter=rabat` – sort by discount (default: nearest store first).
+* `/soeg?q=faxe+kondi` – item search (§16).
 * `/kort?kaede=netto,lidl&butik={store_id}` – chain filter and selected store.
 
 **Mobile shell (< 768 px)**
@@ -999,3 +1001,15 @@ costs, and the recipe on demand.
   kærnemælk. Rugbrød, bread, coffee and fruit are not recognized by the pipeline's taxonomy yet,
   so they cannot be picked (stated in the picker); adding them needs new taxonomy types, a new
   `MATCHER_VERSION` and a reclassification.
+
+## 16. "Søg vare" (2026-11-20)
+
+- `/soeg` ("Søg" in the main navigation, the fifth tab on phones): a GET form (`q`, works without
+  JavaScript). Every word (at most five, at least two characters in all) must occur in the
+  item's name, case-insensitive (`lib/search.ts`).
+- Hits are items (`api.products`, one per `product_key`) of every chain and kind, also outside
+  the healthy staples: name, chain, latest price, pack size, unit price, kind and period, and
+  "N priser →" linking to `/produkt/{key}`. Items with a current price come first, then the
+  most recently priced; at most 60.
+- Leaflet items with the same heading but another pack size are separate items (product key
+  with size, migration 0010).

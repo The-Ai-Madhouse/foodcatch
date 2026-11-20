@@ -7,6 +7,7 @@ import { EARTH_RADIUS_KM, boundingBox, type Coordinates } from "@/lib/geo";
 import type { FoodWasteItem } from "@/lib/foodwaste";
 import type { PriceHistoryRow } from "@/lib/history";
 import type { ProductHistoryRow, ProductInfo } from "@/lib/product";
+import { MAX_RESULTS, likePattern, type SearchHit } from "@/lib/search";
 import type { PipelineRun } from "@/lib/status";
 import type { ReferenceDetail } from "@/lib/deals";
 import { dedupeStores, type NearbyStore } from "@/lib/stores";
@@ -351,6 +352,56 @@ export async function getProduct(productKey: string): Promise<ProductInfo | null
         latestValidTo: toIso(row.latestValidTo),
       }
     : null;
+}
+
+interface SearchSqlRow extends Omit<SearchHit, "latestValidFrom" | "latestValidTo"> {
+  latestValidFrom: Date | null;
+  latestValidTo: Date | null;
+}
+
+/**
+ * Items whose name contains every term (`lib/search.ts`), most recently priced first: the
+ * product keys from `api.product_price_history` (shelf prices, offers, clearances and Salling's
+ * EAN prices), then their latest listing from `api.products`. Two steps, because a filter on
+ * the key is pushed into `api.products` but a filter on its name is not.
+ */
+export async function searchProducts(terms: readonly string[]): Promise<SearchHit[]> {
+  if (terms.length === 0) return [];
+  await connection();
+  const sql = await readOnlyDb();
+  const matches = terms.map(
+    (t) => sql`(title ILIKE ${likePattern(t)} OR product_label ILIKE ${likePattern(t)})`,
+  );
+  const where = matches.reduce((acc, m) => sql`${acc} AND ${m}`);
+  const keys = await sql<{ productKey: string; priceCount: number }[]>`
+    SELECT product_key AS "productKey", count(*)::int AS "priceCount"
+    FROM api.product_price_history
+    WHERE product_key IS NOT NULL AND ${where}
+    GROUP BY product_key
+    ORDER BY max(valid_from) DESC, product_key
+    LIMIT ${MAX_RESULTS}::int
+  `;
+  if (keys.length === 0) return [];
+  const counts = new Map(keys.map((k) => [k.productKey, k.priceCount]));
+  const rows = await sql<Omit<SearchSqlRow, "priceCount">[]>`
+    SELECT product_key AS "productKey", label, chain_id AS "chainId", chain_name AS "chainName",
+           class_key AS "classKey", class_label AS "classLabel", is_exact AS "isExact", ean,
+           latest_source AS "latestSource", latest_kind AS "latestKind",
+           latest_price::float8 AS "latestPrice", latest_unit AS "latestUnit",
+           latest_unit_price_min::float8 AS "latestUnitPriceMin",
+           latest_unit_price_max::float8 AS "latestUnitPriceMax",
+           latest_size_min::float8 AS "latestSizeMin",
+           latest_size_max::float8 AS "latestSizeMax", latest_valid_from AS "latestValidFrom",
+           latest_valid_to AS "latestValidTo"
+    FROM api.products
+    WHERE product_key = ANY(${[...counts.keys()]}::text[])
+  `;
+  return rows.map((r) => ({
+    ...r,
+    latestValidFrom: toIso(r.latestValidFrom),
+    latestValidTo: toIso(r.latestValidTo),
+    priceCount: counts.get(r.productKey) ?? 0,
+  }));
 }
 
 interface PipelineSqlRow {
