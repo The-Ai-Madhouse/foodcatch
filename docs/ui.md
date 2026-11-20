@@ -929,7 +929,7 @@ The visual system (§4) is unchanged.
   "Her: {unit price}", and the references cheapest first (chain, kind, member tag, unit price).
   References count regardless of distance (architecture §6), the more conservative reading.
 
-## 13. Meal ideas, "Madideer" (2026-11-19)
+## 13. Meal ideas, "Madideer" (2026-11-19; replaced by §19 on 2026-11-20)
 
 The owner's request: after choosing an address, suggest 2–5 lunches and 2–5 dinners from this
 week's offers and the food waste nearby, what the cheap items cost and save, what the dish
@@ -1036,3 +1036,47 @@ costs, and the recipe on demand.
 - Staples added this way are listed first in the picker as ticked checkboxes; unticking and
   "Gem basisvarer" removes them. The cookie keeps the order, URI-encodes each id and holds at
   most 30 staples. Offers that have not started show "fra lør. 22. nov.".
+
+## 19. Madideer as a catalogue and a meal plan (2026-11-20)
+
+The owner's request: a clearer "Madideer" tab that starts with many dishes (name and price), lets
+the user filter by time, money and store, opens a dish into its full shopping list with as many
+prices as we have, marks basics expected at home, lets ingredients be ticked off, and saves
+liked dishes. Then, inspired by meal-plan apps: pick days and dishes first, and only then ask
+where to shop – the cheapest single store (recommended) or the cheapest total across stores.
+
+### 19.1 Katalog (`/madideer`)
+
+- Every recipe of `lib/recipes.ts` is shown (not only those with a cheap core item). Each recipe
+  now has `minutes` (total time) and pantry items may be `basic` (oil, spices, onion, garlic,
+  bouillon …).
+- Filters (GET form, `lib/meal-filters.ts`, applied on change): "Måltid" (`maaltid`), "Tid"
+  (`tid` ≤ 15/30/45/60 min), "Pris pr. person" (`pris` ≤ 10/15/20/30 kr.), "Butik du mest
+  handler i" (`butik`, nearby chains: its items win a slot), "Alt fra én butik" (`kun=1`: only
+  that chain, or without a chain the chain that saves the most per dish), "Kun gemte ♥"
+  (`gemte=1`), "Sortér efter" (`sorter`: most saved, cheapest per person, quickest).
+- Folded card: name, description, time · servings · meal, "ca. X kr. pr. pers.", "Spar Y kr.",
+  chain dots and "n af m på tilbud", and a heart (cookie `fc_liked_recipes`, server action).
+- Opened card: the three numbers, "Føj til madplan" (day select), "Indkøbsliste" with a
+  checkbox per row ("Har jeg"): ingredients (chosen offer/clearance with all details, "Flere
+  priser (n)" with every other cheap item, and the slot's normal-price estimate), "Også til
+  retten", and "Basisvarer" pre-ticked. A live "Mangler n varer: ca. X kr." follows the ticks;
+  ticks are kept per dish in localStorage (`fc_have:<id>`). Then "Sådan gør du".
+
+### 19.2 Madplan (`/madideer/madplan`)
+
+1. **Vælg dage** – chips for today and the next 13 days.
+2. **Vælg retter** – per day a select of every dish with price per person and saving; dishes can
+   be removed; at most four per day. Plan cookie `fc_meal_plan`
+   (`YYYY-MM-DD=id.id|…`, past days dropped).
+3. **Hvor vil du handle?** – every nearby chain with what the whole plan costs there, the
+   cheapest marked "Anbefalet" and chosen by default; chains without a useful offer are one
+   quiet line; and "Billigst i alt" across stores (`?butik=flere`).
+4. **Indkøbsliste** – grouped by store, then "Ikke på tilbud", "Også til retterne" and
+   "Basisvarer" (pre-ticked, not in the total), with the dishes each row is for.
+
+Pricing (`lib/meal-plan.ts`): a cheap item is only used when the packs a dish needs cost no more
+than the slot's normal-price estimate (otherwise buying it would raise the total); a cheap item
+shared by dishes is bought in as many packs as their amounts need. Items not on offer are
+priced with the same estimate in every chain, so the differences between stores come from
+offers and food waste only.

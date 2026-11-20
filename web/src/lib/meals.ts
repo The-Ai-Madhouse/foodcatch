@@ -182,11 +182,39 @@ export interface FilledSlot {
   usedCost: number;
 }
 
+/** One ingredient slot of an idea, in recipe order: the chosen cheap item and every other one. */
+export interface SlotRow {
+  slot: RecipeSlot;
+  /** The cheap item used, or null when the slot is bought at the normal price. */
+  chosen: FilledSlot | null;
+  /** Every cheap item that fits the slot, best first (the chosen one included). */
+  options: readonly MealItem[];
+}
+
+/** Which store the user plans to shop in ("Butik" and "Kun én butik" on the page). */
+export interface StoreChoice {
+  /** The preferred chain: its items win a slot over other chains'. */
+  chainId: string | null;
+  /** Only items of one chain: `chainId`, or without it the chain that saves the most. */
+  only: boolean;
+  /**
+   * Pick the cheapest pack instead of the biggest saving, and skip packs that cost more than
+   * the slot's normal-price estimate (buying them would raise the shopping total).
+   */
+  cheapest?: boolean;
+}
+
+export const ANY_STORE: StoreChoice = { chainId: null, only: false };
+
 export interface MealIdea {
   recipe: Recipe;
   filled: FilledSlot[];
-  /** Slots with nothing on offer or cleared: bought at the normal price. */
+  /** Slots with nothing on offer or cleared (in the chosen store): bought at the normal price. */
   missing: RecipeSlot[];
+  /** Every slot in recipe order, with all the cheap items that fit it. */
+  rows: SlotRow[];
+  /** The single chain the cheap items come from when the user wants one store, else null. */
+  chainId: string | null;
   /** What the cheap items cost as whole packs (kr.): the shopping-list price. */
   purchasePrice: number;
   /** Sum of the known savings of the filled slots (kr., whole øre). */
@@ -205,6 +233,11 @@ export interface MealIdea {
   dishCost: number;
   /** {@link dishCost} per serving. */
   costPerServing: number;
+}
+
+/** The chain an item is bought in. */
+export function itemChain(item: MealItem): string {
+  return item.kind === "offer" ? item.deal.chainId : item.item.chainId;
 }
 
 /** The unit price of an item in `unit` (kr. per kg, l or piece), or null when unknown. */
@@ -226,30 +259,66 @@ export function usedCost(slot: RecipeSlot, item: MealItem): number {
   return roundKr(Math.min(item.price, cost));
 }
 
-/** A recipe filled with the best item per slot, or null when a core slot cannot be filled. */
+/** What buying enough packs of `item` for `slot` costs (one pack when its size is unknown). */
+export function slotPayCost(slot: RecipeSlot, item: MealItem): number {
+  const unitPrice = itemUnitPrice(item, slot.unit);
+  const packs = unitPrice
+    ? Math.max(1, Math.ceil((slot.amount * unitPrice) / item.price - 1e-9))
+    : 1;
+  return roundKr(packs * item.price);
+}
+
+/**
+ * A recipe filled with the best item per slot. With a preferred chain its items win; with
+ * `only`, items of other chains are never chosen (they still show as options). Every recipe
+ * gives an idea: slots without a cheap item are priced at their estimate. With `requireCore`,
+ * null when a core slot cannot be filled.
+ */
 export function fillRecipe(
   recipe: Recipe,
   byType: ReadonlyMap<string, readonly MealItem[]>,
+  store: StoreChoice = ANY_STORE,
+  requireCore = false,
 ): MealIdea | null {
   const used = new Set<string>();
   const filled: FilledSlot[] = [];
   const missing: RecipeSlot[] = [];
+  const rows: SlotRow[] = [];
+  const preferred = (i: MealItem) => (store.chainId && itemChain(i) === store.chainId ? 1 : 0);
   for (const slot of recipe.slots) {
+    const seen = new Set<string>();
     const options = slot.types
       .flatMap((t) => byType.get(t) ?? [])
-      .filter((i) => !used.has(`${i.kind}:${i.id}`))
-      .sort(compareItems);
-    const best = options[0];
+      .filter((i) => {
+        const key = `${i.kind}:${i.id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          preferred(b) - preferred(a) ||
+          (store.cheapest ? slotPayCost(slot, a) - slotPayCost(slot, b) : 0) ||
+          compareItems(a, b),
+      );
+    const best = options.find(
+      (i) =>
+        !used.has(`${i.kind}:${i.id}`) &&
+        !(store.cheapest && slotPayCost(slot, i) > slot.estimateKr) &&
+        !(store.only && store.chainId && itemChain(i) !== store.chainId),
+    );
     if (best) {
       used.add(`${best.kind}:${best.id}`);
-      filled.push({ slot, item: best, usedCost: usedCost(slot, best) });
-    } else if (slot.core) {
-      return null;
+      const chosen = { slot, item: best, usedCost: usedCost(slot, best) };
+      filled.push(chosen);
+      rows.push({ slot, chosen, options });
     } else {
+      if (slot.core && requireCore) return null;
       missing.push(slot);
+      rows.push({ slot, chosen: null, options });
     }
   }
-  if (filled.length === 0) return null;
+  if (requireCore && filled.length === 0) return null;
   const sum = (values: number[]) => roundKr(values.reduce((a, b) => a + b, 0));
   const known = filled.filter((f) => f.item.saving != null && f.item.normalPrice != null);
   const totalSaving = sum(known.map((f) => f.item.saving ?? 0));
@@ -263,6 +332,8 @@ export function fillRecipe(
     recipe,
     filled,
     missing,
+    rows,
+    chainId: store.only ? store.chainId : null,
     purchasePrice: sum(filled.map((f) => f.item.price)),
     totalSaving,
     savingPct: knownNormal > 0 && totalSaving > 0 ? (totalSaving / knownNormal) * 100 : null,
@@ -270,6 +341,39 @@ export function fillRecipe(
     dishCost,
     costPerServing: roundKr(dishCost / recipe.servings),
   };
+}
+
+/** More saved first, then the cheaper dish. */
+function betterSingleStore(a: MealIdea, b: MealIdea): number {
+  return (
+    b.totalSaving - a.totalSaving || b.filled.length - a.filled.length || a.dishCost - b.dishCost
+  );
+}
+
+/**
+ * One idea per recipe for the catalogue ("Madideer"). With "only one store" and no chain chosen,
+ * each dish gets the nearby chain where it saves the most.
+ */
+export function mealCatalogue(
+  deals: readonly EvaluatedDeal[],
+  foodWaste: readonly FoodWasteItem[],
+  nearbyChains: ReadonlySet<string>,
+  now: Date,
+  store: StoreChoice = ANY_STORE,
+  recipes: readonly Recipe[] = RECIPES,
+): MealIdea[] {
+  const byType = mealItemsByType(deals, foodWaste, nearbyChains, now);
+  return recipes.map((recipe) => {
+    if (!store.only || store.chainId) return fillRecipe(recipe, byType, store) as MealIdea;
+    const chains = new Set<string>();
+    for (const slot of recipe.slots)
+      for (const t of slot.types) for (const i of byType.get(t) ?? []) chains.add(itemChain(i));
+    const tries = [...chains]
+      .map((chainId) => fillRecipe(recipe, byType, { chainId, only: true }) as MealIdea)
+      .filter((i) => i.filled.length > 0)
+      .sort(betterSingleStore);
+    return tries[0] ?? (fillRecipe(recipe, byType, { chainId: null, only: true }) as MealIdea);
+  });
 }
 
 /** At most this many ideas are shown per meal. */
@@ -308,7 +412,7 @@ export function mealIdeas(
   const byType = mealItemsByType(deals, foodWaste, nearbyChains, now);
   const ideas = recipes
     .filter((r) => r.meal === meal)
-    .map((r) => fillRecipe(r, byType))
+    .map((r) => fillRecipe(r, byType, ANY_STORE, true))
     .filter((i): i is MealIdea => i != null)
     .sort(compareIdeas);
   const chosen: MealIdea[] = [];

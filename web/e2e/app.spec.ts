@@ -217,30 +217,38 @@ test("a clearance cheaper than the other chains says so", async ({ page }) => {
   await expect(item.getByRole("region", { name: "Sammenligning" })).toContainText("Billigere end");
 });
 
-test("meal ideas: lunch and dinner, prices, savings and the recipe", async ({ page }) => {
+test("meal ideas: catalogue, filters, shopping list and meal plan", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("link", { name: "Madideer" }).first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Madideer" })).toBeVisible();
   const main = page.locator("main");
-  await expect(main.getByRole("heading", { level: 2, name: /^Frokost/ })).toBeVisible();
-  await expect(main.getByRole("heading", { level: 2, name: /^Aftensmad/ })).toBeVisible();
+  // A catalogue of every dish, with filters.
+  await expect(main.getByLabel("Tid")).toBeVisible();
+  await expect(main.getByLabel("Butik du mest handler i")).toBeVisible();
   const cards = main.locator("article");
-  const count = await cards.count();
-  expect(count).toBeGreaterThanOrEqual(2);
-  expect(count).toBeLessThanOrEqual(10);
+  expect(await cards.count()).toBeGreaterThanOrEqual(20);
   const card = cards.first();
-  await expect(card.getByText("Indkøb")).toBeVisible();
-  await expect(card.getByText("Du sparer")).toBeVisible();
-  await expect(card.getByText("Retten koster ca.")).toBeVisible();
-  await expect(card.getByText(/pr\. pers\./)).toBeVisible();
-  await expect(main.getByText("Madspild", { exact: true }).first()).toBeVisible();
-  await expect(main.getByText("Tilbud", { exact: true }).first()).toBeVisible();
-  // Stores open in Google Maps in a new tab.
-  const maps = card.locator('a[href^="https://www.google.com/maps/search/"]').first();
-  await expect(maps).toHaveAttribute("target", "_blank");
-  // The recipe is shown on demand.
-  await card.getByText("Vis opskrift").click();
+  await expect(card.getByText(/pr\. pers\./).first()).toBeVisible();
+  // Open a dish: shopping list with ticks and the method.
+  await card.locator("summary").first().click();
+  await expect(card.getByRole("heading", { name: "Indkøbsliste" })).toBeVisible();
+  await expect(card.getByText(/^Mangler \d+/)).toBeVisible();
+  const box = card.locator('input[type="checkbox"]').first();
+  await box.check();
+  await expect(box).toBeChecked();
   await expect(card.getByRole("heading", { name: "Sådan gør du" })).toBeVisible();
+  // Filters narrow the list.
+  await main.getByLabel("Tid").selectOption("15");
+  await expect(page).toHaveURL(/tid=15/);
+  // Meal plan: pick a day and a dish, then a store.
+  await main.getByRole("link", { name: /^Madplan/ }).click();
+  await main.getByRole("button", { name: /^I morgen/ }).click();
+  await main.getByLabel("Vælg ret").first().selectOption({ index: 1 });
+  await main.getByRole("button", { name: "Tilføj" }).first().click();
+  await expect(main.getByRole("heading", { name: "3. Hvor vil du handle?" })).toBeVisible();
+  await expect(main.getByText("Anbefalet")).toBeVisible();
+  await expect(main.getByRole("heading", { name: "4. Indkøbsliste" })).toBeVisible();
+  await main.getByRole("button", { name: "Ryd madplanen" }).click();
 });
 
 /** Open the staples picker unless it is open already (it starts open while nothing is picked). */

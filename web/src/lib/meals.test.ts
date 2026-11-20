@@ -3,6 +3,7 @@ import { evaluateDeals, type DealRow, type EvaluatedDeal } from "./deals";
 import type { FoodWasteItem } from "./foodwaste";
 import {
   MAX_IDEAS,
+  mealCatalogue,
   RECIPES,
   fillRecipe,
   foodWasteItem,
@@ -190,6 +191,7 @@ describe("fillRecipe", () => {
     name: "Test",
     meal: "frokost",
     servings: 2,
+    minutes: 10,
     description: "",
     slots: [
       { label: "Æg", types: ["æg"], amount: 4, unit: "stk", estimateKr: 12, core: true },
@@ -200,7 +202,7 @@ describe("fillRecipe", () => {
   };
 
   it("needs every core slot", () => {
-    expect(fillRecipe(recipe, new Map())).toBeNull();
+    expect(fillRecipe(recipe, new Map(), undefined, true)).toBeNull();
   });
 
   it("lists unfilled optional slots as missing and sums known savings", () => {
@@ -231,7 +233,7 @@ describe("fillRecipe", () => {
       ],
     };
     const byType = mealItemsByType([], [waste()], NEARBY, NOW);
-    expect(fillRecipe(twice, byType)).toBeNull();
+    expect(fillRecipe(twice, byType, undefined, true)).toBeNull();
   });
 });
 
@@ -359,5 +361,69 @@ describe("RECIPES", () => {
   it("has lunches and dinners", () => {
     expect(RECIPES.filter((r) => r.meal === "frokost").length).toBeGreaterThanOrEqual(5);
     expect(RECIPES.filter((r) => r.meal === "aftensmad").length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe("mealCatalogue", () => {
+  const recipe: Recipe = {
+    id: "kat",
+    name: "Kat",
+    meal: "aftensmad",
+    servings: 2,
+    minutes: 20,
+    description: "",
+    slots: [
+      { label: "Æg", types: ["æg"], amount: 4, unit: "stk", estimateKr: 12, core: true },
+      { label: "Kød", types: ["hakket_oksekød"], amount: 0.5, unit: "kg", estimateKr: 45 },
+    ],
+    pantry: [{ name: "olie", amount: "1 spsk.", estimateKr: 1, basic: true }],
+    steps: ["Lav det."],
+  };
+  const eggsLidl = waste({ listingId: "w-lidl", chainId: "lidl" });
+
+  it("prices every recipe, also without anything cheap", () => {
+    const [idea] = mealCatalogue([], [], NEARBY, NOW, undefined, [recipe]);
+    expect(idea?.filled).toEqual([]);
+    expect(idea?.rows.map((r) => r.chosen)).toEqual([null, null]);
+    expect(idea?.dishCost).toBe(58);
+  });
+
+  it("prefers the chosen chain and keeps the other prices as options", () => {
+    const [idea] = mealCatalogue(
+      [deal()],
+      [waste(), eggsLidl],
+      NEARBY,
+      NOW,
+      { chainId: "lidl", only: false },
+      [recipe],
+    );
+    expect(idea?.rows[0]?.chosen?.item.id).toBe("w-lidl");
+    expect(idea?.rows[0]?.options).toHaveLength(2);
+    // Nothing in Lidl for the mince: another chain fills it.
+    expect(idea?.rows[1]?.chosen?.item.id).toBe("offer-1");
+  });
+
+  it("uses one chain only when asked", () => {
+    const [idea] = mealCatalogue(
+      [deal()],
+      [eggsLidl],
+      NEARBY,
+      NOW,
+      { chainId: "lidl", only: true },
+      [recipe],
+    );
+    expect(idea?.chainId).toBe("lidl");
+    expect(idea?.rows[1]?.chosen).toBeNull();
+    expect(idea?.rows[1]?.options).toHaveLength(1);
+  });
+
+  it("picks the chain that saves the most when one store is wanted", () => {
+    const [idea] = mealCatalogue([deal()], [eggsLidl], NEARBY, NOW, { chainId: null, only: true }, [
+      recipe,
+    ]);
+    expect(idea?.filled).toHaveLength(1);
+    expect(idea?.chainId).toBe(
+      idea && idea.filled[0] ? (idea.filled[0].item.kind === "offer" ? "netto" : "lidl") : null,
+    );
   });
 });

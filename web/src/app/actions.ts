@@ -23,6 +23,17 @@ import {
   textStapleId,
   withStaple,
 } from "@/lib/staple-catalogue";
+import { LIKED_COOKIE, parseLiked, serializeLiked, toggleLiked } from "@/lib/meal-filters";
+import {
+  PLAN_COOKIE,
+  addPlanDish,
+  parsePlan,
+  removePlanDish,
+  serializePlan,
+  todayInDenmark,
+  togglePlanDay,
+  type MealPlan,
+} from "@/lib/meal-plan";
 import { GeocodingError, geocodeAddress } from "@/server/geocode";
 
 /** The result of a location action, shown in the location sheet. */
@@ -180,4 +191,98 @@ export async function addStaple(formData: FormData): Promise<void> {
   const store = await cookies();
   const current = parseStaples(store.get(STAPLES_COOKIE)?.value);
   await persistStaples(serializeStaples(withStaple(current, id)));
+}
+
+/** Like or unlike a dish in "Madideer"; kept in a cookie for a year. */
+export async function toggleLikedRecipe(id: string): Promise<{ liked: boolean }> {
+  const store = await cookies();
+  const next = toggleLiked(parseLiked(store.get(LIKED_COOKIE)?.value), id);
+  const value = serializeLiked(next);
+  if (value) {
+    store.set(LIKED_COOKIE, value, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: COOKIE_MAX_AGE_S,
+    });
+  } else {
+    store.delete(LIKED_COOKIE);
+  }
+  revalidatePath("/madideer");
+  return { liked: next.includes(id) };
+}
+
+/** Read, change and store the meal plan cookie. */
+async function changePlan(change: (plan: MealPlan) => MealPlan): Promise<void> {
+  const store = await cookies();
+  const today = todayInDenmark(new Date());
+  const next = change(parsePlan(store.get(PLAN_COOKIE)?.value, today));
+  const value = serializePlan(parsePlan(serializePlan(next), today));
+  if (value) {
+    store.set(PLAN_COOKIE, value, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: COOKIE_MAX_AGE_S,
+    });
+  } else {
+    store.delete(PLAN_COOKIE);
+  }
+  revalidatePath("/madideer", "layout");
+}
+
+const text = (formData: FormData, name: string): string => {
+  const v = formData.get(name);
+  return typeof v === "string" ? v : "";
+};
+
+/** Add or remove a day of the meal plan. */
+export async function togglePlanDayAction(formData: FormData): Promise<void> {
+  await changePlan((plan) => togglePlanDay(plan, text(formData, "dato")));
+}
+
+/** Add a dish to a day of the meal plan. */
+export async function addPlanDishAction(formData: FormData): Promise<void> {
+  await changePlan((plan) => addPlanDish(plan, text(formData, "dato"), text(formData, "ret")));
+}
+
+/** Remove one dish from a day of the meal plan. */
+export async function removePlanDishAction(formData: FormData): Promise<void> {
+  await changePlan((plan) =>
+    removePlanDish(plan, text(formData, "dato"), Number(text(formData, "nr"))),
+  );
+}
+
+/** Empty the meal plan. */
+export async function clearPlanAction(): Promise<void> {
+  await changePlan(() => []);
+}
+
+/** The result of "Føj til madplan" in the catalogue, shown next to the button. */
+export interface AddToPlanState {
+  status: "idle" | "added" | "full" | "error";
+  /** The day it was added to (`YYYY-MM-DD`). */
+  date?: string;
+  /** How many dishes that day now has. */
+  count?: number;
+  seq: number;
+}
+
+/** Add a dish from the catalogue and say whether it worked. */
+export async function addToPlanFromCatalogue(
+  previous: AddToPlanState,
+  formData: FormData,
+): Promise<AddToPlanState> {
+  const seq = previous.seq + 1;
+  const date = text(formData, "dato");
+  const id = text(formData, "ret");
+  const store = await cookies();
+  const today = todayInDenmark(new Date());
+  const before = parsePlan(store.get(PLAN_COOKIE)?.value, today);
+  const after = addPlanDish(before, date, id);
+  const day = after.find((d) => d.date === date);
+  if (!day) return { status: "error", seq };
+  if (after === before) return { status: "full", date, count: day.recipes.length, seq };
+  await changePlan(() => after);
+  return { status: "added", date, count: day.recipes.length, seq };
 }
