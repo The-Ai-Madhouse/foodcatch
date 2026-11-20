@@ -8,7 +8,7 @@ export default function NotFound() {
         Vi kunne ikke finde det, du ledte efter. Varen har måske ingen registrerede priser endnu.
       </p>
       <p className="mt-3">
-        <Link href="/">Til ugens tilbud</Link>
+        <Link href="/">Til forsiden</Link>
       </p>
     </>
   );

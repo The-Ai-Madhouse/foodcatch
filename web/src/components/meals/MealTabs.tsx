@@ -1,6 +1,6 @@
 import { Segmented } from "@/components/Segmented";
 
-/** "Katalog" / "Madplan" at the top of the Madideer tab. */
+/** "Retter" / "Madplan" at the top of the Aftensmad tab. */
 export function MealTabs({
   active,
   planCount,
@@ -11,11 +11,11 @@ export function MealTabs({
   return (
     <div className="mt-3">
       <Segmented
-        label="Madideer"
+        label="Aftensmad"
         items={[
-          { href: "/madideer", label: "Katalog", active: active === "katalog" },
+          { href: "/", label: "Retter", active: active === "katalog" },
           {
-            href: "/madideer/madplan",
+            href: "/madplan",
             label: planCount > 0 ? `Madplan (${planCount})` : "Madplan",
             active: active === "madplan",
           },

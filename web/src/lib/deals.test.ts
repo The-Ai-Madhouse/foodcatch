@@ -447,10 +447,10 @@ describe("all chains", () => {
   });
 
   it("builds shareable hrefs", () => {
-    expect(dealsHref("gode", null)).toBe("/");
-    expect(dealsHref("alle", null)).toBe("/?vis=alle");
-    expect(dealsHref("gode", "lidl,netto")).toBe("/?kaede=lidl,netto");
-    expect(dealsHref("alle", "lidl")).toBe("/?vis=alle&kaede=lidl");
+    expect(dealsHref("gode", null)).toBe("/tilbud");
+    expect(dealsHref("alle", null)).toBe("/tilbud?vis=alle");
+    expect(dealsHref("gode", "lidl,netto")).toBe("/tilbud?kaede=lidl,netto");
+    expect(dealsHref("alle", "lidl")).toBe("/tilbud?vis=alle&kaede=lidl");
   });
 
   it("sorts within a group by unit price, per unit", () => {

@@ -19,12 +19,10 @@
 import type { EvaluatedDeal } from "./deals";
 import { foodWasteUnitPrice, type FoodWasteItem } from "./foodwaste";
 import { RECIPES, type Meal, type Recipe, type RecipeSlot } from "./recipes";
-import { referenceCounts, toOre, type ReferenceKind } from "./verdict";
+import { normalReference } from "./savings";
+import { toOre } from "./verdict";
 
 export { RECIPES, type Meal, type Recipe, type RecipeSlot } from "./recipes";
-
-/** Normal-price reference kinds an offer's saving is computed against. */
-const NORMAL_PRICE_KINDS: ReadonlySet<ReferenceKind> = new Set(["regular", "ean_reference"]);
 
 /** A cheap item that can fill a recipe slot. */
 export type MealItem =
@@ -67,16 +65,8 @@ export function normalUnitPrice(
   deal: EvaluatedDeal,
   nearbyChains: ReadonlySet<string>,
 ): number | null {
-  if (!deal.isExact) return null;
-  const prices = deal.references
-    .filter(
-      (r) =>
-        NORMAL_PRICE_KINDS.has(r.kind) &&
-        referenceCounts(r, nearbyChains) &&
-        (r.unit == null || r.unit === deal.unit),
-    )
-    .map((r) => r.unit_price);
-  return prices.length ? Math.min(...prices) : null;
+  // One definition of "the normal price" for the whole app (lib/savings.ts).
+  return normalReference(deal, nearbyChains)?.unit_price ?? null;
 }
 
 /**

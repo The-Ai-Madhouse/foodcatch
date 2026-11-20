@@ -172,10 +172,10 @@ async function persistStaples(value: string): Promise<void> {
   } else {
     store.delete(STAPLES_COOKIE);
   }
-  revalidatePath("/");
+  revalidatePath("/", "layout");
 }
 
-/** Save the staples picked on the offers page ("Dine basisvarer"); an empty pick clears them. */
+/** Save the staples picked on "Mine varer"; an empty pick clears them. */
 export async function saveStaples(formData: FormData): Promise<void> {
   await persistStaples(serializeStaples(formData.getAll("basisvare")));
 }
@@ -208,7 +208,7 @@ export async function toggleLikedRecipe(id: string): Promise<{ liked: boolean }>
   } else {
     store.delete(LIKED_COOKIE);
   }
-  revalidatePath("/madideer");
+  revalidatePath("/");
   return { liked: next.includes(id) };
 }
 
@@ -228,7 +228,8 @@ async function changePlan(change: (plan: MealPlan) => MealPlan): Promise<void> {
   } else {
     store.delete(PLAN_COOKIE);
   }
-  revalidatePath("/madideer", "layout");
+  revalidatePath("/");
+  revalidatePath("/madplan");
 }
 
 const text = (formData: FormData, name: string): string => {

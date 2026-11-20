@@ -1081,7 +1081,7 @@ shared by dishes is bought in as many packs as their amounts need. Items not on 
 priced with the same estimate in every chain, so the differences between stores come from
 offers and food waste only.
 
-## 20. Calmer pages, store popover, every chain (2026-11-20)
+## 20. Calmer pages, store popover, every chain (2026-11-20; structure replaced by §21)
 
 The owner found the app too dense. Decisions, made for a student glancing at a phone in a shop:
 
@@ -1109,3 +1109,64 @@ The owner found the app too dense. Decisions, made for a student glancing at a p
   tilbud", "Tilbud i {kæde}: …") and every store shows its own chain's good buys; the loading
   title, the price-history legend ("Tilbud", "Normalpris") and the badge defaults no longer
   assume Netto. Chain-specific facts (Netto+, Coop membership, eTilbudsavis slugs) stay as data.
+
+## 21. Restructure around what the user wants (2026-11-20)
+
+The owner's priorities, in order, and what each becomes:
+
+| # | The user wants to … | Becomes |
+|---|---|---|
+| 1 | get a dinner idea fast by looking at cheap dinners | **Aftensmad** – the front page `/` |
+| 2 | see cheap products to cook from | **Tilbud** – `/tilbud`, ingredients on offer, biggest saving first |
+| 3 | keep an eye on their staples and save | **Mine varer** – `/mine-varer`, a watch list |
+| 4 | search an item and see where it is cheapest | **Søg** – `/soeg`, cheapest current price first |
+
+Navigation (phone tab bar and desktop header) follows that order: Aftensmad, Tilbud, Mine varer,
+Søg, Kort. Food waste is a bonus, not a destination of its own: `/tilbud` shows the best
+clearances nearby in a small "Madspild – en heldig bonus" block that links to `/madspild`.
+Old addresses redirect (`/madideer` → `/`, `/madideer/madplan` → `/madplan`).
+
+```
+Phone, /                         Phone, /tilbud
+┌──────────────────────────┐     ┌──────────────────────────┐
+│ Aftensmad                │     │ Tilbud                   │
+│ Billigst i aften         │     │ [Størst besparelse|Alle] │
+│ ┌──────────────────────┐ │     │ [kæder …]                │
+│ │ Lasagne      Spar 51 │ │     │ Kød                      │
+│ │ 4 af 5 på tilbud     │ │     │ ┌──────────────────────┐ │
+│ │ ● Netto  ● føtex     │ │     │ │ Hakket grisekød      │ │
+│ └──────────────────────┘ │     │ │ 33,33 kr.  Spar 8,62 │ │
+│ [Filtre og sortering ▾]  │     │ │ ● Netto Nørre V.     │ │
+│ Alle retter …            │     │ └──────────────────────┘ │
+│ Madplan for ugen →       │     │ Kommer snart …           │
+└──────────────────────────┘     │ Madspild – heldig bonus  │
+                                 └──────────────────────────┘
+```
+
+**Savings are the common language.** Every price the user can buy shows one `SavingTag`,
+computed only from our data, never estimated:
+
+* an offer: against the cheapest normal shelf price (`regular`, or Salling's `ean_reference`)
+  of exactly the same product at a chain near the user, for the offer's smallest pack:
+  "Spar 8,62 kr. (−20 %)"; "Ingen besparelse" when the normal price is not higher; "Normalpris
+  ukendt" when we have none. The tag's tooltip/hidden text names the normal price and chain.
+* a clearance: against Salling's price before the markdown.
+* a dish: the sum of the known savings of the items on offer, "Spar 50,81 kr."; with no known
+  saving it says so. The dish's price per person is an estimate (recipe amounts plus estimated
+  normal prices for what is not on offer) and is always marked "skøn".
+
+The verdict ("Godt køb", "Billigere andre steder") stays as the second, smaller signal: it
+answers "is this the cheapest place near me", the saving answers "how much do I save".
+
+**Upcoming offers are never hidden.** `/tilbud` ends with "Kommer snart", `/mine-varer` says
+"På tilbud fra lør. 22. nov." for a staple, and search marks upcoming prices.
+
+**Search compares like with like.** `/soeg` groups hits by exact class (items without an exact
+class by name), so "Billigst nær dig" never compares hakket grisekød with hakket oksekød. Inside
+a group, chains with a store near the user come first, then the lowest unit price; the unit
+price is the big number (it is what "cheapest" compares) and the pack price sits next to the
+size. A single price in a group is never called "cheapest". Upcoming offers come first ("Kommer
+på tilbud"), expired prices are folded away.
+
+On desktop the front page uses its side column for "Største besparelser lige nu": the offers
+with the biggest known saving, to build a dish around.

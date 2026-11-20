@@ -410,7 +410,7 @@ function StoreDetail({
           Ugens tilbud i {chain}
         </h3>
         <Link
-          href={`/?kaede=${encodeURIComponent(store.chainId)}` as Route}
+          href={`/tilbud?kaede=${encodeURIComponent(store.chainId)}` as Route}
           className="mt-1 inline-flex min-h-11 items-center"
         >
           {goodCount > 0

@@ -277,7 +277,7 @@ export function dealsHref(filter: DealFilter, chains: string | null): string {
   if (filter === "alle") params.set("vis", "alle");
   if (chains) params.set("kaede", chains);
   const query = params.toString().replaceAll("%2C", ",");
-  return query ? `/?${query}` : "/";
+  return query ? `/tilbud?${query}` : "/tilbud";
 }
 
 /**

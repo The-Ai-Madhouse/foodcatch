@@ -48,7 +48,7 @@ export function AddToPlanForm({
           <span key={state.seq} className="font-medium text-good-fg">
             ✓ {name} er lagt på {label?.toLocaleLowerCase("da-DK")} ({state.count}{" "}
             {state.count === 1 ? "ret" : "retter"} den dag).{" "}
-            <Link href="/madideer/madplan">Se madplanen →</Link>
+            <Link href="/madplan">Se madplanen →</Link>
           </span>
         ) : state.status === "full" ? (
           <span className="text-bad-fg">

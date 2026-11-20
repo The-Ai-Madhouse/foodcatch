@@ -20,7 +20,7 @@ const archivo = localFont({
 export const metadata: Metadata = {
   title: { default: "FoodCatch", template: "%s · FoodCatch" },
   description:
-    "Find sunde basisvarer, der er dokumenteret billige nær dig: ugens tilbud fra alle kæder sammenlignet med andre butikker, madspild og prishistorik.",
+    "Billig aftensmad og varer nær dig: retter med ugens tilbud, hvad du sparer ift. normalprisen, dine faste varer og hvor en vare er billigst.",
   robots: { index: false, follow: false },
 };
 

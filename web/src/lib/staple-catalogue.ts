@@ -13,9 +13,6 @@ import taxonomy from "./taxonomy.json";
 
 export const STAPLES_COOKIE = "fc_staples";
 
-/** Set ("1") while "Dine basisvarer" is folded away on the offers page; written by the client. */
-export const STAPLES_FOLDED_COOKIE = "fc_staples_folded";
-
 /** At most this many staples are kept. */
 export const MAX_STAPLES = 30;
 /** Free text must be this long (after normalizing) … */

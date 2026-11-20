@@ -87,7 +87,7 @@ test.describe("location", () => {
 });
 
 test("home shows where to buy each offer, its size and its source", async ({ page }) => {
-  await page.goto("/?vis=alle&kaede=netto");
+  await page.goto("/tilbud?vis=alle&kaede=netto");
   const card = page.locator("article").first();
   await expect(card).toBeVisible();
   await expect(card).toContainText(/Nærmeste butik: Netto .+ · \d+(?:,\d)?\u00a0(?:m|km)/);
@@ -106,7 +106,7 @@ test("home shows where to buy each offer, its size and its source", async ({ pag
 });
 
 test("a store name shows its address and opens Google Maps", async ({ page }, testInfo) => {
-  await page.goto("/?vis=alle");
+  await page.goto("/tilbud?vis=alle");
   const trigger = page.locator('article button[aria-haspopup="dialog"]').first();
   if (testInfo.project.name === "mobile") await trigger.click();
   else await trigger.hover(); // holding the mouse over it is enough on a desktop
@@ -122,7 +122,7 @@ test("a store name shows its address and opens Google Maps", async ({ page }, te
 });
 
 test("offers of every chain can be filtered by chain", async ({ page }) => {
-  await page.goto("/?vis=alle");
+  await page.goto("/tilbud?vis=alle");
   const chips = page.getByRole("navigation", { name: "Kæder" }).getByRole("link");
   await expect(chips.first()).toHaveText("Alle kæder");
   expect(await chips.count()).toBeGreaterThan(2); // "Alle kæder" and at least two chains
@@ -146,7 +146,7 @@ test("offers of every chain can be filtered by chain", async ({ page }) => {
 });
 
 test("an offer links to its item's price history with a chart and a table", async ({ page }) => {
-  await page.goto("/?vis=alle");
+  await page.goto("/tilbud?vis=alle");
   // The link sits in the card's "Detaljer" panel.
   const card = page.locator("article").filter({ has: page.locator('a[href^="/produkt/"]') });
   await card.first().locator("details > summary").first().click();
@@ -231,19 +231,18 @@ test("a clearance cheaper than the other chains says so", async ({ page }) => {
   await expect(item.getByRole("region", { name: "Sammenligning" })).toContainText("Billigere end");
 });
 
-test("meal ideas: catalogue, filters, shopping list and meal plan", async ({ page }) => {
+test("the front page gives dinner ideas with what they save, filters and a meal plan", async ({
+  page,
+}) => {
   await page.goto("/");
-  await page.getByRole("link", { name: "Madideer" }).first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Madideer" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Aftensmad" })).toBeVisible();
   const main = page.locator("main");
-  // A catalogue of every dish, with filters folded away.
-  await main.locator("summary", { hasText: "Filtre og sortering" }).click();
-  await expect(main.locator('select[name="tid"]')).toBeVisible();
-  await expect(main.getByLabel("Butik du mest handler i")).toBeVisible();
   const cards = main.locator("article");
-  expect(await cards.count()).toBeGreaterThanOrEqual(20);
+  expect(await cards.count()).toBeGreaterThanOrEqual(10);
   const card = cards.first();
-  await expect(card.getByText(/pr\. pers\./).first()).toBeVisible();
+  // Every dish says what it saves (or that nothing is on offer / the saving is unknown).
+  await expect(card).toContainText(/Spar \d|Intet på tilbud|Besparelse ukendt/);
+  await expect(card.getByText(/pr\. pers\. \(skøn\)/)).toBeVisible();
   // Open a dish: shopping list with ticks and the method.
   await card.locator("summary").first().click();
   await expect(card.getByRole("heading", { name: "Indkøbsliste" })).toBeVisible();
@@ -252,11 +251,16 @@ test("meal ideas: catalogue, filters, shopping list and meal plan", async ({ pag
   await box.check();
   await expect(box).toBeChecked();
   await expect(card.getByRole("heading", { name: "Sådan gør du" })).toBeVisible();
-  // Filters narrow the list.
+  // Filters are folded away and narrow the list.
+  await main.locator("summary", { hasText: "Filtre og sortering" }).click();
   await main.locator('select[name="tid"]').selectOption("15");
   await expect(page).toHaveURL(/tid=15/);
+  // Lunch instead of dinner.
+  await main.getByRole("link", { name: "Frokost" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Frokost" })).toBeVisible();
   // Meal plan: pick a day and a dish, then a store.
-  await main.getByRole("link", { name: /^Madplan/ }).click();
+  await main.getByRole("link", { name: /Planlæg ugen|Min madplan/ }).click();
+  await expect(page).toHaveURL(/\/madplan$/);
   await main.getByRole("button", { name: /^I morgen/ }).click();
   await main.getByLabel("Vælg ret", { exact: true }).first().selectOption({ index: 1 });
   await main.getByRole("button", { name: "Tilføj" }).first().click();
@@ -266,47 +270,58 @@ test("meal ideas: catalogue, filters, shopping list and meal plan", async ({ pag
   await main.getByRole("button", { name: "Ryd madplanen" }).click();
 });
 
-/** Open the staples picker (inside the foldable section) unless it is open already. */
+test("old addresses lead to the new pages", async ({ page }) => {
+  await page.goto("/madideer");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/madideer/madplan");
+  await expect(page).toHaveURL(/\/madplan$/);
+});
+
+test("every offer says what it saves against the normal price", async ({ page }) => {
+  await page.goto("/tilbud?vis=alle");
+  const cards = page.locator("article");
+  await expect(cards.first()).toBeVisible();
+  for (const text of await cards.allInnerTexts()) {
+    expect(text).toMatch(/Spar (op til )?\d|Ingen besparelse|Normalpris ukendt/);
+  }
+  // The basis of a saving is stated in the card's details.
+  const saving = cards.filter({ hasText: /Spar \d/ }).first();
+  await saving.locator("details > summary").first().click();
+  await expect(saving).toContainText(/Normalpris \d+,\d\d\u00a0kr\./);
+});
+
+/** Open the staples picker on "Mine varer" unless it is open already. */
 async function openPicker(staples: Locator) {
-  const fold = staples.locator("details").first();
-  if ((await fold.getAttribute("open")) === null) await fold.locator(":scope > summary").click();
-  const picker = fold.locator("details").first();
+  const picker = staples.locator("details").first();
   if ((await picker.getAttribute("open")) === null) await picker.locator("summary").click();
   await expect(picker).toHaveAttribute("open", "");
 }
 
-test("offers: staples picker, foldable staples and categories", async ({ page }) => {
+test("my items: pick staples and see them when they are cheap", async ({ page }) => {
   await page.goto("/");
-  const staples = page.getByRole("region", { name: "Dine basisvarer" });
+  await page.getByRole("link", { name: "Mine varer" }).first().click();
+  await expect(page).toHaveURL(/\/mine-varer$/);
+  const staples = page.getByRole("region", { name: "Dine varer" });
   await openPicker(staples);
   await staples.getByLabel("Æg", { exact: true }).check();
   await staples.getByRole("button", { name: "Gem basisvarer" }).click();
-  await expect(staples.getByRole("heading", { level: 3, name: /^Æg/ })).toBeVisible();
+  const egg = staples.getByRole("article", { name: /^Æg/ });
+  await expect(egg).toBeVisible();
+  await expect(egg).toContainText(/Billig nu|På tilbud fra|Madspild nær dig/);
+  await expect(egg).toContainText(/Spar (op til )?\d|Ingen besparelse|Normalpris ukendt/);
+});
 
-  // The staples fold away and stay folded after a reload (cookie).
-  const fold = staples.locator("details").first();
-  await fold.locator(":scope > summary").click();
-  await expect(fold).not.toHaveAttribute("open", "");
-  await expect
-    .poll(
-      async () =>
-        (await page.context().cookies()).find((c) => c.name === "fc_staples_folded")?.value,
-    )
-    .toBe("1");
-  await page.reload();
-  await expect(
-    page.getByRole("region", { name: "Dine basisvarer" }).locator("details").first(),
-  ).not.toHaveAttribute("open", "");
-
+test("offers: categories fold away", async ({ page }) => {
+  await page.goto("/tilbud");
   const group = page.locator("details[id^=gruppe-]").first();
   await expect(group).toHaveAttribute("open", "");
   await group.locator(":scope > summary").click();
   await expect(group).not.toHaveAttribute("open", "");
 });
 
-test("offers: add a staple through the search and as free text", async ({ page }) => {
-  await page.goto("/");
-  const staples = page.getByRole("region", { name: "Dine basisvarer" });
+test("my items: add a staple through the search and as free text", async ({ page }) => {
+  await page.goto("/mine-varer");
+  const staples = page.getByRole("region", { name: "Dine varer" });
   await openPicker(staples);
   const search = staples.getByLabel("Find flere basisvarer");
   await search.fill("kylling");
@@ -315,16 +330,16 @@ test("offers: add a staple through the search and as free text", async ({ page }
   await search.fill("danbo");
   await staples.getByRole("button", { name: /Følg “danbo” som fritekst/ }).click();
   await expect(
-    staples.getByRole("heading", { level: 3, name: /^Danbo.*uden prisdom/ }),
+    staples.getByRole("heading", { level: 2, name: /^Danbo.*uden prisdom/ }),
   ).toBeVisible();
   // Unticking and saving removes it again.
   await staples.getByRole("checkbox", { name: /Danbo/ }).uncheck();
   await staples.getByRole("button", { name: "Gem basisvarer" }).click();
-  await expect(staples.getByRole("heading", { level: 3, name: /^Danbo/ })).toHaveCount(0);
+  await expect(staples.getByRole("heading", { level: 2, name: /^Danbo/ })).toHaveCount(0);
 });
 
 test("offers: upcoming offers have their own section", async ({ page }) => {
-  await page.goto("/?vis=alle");
+  await page.goto("/tilbud?vis=alle");
   const upcoming = page.getByRole("region", { name: "Kommende tilbud" });
   await expect(upcoming.locator("details[id^=kommende-]").first()).toBeVisible();
   await expect(upcoming.getByText(/^Fra /).first()).toBeVisible();
@@ -337,8 +352,10 @@ test("search: find an item and open its price history", async ({ page }) => {
   await page.getByRole("searchbox", { name: "Varenavn" }).fill("hakket grisekød");
   await page.getByRole("button", { name: "Søg", exact: true }).click();
   await expect(page).toHaveURL(/q=hakket\+grisek/);
+  // Grouped by item, the cheapest price near the user first.
+  await expect(page.getByRole("heading", { level: 2, name: /Hakket grisekød/ })).toBeVisible();
+  await expect(page.getByText("Billigst nær dig").first()).toBeVisible();
   const first = page.locator('a[href^="/produkt/"]').first();
-  await expect(first).toContainText(/pris(er)? →/);
   await first.click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText(/Hakket grisekød/i);
 });
@@ -356,7 +373,7 @@ test("food waste: filter by category", async ({ page }) => {
 
 test("no horizontal page scroll on phones", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile", "phone layout only");
-  await page.goto("/");
+  await page.goto("/tilbud");
   const productHref = await page.locator('a[href^="/produkt/"]').first().getAttribute("href");
   await page.locator("article details > summary").first().click();
   await page
@@ -367,6 +384,9 @@ test("no horizontal page scroll on phones", async ({ page }, testInfo) => {
   const href = await classLink.getAttribute("href");
   for (const path of [
     "/",
+    "/tilbud",
+    "/mine-varer",
+    "/madplan",
     "/madspild",
     "/madspild?sorter=rabat",
     "/madideer",

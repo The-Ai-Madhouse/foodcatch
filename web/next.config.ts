@@ -4,6 +4,13 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,
+  // The app was restructured around dinner ideas (docs/ui.md §21).
+  async redirects() {
+    return [
+      { source: "/madideer", destination: "/", permanent: false },
+      { source: "/madideer/madplan", destination: "/madplan", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

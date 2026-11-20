@@ -3,7 +3,9 @@ import Link from "next/link";
 import { Badge, DiscountPill, MemberPriceTag } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
 import { ChevronIcon } from "@/components/Icons";
+import { SavingTag } from "@/components/SavingTag";
 import { SourceLink } from "@/components/SourceLink";
+import { clearanceSaving } from "@/lib/savings";
 import { chainName } from "@/lib/chains";
 import { cleanClassLabel, referenceKindLabel } from "@/lib/deals";
 import {
@@ -95,6 +97,7 @@ export function FoodWasteItemRow({
   const size = foodWastePackSize(item);
   const unitPrice = foodWasteUnitPrice(item);
   const discount = shownDiscount(item.discountPct);
+  const saving = clearanceSaving(item);
   const stock = formatStock(item.stock, item.stockUnit);
   const off = openFoodFactsProductLink(item.ean);
   const badge = competitorBadge(item);
@@ -120,7 +123,11 @@ export function FoodWasteItemRow({
                   før <s>{formatDkk(item.referencePrice)}</s>
                 </span>
               ) : null}
-              {discount != null ? <DiscountPill percent={discount} /> : null}
+              {saving.kind === "saving" ? (
+                <SavingTag saving={saving} size="sm" />
+              ) : discount != null ? (
+                <DiscountPill percent={discount} />
+              ) : null}
             </span>
             <span className="block text-meta text-ink-2">
               <span className={size.origin === "unknown" ? "text-ink-3" : "text-ink"}>

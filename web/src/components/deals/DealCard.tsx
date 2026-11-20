@@ -3,6 +3,7 @@ import Link from "next/link";
 import { MemberBadge, VerdictBadge } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
 import { ChevronIcon } from "@/components/Icons";
+import { SavingTag, savingBasisText } from "@/components/SavingTag";
 import { SourceLink } from "@/components/SourceLink";
 import { StoreInfo } from "@/components/StoreInfo";
 import { chainName } from "@/lib/chains";
@@ -26,6 +27,7 @@ import {
   packSize,
 } from "@/lib/format";
 import { classPath, productPath } from "@/lib/routes";
+import { listingSaving } from "@/lib/savings";
 import { sourceLink } from "@/lib/sources";
 import { chainPins, shortStoreName, storePin, type NearbyStore } from "@/lib/stores";
 import { LOCATION_INDEPENDENT_KINDS } from "@/lib/verdict";
@@ -61,6 +63,7 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
   const nearestKm: NearestDistance = (chainId) =>
     ctx.storesByChain.get(chainId)?.[0]?.distanceKm ?? null;
   const upcoming = Date.parse(offer.validFrom) > ctx.now.getTime();
+  const saving = listingSaving(listing, ctx.nearbyChains);
   const counted = variants.reduce(
     (sum, v) => sum + referenceViews(v, ctx.nearbyChains).filter((r) => r.counts).length,
     0,
@@ -95,9 +98,12 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
           </div>
         </div>
 
-        <p className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="text-price shelf text-ink">{formatDkk(offer.price)}</span>
-          <span className="text-meta text-ink-2">
+          <SavingTag saving={saving} />
+        </p>
+        <p className="text-meta text-ink-2">
+          <span>
             <span className={size.origin === "unknown" ? "text-ink-3" : undefined}>
               {size.text}
             </span>
@@ -142,6 +148,7 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
               {verdictReason(variants[0] as EvaluatedDeal, ctx.nearbyChains, nearestKm)}
             </p>
           )}
+          <p className="text-meta text-ink-2">{savingBasisText(saving)}</p>
           <p className="text-meta text-ink-3">
             {upcoming ? "Kommer: " : "Gælder "}
             {formatShortPeriod(offer.validFrom, offer.validTo)}

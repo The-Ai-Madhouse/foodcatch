@@ -3,18 +3,22 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClockLeafIcon, MapIcon, PotIcon, SearchIcon, TagIcon } from "@/components/Icons";
+import { MapIcon, PotIcon, SearchIcon, StarIcon, TagIcon } from "@/components/Icons";
 
 const ITEMS: readonly { href: Route; label: string; Icon: typeof TagIcon }[] = [
-  { href: "/", label: "Tilbud", Icon: TagIcon },
-  { href: "/madspild", label: "Madspild", Icon: ClockLeafIcon },
-  { href: "/madideer", label: "Madideer", Icon: PotIcon },
+  // In the order of what the user comes for (docs/ui.md §21).
+  { href: "/", label: "Aftensmad", Icon: PotIcon },
+  { href: "/tilbud", label: "Tilbud", Icon: TagIcon },
+  { href: "/mine-varer", label: "Mine varer", Icon: StarIcon },
   { href: "/soeg", label: "Søg", Icon: SearchIcon },
   { href: "/kort", label: "Kort", Icon: MapIcon },
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  // The meal plan belongs to "Aftensmad"; food waste is a part of "Tilbud".
+  if (href === "/") return pathname === "/" || pathname.startsWith("/madplan");
+  if (href === "/tilbud" && pathname.startsWith("/madspild")) return true;
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 /** The main navigation: links in the desktop header, a bottom tab bar on phones. */

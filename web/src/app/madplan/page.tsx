@@ -99,7 +99,7 @@ function StoreOption({
 }
 
 /** "Madplan": pick days and dishes, then where to shop, then one shopping list (docs/ui.md §19.2). */
-export default async function MealPlanPage({ searchParams }: PageProps<"/madideer/madplan">) {
+export default async function MealPlanPage({ searchParams }: PageProps<"/madplan">) {
   const now = new Date();
   const [params, location, plan] = await Promise.all([
     searchParams,
@@ -226,7 +226,7 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madidee
             <h2 id="trin-retter" className={STEP}>
               2. Vælg retter
             </h2>
-            <Link href="/madideer" className="text-meta">
+            <Link href="/" className="text-meta">
               Find retter i kataloget
             </Link>
           </div>
@@ -386,7 +386,7 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madidee
                 s.store.kind === "one" ? (
                   <StoreOption
                     key={s.store.chainId}
-                    href={`/madideer/madplan?butik=${s.store.chainId}`}
+                    href={`/madplan?butik=${s.store.chainId}`}
                     title={
                       <>
                         <ChainDot chainId={s.store.chainId} size="sm" />
@@ -414,10 +414,7 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madidee
                   s.store.kind === "one" ? (
                     <span key={s.store.chainId}>
                       {i > 0 ? ", " : ""}
-                      <Link
-                        href={`/madideer/madplan?butik=${s.store.chainId}` as Route}
-                        scroll={false}
-                      >
+                      <Link href={`/madplan?butik=${s.store.chainId}` as Route} scroll={false}>
                         {chainName(s.store.chainId)}
                       </Link>
                     </span>
@@ -429,7 +426,7 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madidee
           <h3 className="mt-4 text-micro font-semibold text-ink-3 uppercase">Flere butikker</h3>
           <ul className="mt-1">
             <StoreOption
-              href="/madideer/madplan?butik=flere"
+              href="/madplan?butik=flere"
               title={
                 <>
                   <span className="flex -space-x-1">

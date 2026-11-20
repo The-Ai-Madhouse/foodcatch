@@ -251,6 +251,35 @@ function checklistRows(idea: MealIdea, ctx: MealContext): ChecklistRow[] {
 }
 
 /**
+ * What the dish saves against normal prices: the sum of the items' known savings (never an
+ * estimate). Says so when nothing is on offer or the saving is unknown.
+ */
+function DishSaving({ idea }: { idea: MealIdea }) {
+  if (idea.totalSaving > 0) {
+    return (
+      <span
+        title="Summen af de kendte besparelser på varerne på tilbud, ift. normalprisen på samme vare."
+        className="inline-flex items-center gap-1 rounded-md bg-good-fg px-2 py-0.5 text-meta font-semibold whitespace-nowrap text-page tabular"
+      >
+        Spar {formatDkk(idea.totalSaving)}
+        {idea.unknownSavings > 0 ? <span className="font-normal">+ mere</span> : null}
+      </span>
+    );
+  }
+  if (idea.filled.length === 0) {
+    return <span className="text-meta text-ink-3">Intet på tilbud lige nu</span>;
+  }
+  return (
+    <span
+      title="Varerne er gode køb, men vi kender ikke normalprisen på præcis samme vare."
+      className="text-meta text-ink-3"
+    >
+      Besparelse ukendt
+    </span>
+  );
+}
+
+/**
  * One dish of the catalogue (docs/ui.md §19): folded it shows the name, time and price; opened,
  * the shopping list with every price we know, ticks for what you have, and the method.
  */
@@ -286,42 +315,38 @@ export function RecipeCard({
           <h3 id={headingId} className="text-heading font-semibold text-ink">
             {recipe.name}
           </h3>
-          <p className="mt-1 text-micro text-ink-3 tabular">
+          <p className="mt-0.5 text-micro text-ink-3 tabular">
             ⏱ {recipe.minutes} min{sep}
-            {recipe.servings} pers.{sep}
-            {recipe.meal === "frokost" ? "Frokost" : "Aftensmad"}
+            {recipe.servings} pers.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <span className="text-ink">
-              <span className="text-meta text-ink-2">ca. </span>
-              <span className="text-price shelf">{formatDkk(Math.round(idea.costPerServing))}</span>
-              <span className="text-meta font-normal text-ink-2"> pr. pers.</span>
-            </span>
-            {idea.totalSaving > 0 ? (
-              <Badge tone="good" icon={null}>
-                Spar {formatDkk(idea.totalSaving)}
-                {idea.unknownSavings > 0 ? " +" : ""}
-              </Badge>
-            ) : null}
-            {idea.filled.length > 0 ? (
-              <span className="flex items-center gap-1.5 text-micro text-ink-2">
-                <span className="flex -space-x-1">
-                  {chains.map((c) => (
-                    <ChainDot key={c} chainId={c} size="sm" />
-                  ))}
-                </span>
-                {idea.filled.length} af {idea.rows.length} på tilbud
-                {idea.chainId ? ` i ${chainName(idea.chainId)}` : ""}
-              </span>
-            ) : (
-              <span className="text-micro text-ink-3">Intet på tilbud lige nu</span>
-            )}
-            <span className="ml-auto flex items-center gap-1 text-micro font-medium text-link">
-              <span className="group-open/card:hidden">Se indkøb</span>
-              <span className="hidden group-open/card:inline">Luk</span>
-              <ChevronIcon className="details-chevron" />
+            <DishSaving idea={idea} />
+            <span className="text-meta text-ink-2">
+              ca. {formatDkk(Math.round(idea.costPerServing))} pr. pers.
+              <span className="text-ink-3"> (skøn)</span>
             </span>
           </div>
+          {idea.filled.length > 0 ? (
+            <p className="mt-2 flex items-start gap-1.5 text-meta text-ink-2">
+              <span className="mt-0.5 flex shrink-0 -space-x-1">
+                {chains.map((c) => (
+                  <ChainDot key={c} chainId={c} size="sm" />
+                ))}
+              </span>
+              <span className="min-w-0">
+                <span className="text-ink">På tilbud: </span>
+                {idea.filled.map((f) => f.slot.label.toLocaleLowerCase("da-DK")).join(", ")}
+                {idea.missing.length > 0 ? (
+                  <span className="text-ink-3"> · {idea.missing.length} til normalpris</span>
+                ) : null}
+              </span>
+            </p>
+          ) : null}
+          <span className="mt-1 flex items-center justify-end gap-1 text-micro font-medium text-link">
+            <span className="group-open/card:hidden">Se indkøb</span>
+            <span className="hidden group-open/card:inline">Luk</span>
+            <ChevronIcon className="details-chevron" />
+          </span>
         </summary>
 
         <div className="border-t border-line px-4 pb-4 lg:px-5">
