@@ -141,7 +141,51 @@ def test_normalize_title_in_python_and_sql_agree(data: Data, title: str, expecte
     stored = data.conn.execute(
         select(listing.c.product_key).where(listing.c.id == listing_id)
     ).scalar_one()
-    assert stored == f"offer:lidl:{expected}"
+    assert stored == f"offer:lidl:{expected}:1kg"
+
+
+@pytest.mark.parametrize(
+    ("unit", "size_min", "size_max", "suffix"),
+    [
+        ("l", Decimal("1.500"), Decimal("1.5"), ":1.5l"),
+        ("l", Decimal("9.90"), Decimal("9.90"), ":9.9l"),
+        ("kg", Decimal("0.4"), Decimal("0.5"), ":0.4-0.5kg"),
+        ("stk", Decimal("10"), Decimal("10"), ":10stk"),
+        ("kg", Decimal("100"), None, ":100kg"),
+        ("kg", None, None, ""),
+        (None, None, None, ""),
+    ],
+)
+def test_offer_key_ends_in_the_pack_size_in_python_and_sql(
+    data: Data,
+    unit: str | None,
+    size_min: Decimal | None,
+    size_max: Decimal | None,
+    suffix: str,
+) -> None:
+    """Same heading, other pack: "Faxe Kondi" 1.5 l and a crate are two items (migration 0010)."""
+    listing_id = data.listing(
+        classify=False,
+        title="Faxe Kondi",
+        unit=unit,
+        size_min=size_min,
+        size_max=size_max,
+        unit_price_min=None,
+        unit_price_max=None,
+    )
+    stored = data.conn.execute(
+        select(listing.c.product_key).where(listing.c.id == listing_id)
+    ).scalar_one()
+    assert stored == f"offer:netto:faxe kondi{suffix}"
+    assert stored == product_key(
+        source="tjek",
+        source_item_id="x",
+        chain_id="netto",
+        title="Faxe Kondi",
+        unit=unit,
+        size_min=size_min,
+        size_max=size_max,
+    )
 
 
 def test_product_keys_per_source(data: Data) -> None:
@@ -247,7 +291,7 @@ def test_current_deals_show_every_chain_and_netto_view_is_its_netto_part(data: D
     assert set(rows) == {netto, lidl}  # Lidl's shelf price is no deal
     assert rows[lidl]["chain_name"] == "Lidl"
     assert rows[lidl]["target_unit_price_worst"] == Decimal(35)
-    assert rows[lidl]["product_key"] == "offer:lidl:hakket oksekød 8 12"
+    assert rows[lidl]["product_key"] == "offer:lidl:hakket oksekød 8 12:1kg"
     assert {r["kind"] for r in rows[netto]["references"]} == {"offer", "regular"}
 
     netto_row = data.one("SELECT * FROM api.current_netto_deals")

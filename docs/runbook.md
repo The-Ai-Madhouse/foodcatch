@@ -610,8 +610,11 @@ later work.
   reference elsewhere. Other chains' texts are not read this way, and a Lidl shelf price printed
   without the phrase is treated as an offer.
 * *Product keys of leaflet items are approximate.* Tjek has no product id, so a leaflet item's
-  price history (`api.product_price_history`, key `offer:<chain>:<normalized heading>`) joins
-  every item of that chain with the same heading and starts afresh when the heading changes.
+  price history (`api.product_price_history`, key `offer:<chain>:<normalized heading>:<size>`)
+  joins every item of that chain with the same heading and pack size, and starts afresh when the
+  heading or the size changes (a pack of 400-500 g one week and 450 g the next are two items).
+  Before migration 0010 the size was not part of the key, so a bottle and a crate shared one
+  history.
   `rema:` and `ean:` keys are exact.
 * *Food-waste comparison is chain-wide.* `food_waste_references` / `beats_competitors` use the
   current offers and shelf prices of every other chain regardless of distance (more conservative

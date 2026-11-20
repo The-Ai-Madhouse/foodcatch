@@ -254,14 +254,17 @@ which are Lidl's shelf prices printed in the leaflet and stored as `regular`; Re
 are `regular` or `offer` (campaign); food waste is `clearance`.
 
 `listing.product_key` names the *individual item* whose prices can be followed over time
-(`db/product_key.py`, frozen in migration 0008): `rema:<Rema product id>` (every regular and
+(`db/product_key.py`, frozen in migration 0010): `rema:<Rema product id>` (every regular and
 campaign period of a Rema product); `ean:<EAN>` (a food-waste clearance with a real GTIN; the EAN
 shelf prices in `product_reference_price` share the key); `clearance:<chain>:<normalized title>`
-(clearances without a GTIN); `offer:<chain>:<normalized title>` (Tjek leaflet items). Tjek has no
-product id, so `offer:` keys are **approximate**: two products with the same heading at one chain
-share a key and a renamed heading starts a new one. Normalization: a fixed upper-to-lower table for
-ASCII and Nordic/Western accented letters (no locale), every other run of characters becomes one
-space, trimmed (`"Hakket grisekød 8-12%"` → `hakket grisekød 8 12`).
+(clearances without a GTIN); `offer:<chain>:<normalized title>[:<size>]` (Tjek leaflet items; the
+size is the purchasable quantity in the base unit, `1.5l`, `0.4-0.5kg` or `10stk`, and is left out
+when unknown). Tjek has no product id, so `offer:` keys are **approximate**: two products with the
+same heading and pack size at one chain share a key, and a renamed heading or a changed size starts
+a new one (since migration 0010 a 1.5 l bottle and a crate of the same soda are two items).
+Normalization: a fixed upper-to-lower table for ASCII and Nordic/Western accented letters (no
+locale), every other run of characters becomes one space, trimmed (`"Hakket grisekød 8-12%"` →
+`hakket grisekød 8 12`).
 
 **`matcher_release`** – `version text pk`, `created_at`, `is_current bool` (exactly one current).
 

@@ -82,7 +82,7 @@ def test_migrations_match_table_definitions(db_engine: Engine) -> None:
 
 
 def test_single_head() -> None:
-    assert migrate.current_head() == "0009"
+    assert migrate.current_head() == "0010"
 
 
 def test_seed_data(db_engine: Engine) -> None:
@@ -228,12 +228,9 @@ def test_0007_appends_view_columns_and_back(empty_database: str) -> None:
         engine.dispose()
 
 
-def _migration_0008() -> ModuleType:
-    path = (
-        Path(migrate.__file__).parent
-        / "migrations/versions/0008_all_chain_deals_and_product_history.py"
-    )
-    spec = importlib.util.spec_from_file_location("migration_0008", path)
+def _migration(filename: str) -> ModuleType:
+    path = Path(migrate.__file__).parent / "migrations/versions" / filename
+    spec = importlib.util.spec_from_file_location(f"migration_{filename[:4]}", path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -241,10 +238,10 @@ def _migration_0008() -> ModuleType:
     return module
 
 
-def test_0008_frozen_rules_match_the_code() -> None:
-    """The migration's frozen SQL copies equal the rules the pipeline applies today."""
-    module = _migration_0008()
-    assert module.PRODUCT_KEY_SQL == PRODUCT_KEY_SQL
+def test_frozen_rules_match_the_code() -> None:
+    """The latest frozen SQL copies in migrations equal the rules the pipeline applies today."""
+    assert _migration("0010_offer_product_key_pack_size.py").PRODUCT_KEY_SQL == PRODUCT_KEY_SQL
+    module = _migration("0008_all_chain_deals_and_product_history.py")
     assert module.PIECE_TYPE_IDS == PIECE_TYPE_IDS
 
 
@@ -317,6 +314,74 @@ def test_0008_backfills_kinds_keys_and_deal_columns_and_back(empty_database: str
         migrate.upgrade(empty_database, "0008")  # and back up again
         with engine.connect() as conn:
             assert api_columns(conn) == API_COLUMNS
+    finally:
+        engine.dispose()
+
+
+_SEED_0009 = """
+INSERT INTO fetch_run (id, job, source, status)
+VALUES ('00000000-0000-0000-0000-000000000001', 'tjek-offers', 'tjek', 'succeeded');
+INSERT INTO raw_object (id, fetch_run_id, source, endpoint, storage_key, sha256, bytes)
+VALUES ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001',
+        'tjek', 'offers', 'k', 'x', 1);
+INSERT INTO listing (id, source, source_item_id, chain_id, kind, title, price, unit, size_min,
+                     size_max, valid_from, valid_to, raw_object_id)
+VALUES ('00000000-0000-0000-0000-00000000000a', 'tjek', 'bottle', 'netto', 'offer',
+        'Faxe Kondi', 10, 'l', 1.50, 1.50, now() - interval '1 day', now() + interval '3 days',
+        '00000000-0000-0000-0000-000000000002'),
+       ('00000000-0000-0000-0000-00000000000b', 'tjek', 'crate', 'netto', 'offer',
+        'Faxe Kondi', 75, 'l', 9.9, 9.9, now() - interval '1 day', now() + interval '3 days',
+        '00000000-0000-0000-0000-000000000002'),
+       ('00000000-0000-0000-0000-00000000000c', 'rema', '777', 'rema1000', 'regular',
+        'Faxe Kondi', 15, 'l', 1.5, 1.5, now() - interval '1 day', NULL,
+        '00000000-0000-0000-0000-000000000002');
+"""
+
+
+def test_0010_adds_the_pack_size_to_offer_keys_and_back(empty_database: str) -> None:
+    engine = create_engine(normalize_database_url(empty_database))
+    keys_sql = text("SELECT source_item_id, product_key FROM listing ORDER BY source_item_id")
+    try:
+        migrate.upgrade(empty_database, "0009")
+        with engine.begin() as conn:
+            conn.execute(text(_SEED_0009))
+        with engine.connect() as conn:
+            definitions = _view_definitions(conn)
+            columns = api_columns(conn)
+            assert dict(conn.execute(keys_sql).all()) == {
+                "777": "rema:777",
+                "bottle": "offer:netto:faxe kondi",
+                "crate": "offer:netto:faxe kondi",
+            }
+
+        migrate.upgrade(empty_database, "0010")
+        with engine.connect() as conn:
+            assert dict(conn.execute(keys_sql).all()) == {
+                "777": "rema:777",
+                "bottle": "offer:netto:faxe kondi:1.5l",
+                "crate": "offer:netto:faxe kondi:9.9l",
+            }
+            assert _view_definitions(conn) == definitions
+            assert api_columns(conn) == columns
+            assert all(_web_role_can_select(conn, view) for view in API_VIEWS)
+            history = conn.execute(
+                text(
+                    "SELECT count(*) FROM api.product_price_history"
+                    " WHERE product_key = 'offer:netto:faxe kondi:9.9l'"
+                )
+            ).scalar_one()
+            assert history == 1
+
+        migrate.downgrade(empty_database, "0009")
+        with engine.connect() as conn:
+            assert conn.execute(keys_sql).all()[1:] == [
+                ("bottle", "offer:netto:faxe kondi"),
+                ("crate", "offer:netto:faxe kondi"),
+            ]
+            assert _view_definitions(conn) == definitions
+            assert all(_web_role_can_select(conn, view) for view in API_VIEWS)
+
+        migrate.upgrade(empty_database, "0010")  # and back up again
     finally:
         engine.dispose()
 
