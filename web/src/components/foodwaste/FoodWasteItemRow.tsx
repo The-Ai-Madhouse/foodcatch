@@ -114,7 +114,7 @@ export function FoodWasteItemRow({
               <ChevronIcon className="mt-0.5 details-chevron text-ink-3" />
             </span>
             <span className="flex flex-wrap items-center gap-x-2 text-meta text-ink-2">
-              <span className="text-body font-bold text-ink tabular">{formatDkk(item.price)}</span>
+              <span className="text-title shelf text-ink">{formatDkk(item.price)}</span>
               {item.referencePrice != null && item.referencePrice > item.price ? (
                 <span className="tabular">
                   før <s>{formatDkk(item.referencePrice)}</s>
@@ -241,21 +241,21 @@ export function FoodWasteItemRow({
               </ul>
             </section>
           ) : null}
+          {off || item.productKey ? (
+            <p className="flex flex-wrap items-center gap-x-4">
+              {off ? <SourceLink link={off} className="min-h-11" /> : null}
+              {item.productKey ? (
+                <Link
+                  href={productPath(item.productKey) as Route}
+                  className="inline-flex min-h-11 items-center text-meta"
+                >
+                  Prishistorik
+                </Link>
+              ) : null}
+            </p>
+          ) : null}
         </div>
       </details>
-      {off || item.productKey ? (
-        <p className="-mt-2 flex flex-wrap items-center gap-x-4 pb-1 sm:pl-[68px]">
-          {off ? <SourceLink link={off} className="min-h-11" /> : null}
-          {item.productKey ? (
-            <Link
-              href={productPath(item.productKey) as Route}
-              className="inline-flex min-h-11 items-center text-meta"
-            >
-              Prishistorik
-            </Link>
-          ) : null}
-        </p>
-      ) : null}
     </>
   );
 }

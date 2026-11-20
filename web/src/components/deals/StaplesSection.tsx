@@ -210,7 +210,13 @@ function StaplePicker({ selected, open }: { selected: readonly string[]; open: b
   });
   return (
     <Disclosure initialOpen={open} className="group/picker border-t border-line">
-      <summary className="flex h-11 items-center gap-1 text-meta font-medium text-link">
+      <summary
+        className={
+          selected.length
+            ? "flex h-11 items-center gap-1 text-meta font-medium text-link"
+            : "my-2 inline-flex h-11 items-center gap-1 rounded-[10px] bg-brand px-4 font-semibold text-page"
+        }
+      >
         {selected.length ? "Skift basisvarer" : "Vælg dine basisvarer"}
         <ChevronIcon className="details-chevron" />
       </summary>
@@ -361,7 +367,7 @@ export function StaplesSection({
             Ikke på tilbud: {quiet.map((m) => m.staple.label).join(", ")}
           </p>
         ) : null}
-        <StaplePicker selected={selected} open={selected.length === 0} />
+        <StaplePicker selected={selected} open={false} />
       </StaplesFold>
     </section>
   );

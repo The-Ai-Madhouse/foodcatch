@@ -100,7 +100,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/soeg">) {
 
   return (
     <div className="mx-auto max-w-[760px]">
-      <h1 className="text-title font-bold text-ink">Søg vare</h1>
+      <h1 className="text-display shelf text-ink">Søg vare</h1>
       <p className="text-meta text-ink-2">
         Find en vilkårlig vare fra tilbudsaviser, REMA 1000-sortimentet og madspild, og se dens
         prishistorik.

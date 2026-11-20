@@ -2,6 +2,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { MemberBadge, VerdictBadge } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
+import { ChevronIcon } from "@/components/Icons";
 import { SourceLink } from "@/components/SourceLink";
 import { StoreInfo } from "@/components/StoreInfo";
 import { chainName } from "@/lib/chains";
@@ -77,88 +78,93 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
   );
 
   return (
-    <article
-      aria-labelledby={headingId}
-      className="rounded-xl border border-line bg-surface p-4 lg:p-5"
-    >
-      <div className="flex items-start gap-3">
-        <h3 id={headingId} className="min-w-0 flex-1 text-heading font-semibold text-ink">
-          {offer.title}
-        </h3>
-        {!several || offer.memberOnly ? (
+    <article aria-labelledby={headingId} className="rounded-xl border border-line bg-surface">
+      <div className="px-4 pt-3 lg:px-5">
+        <div className="flex items-start gap-3">
+          <h3 id={headingId} className="min-w-0 flex-1 text-heading font-semibold text-ink">
+            {offer.title}
+          </h3>
           <div className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
-            {!several ? (
-              <VerdictBadge
-                status={listing.status}
-                memberOnly={offer.memberOnly}
-                chainId={offer.chainId}
-              />
-            ) : null}
+            <VerdictBadge
+              status={listing.status}
+              memberOnly={offer.memberOnly}
+              chainId={offer.chainId}
+            />
             {/* Required: a member price may only be "Godt køb" when marked (lib/deals.ts). */}
             {offer.memberOnly ? <MemberBadge chainId={offer.chainId} /> : null}
           </div>
-        ) : null}
+        </div>
+
+        <p className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <span className="text-price shelf text-ink">{formatDkk(offer.price)}</span>
+          <span className="text-meta text-ink-2">
+            <span className={size.origin === "unknown" ? "text-ink-3" : undefined}>
+              {size.text}
+            </span>
+            {unitPrice ? (
+              <>
+                {sep}
+                <span className="whitespace-nowrap tabular">{unitPrice}</span>
+              </>
+            ) : null}
+          </span>
+        </p>
+
+        <div className="flex flex-wrap items-center justify-between gap-x-3">
+          <ChainWhere chainId={offer.chainId} ctx={ctx} />
+          {upcoming ? (
+            <span className="text-meta font-medium text-warn-fg">
+              Fra {formatShortPeriod(offer.validFrom, null)}
+            </span>
+          ) : null}
+        </div>
       </div>
 
-      <p className="mt-1 text-meta text-ink-2">
-        <span className="text-price font-bold text-ink tabular">{formatDkk(offer.price)}</span>
-        {sep}
-        <span className={size.origin === "unknown" ? "text-ink-3" : "text-ink"}>{size.text}</span>
-        {unitPrice ? (
-          <>
-            {sep}
-            <span className="whitespace-nowrap tabular">{unitPrice}</span>
-          </>
-        ) : null}
-      </p>
-
-      <ChainWhere chainId={offer.chainId} ctx={ctx} />
-
-      <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3">
-        <p className="text-meta text-ink-3">
-          {upcoming ? "Kommer: " : ""}
-          {formatShortPeriod(offer.validFrom, offer.validTo)}
-          {offer.maxPerCustomer ? ` · Max ${offer.maxPerCustomer} pr. kunde` : ""}
-        </p>
-        {offer.productKey ? <HistoryLink productKey={offer.productKey} /> : null}
-      </div>
-
-      {several ? (
-        <ul className="mt-3 space-y-2 border-t border-line pt-3" aria-label="Varer i tilbuddet">
-          {variants.map((v) => (
-            <li key={v.variantIndex} className="flex items-start justify-between gap-3">
-              <span className="min-w-0 text-meta text-ink-2">{cleanClassLabel(v.classLabel)}</span>
-              <VerdictBadge status={v.status} memberOnly={v.memberOnly} chainId={v.chainId} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-meta text-ink-2">
-          {verdictReason(variants[0] as EvaluatedDeal, ctx.nearbyChains, nearestKm)}
-        </p>
-      )}
-
-      {hasReferences || link ? (
-        <div className="relative mt-3 border-t border-line">
+      <details className="group/deal border-t border-line">
+        <summary className="flex h-11 items-center gap-1 px-4 text-meta font-medium text-ink-2 hover:text-ink lg:px-5">
+          {hasReferences ? `Detaljer og sammenligning (${counted})` : "Detaljer"}
+          <ChevronIcon className="ml-auto details-chevron text-ink-3" />
+        </summary>
+        <div className="space-y-2 px-4 pb-3 lg:px-5">
+          {several ? (
+            <ul className="space-y-2" aria-label="Varer i tilbuddet">
+              {variants.map((v) => (
+                <li key={v.variantIndex} className="flex items-start justify-between gap-3">
+                  <span className="min-w-0 text-meta text-ink-2">
+                    {cleanClassLabel(v.classLabel)}
+                  </span>
+                  <VerdictBadge status={v.status} memberOnly={v.memberOnly} chainId={v.chainId} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-meta text-ink">
+              {verdictReason(variants[0] as EvaluatedDeal, ctx.nearbyChains, nearestKm)}
+            </p>
+          )}
+          <p className="text-meta text-ink-3">
+            {upcoming ? "Kommer: " : "Gælder "}
+            {formatShortPeriod(offer.validFrom, offer.validTo)}
+            {offer.maxPerCustomer ? `. Højst ${offer.maxPerCustomer} pr. kunde.` : ""}
+          </p>
           {hasReferences ? (
             <Comparison
               count={counted}
               radiusKm={ctx.radiusKm}
-              reserveRight={link != null}
+              reserveRight={false}
               sections={variants.flatMap((v) =>
                 v.status === "pending" ? [] : [comparisonSection(v, ctx, several)],
               )}
             />
           ) : null}
-          {link ? (
-            <div
-              className={`flex h-11 items-center ${hasReferences ? "absolute top-0 right-0" : "justify-end"}`}
-            >
-              <SourceLink link={link} />
-            </div>
+          {link || offer.productKey ? (
+            <p className="flex flex-wrap items-center gap-x-4">
+              {offer.productKey ? <HistoryLink productKey={offer.productKey} /> : null}
+              <SourceLink link={link} className="min-h-11" />
+            </p>
           ) : null}
         </div>
-      ) : null}
+      </details>
     </article>
   );
 }

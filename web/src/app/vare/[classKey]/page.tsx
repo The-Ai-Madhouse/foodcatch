@@ -56,7 +56,7 @@ export default async function ClassHistoryPage({ params }: PageProps<"/vare/[cla
 
   return (
     <div className="mx-auto max-w-[760px]">
-      <h1 className="text-title font-bold text-ink">{title}</h1>
+      <h1 className="text-display shelf text-ink">{title}</h1>
       <p className="text-meta text-ink-2">
         {rows.length} {rows.length === 1 ? "pris" : "priser"} registreret
       </p>

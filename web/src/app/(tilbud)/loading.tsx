@@ -2,7 +2,7 @@
 export default function Loading() {
   return (
     <div aria-busy="true" className="lg:max-w-[640px]">
-      <h1 className="text-title font-bold text-ink">Ugens tilbud</h1>
+      <h1 className="text-display shelf text-ink">Ugens tilbud</h1>
       <p className="sr-only" role="status">
         Henter tilbud…
       </p>

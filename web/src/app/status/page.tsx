@@ -37,7 +37,7 @@ export default async function StatusPage() {
 
   return (
     <>
-      <h1 className="text-title font-bold text-ink">Datastatus</h1>
+      <h1 className="text-display shelf text-ink">Datastatus</h1>
       <p className="mb-4 text-meta text-ink-2">
         Seneste kørsel af hvert job i datapipelinen og køen af varer til manuel gennemgang.
       </p>

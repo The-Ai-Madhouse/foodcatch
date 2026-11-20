@@ -5,7 +5,17 @@ import { MainNav } from "@/components/layout/MainNav";
 import { StaleBanner } from "@/components/layout/StaleBanner";
 import { LocationControl } from "@/components/location/LocationControl";
 import { getUserLocation } from "@/server/location";
+import localFont from "next/font/local";
 import "./globals.css";
+
+// Archivo, variable in weight and width (self-hosted, see app/fonts/README.md).
+const archivo = localFont({
+  src: "./fonts/archivo-latin.woff2",
+  variable: "--font-archivo",
+  weight: "100 900",
+  display: "swap",
+  declarations: [{ prop: "font-stretch", value: "62% 125%" }],
+});
 
 export const metadata: Metadata = {
   title: { default: "FoodCatch", template: "%s · FoodCatch" },
@@ -25,7 +35,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const location = await getUserLocation();
   return (
-    <html lang="da">
+    <html lang="da" className={archivo.variable}>
       <body className="min-h-dvh bg-page pb-tabbar text-ink antialiased md:pb-0">
         <a
           href="#indhold"
@@ -36,16 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="sticky top-0 z-30 border-b border-line bg-surface">
           <div className="mx-auto flex h-12 max-w-[1200px] items-center justify-between gap-3 px-4 md:h-14 lg:px-6">
             <div className="flex min-w-0 items-center gap-6">
-              <Link
-                href="/"
-                className="flex shrink-0 items-center gap-2 text-heading font-bold text-ink no-underline"
-              >
-                <span
-                  aria-hidden="true"
-                  className="inline-flex size-6 items-center justify-center rounded-md bg-brand text-meta font-bold text-page"
-                >
-                  F
-                </span>
+              <Link href="/" className="shrink-0 text-title shelf text-ink no-underline">
                 FoodCatch
               </Link>
               <MainNav variant="header" />

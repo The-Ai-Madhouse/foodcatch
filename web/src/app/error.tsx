@@ -8,7 +8,7 @@ export default function ErrorPage({ error, retry }: { error: unknown; retry: () 
       : null;
   return (
     <>
-      <h1 className="text-title font-bold text-ink">Noget gik galt – prøv igen.</h1>
+      <h1 className="text-display shelf text-ink">Noget gik galt – prøv igen.</h1>
       <p className="mt-1 max-w-prose text-meta text-ink-2">
         Siden kunne ikke hentes. Oftest skyldes det, at databasen ikke kan nås – tjek at den kører,
         og at WEB_DATABASE_URL er sat.

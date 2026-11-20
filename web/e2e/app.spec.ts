@@ -105,18 +105,33 @@ test("home shows where to buy each offer, its size and its source", async ({ pag
   for (const text of cards) expect(text).toMatch(SIZE);
 });
 
+test("a store name shows its address and opens Google Maps", async ({ page }, testInfo) => {
+  await page.goto("/?vis=alle");
+  const trigger = page.locator('article button[aria-haspopup="dialog"]').first();
+  if (testInfo.project.name === "mobile") await trigger.click();
+  else await trigger.hover(); // holding the mouse over it is enough on a desktop
+  const card = page.locator("[popover]:popover-open");
+  await expect(card).toBeVisible();
+  await expect(card).toContainText(/\d{4} /); // a postcode in the address
+  await expect(card.getByRole("link", { name: /Åbn i Google Maps/ }).first()).toHaveAttribute(
+    "href",
+    /^https:\/\/www\.google\.com\/maps\/search\//,
+  );
+  await page.keyboard.press("Escape");
+  await expect(card).toHaveCount(0);
+});
+
 test("offers of every chain can be filtered by chain", async ({ page }) => {
   await page.goto("/?vis=alle");
   const chips = page.getByRole("navigation", { name: "Kæder" }).getByRole("link");
   await expect(chips.first()).toHaveText("Alle kæder");
   expect(await chips.count()).toBeGreaterThan(2); // "Alle kæder" and at least two chains
-  // Offers of more than one chain are listed.
-  const chains = await page
-    .locator('article a[href^="/kort?kaede="]')
-    .evaluateAll((els) => els.map((e) => e.getAttribute("href")));
-  expect(new Set(chains).size).toBeGreaterThan(1);
+  // Offers of more than one chain are listed (the chain name opens its store popover).
+  const chainNames = page.locator('article button[aria-haspopup="dialog"] strong');
+  expect(new Set(await chainNames.allInnerTexts()).size).toBeGreaterThan(1);
 
   const chip = chips.filter({ hasNotText: /Alle kæder|Netto/ }).first();
+  const chipText = await chip.innerText();
   const kaede = new URL((await chip.getAttribute("href")) ?? "", "http://x").searchParams.get(
     "kaede",
   );
@@ -125,17 +140,17 @@ test("offers of every chain can be filtered by chain", async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`[?&]kaede=${kaede}`));
   await expect(chips.filter({ has: page.locator('[aria-current="true"]') })).toHaveCount(0);
   await expect(page.locator(`nav[aria-label="Kæder"] a[aria-current="true"]`)).toHaveCount(1);
-  // Every card is an offer of that chain (its where line opens the map filtered to it).
-  const where = page.locator('article a[href^="/kort?kaede="]');
-  await expect(where.first()).toBeVisible();
-  for (const href of await where.evaluateAll((els) => els.map((e) => e.getAttribute("href")))) {
-    expect(href).toBe(`/kort?kaede=${kaede}`);
-  }
+  // Every card is an offer of that chain.
+  await expect(chainNames.first()).toBeVisible();
+  for (const name of await chainNames.allInnerTexts()) expect(chipText).toContain(name);
 });
 
 test("an offer links to its item's price history with a chart and a table", async ({ page }) => {
   await page.goto("/?vis=alle");
-  const link = page.locator("article").getByRole("link", { name: "Prishistorik" }).first();
+  // The link sits in the card's "Detaljer" panel.
+  const card = page.locator("article").filter({ has: page.locator('a[href^="/produkt/"]') });
+  await card.first().locator("details > summary").first().click();
+  const link = card.first().getByRole("link", { name: "Prishistorik" });
   const href = await link.getAttribute("href");
   expect(href).toMatch(/^\/produkt\/[^/]+$/);
   await link.click();
@@ -189,7 +204,8 @@ test("a food-waste item shows its store, weight and source", async ({ page }) =>
   const row = group.locator("li").first();
   const item = row.locator("details");
   await expect(item).toContainText(SIZE);
-  // Visible without expanding: the item on Open Food Facts (by EAN) and its price history.
+  // Expanded: the item on Open Food Facts (by EAN), its price history and the "Kilde" facts.
+  await item.locator("summary").click();
   const off = row.getByRole("link", { name: /Varen på Open Food Facts/ });
   await expect(off).toBeVisible();
   await expect(off).toHaveAttribute("href", /^https:\/\/world\.openfoodfacts\.org\/product\/\d+$/);
@@ -197,8 +213,6 @@ test("a food-waste item shows its store, weight and source", async ({ page }) =>
     "href",
     /^\/produkt\//,
   );
-  // Expanded: the "Kilde" facts.
-  await item.locator("summary").click();
   const source = item.getByRole("region", { name: "Kilde" });
   await expect(source).toContainText("Fra Salling Groups madspildsdata – ingen vareside");
   await expect(source).toContainText(/Hentet\s*\d+\./);
@@ -222,8 +236,9 @@ test("meal ideas: catalogue, filters, shopping list and meal plan", async ({ pag
   await page.getByRole("link", { name: "Madideer" }).first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Madideer" })).toBeVisible();
   const main = page.locator("main");
-  // A catalogue of every dish, with filters.
-  await expect(main.getByLabel("Tid")).toBeVisible();
+  // A catalogue of every dish, with filters folded away.
+  await main.locator("summary", { hasText: "Filtre og sortering" }).click();
+  await expect(main.locator('select[name="tid"]')).toBeVisible();
   await expect(main.getByLabel("Butik du mest handler i")).toBeVisible();
   const cards = main.locator("article");
   expect(await cards.count()).toBeGreaterThanOrEqual(20);
@@ -238,12 +253,12 @@ test("meal ideas: catalogue, filters, shopping list and meal plan", async ({ pag
   await expect(box).toBeChecked();
   await expect(card.getByRole("heading", { name: "Sådan gør du" })).toBeVisible();
   // Filters narrow the list.
-  await main.getByLabel("Tid").selectOption("15");
+  await main.locator('select[name="tid"]').selectOption("15");
   await expect(page).toHaveURL(/tid=15/);
   // Meal plan: pick a day and a dish, then a store.
   await main.getByRole("link", { name: /^Madplan/ }).click();
   await main.getByRole("button", { name: /^I morgen/ }).click();
-  await main.getByLabel("Vælg ret").first().selectOption({ index: 1 });
+  await main.getByLabel("Vælg ret", { exact: true }).first().selectOption({ index: 1 });
   await main.getByRole("button", { name: "Tilføj" }).first().click();
   await expect(main.getByRole("heading", { name: "3. Hvor vil du handle?" })).toBeVisible();
   await expect(main.getByText("Anbefalet")).toBeVisible();
@@ -251,14 +266,16 @@ test("meal ideas: catalogue, filters, shopping list and meal plan", async ({ pag
   await main.getByRole("button", { name: "Ryd madplanen" }).click();
 });
 
-/** Open the staples picker unless it is open already (it starts open while nothing is picked). */
+/** Open the staples picker (inside the foldable section) unless it is open already. */
 async function openPicker(staples: Locator) {
-  const picker = staples.locator("details").first();
+  const fold = staples.locator("details").first();
+  if ((await fold.getAttribute("open")) === null) await fold.locator(":scope > summary").click();
+  const picker = fold.locator("details").first();
   if ((await picker.getAttribute("open")) === null) await picker.locator("summary").click();
   await expect(picker).toHaveAttribute("open", "");
 }
 
-test("offers: staples picker and foldable categories", async ({ page }) => {
+test("offers: staples picker, foldable staples and categories", async ({ page }) => {
   await page.goto("/");
   const staples = page.getByRole("region", { name: "Dine basisvarer" });
   await openPicker(staples);
@@ -266,8 +283,21 @@ test("offers: staples picker and foldable categories", async ({ page }) => {
   await staples.getByRole("button", { name: "Gem basisvarer" }).click();
   await expect(staples.getByRole("heading", { level: 3, name: /^Æg/ })).toBeVisible();
 
-  const categories = page.getByRole("navigation", { name: "Kategorier" });
-  await expect(categories.getByRole("link").first()).toBeVisible();
+  // The staples fold away and stay folded after a reload (cookie).
+  const fold = staples.locator("details").first();
+  await fold.locator(":scope > summary").click();
+  await expect(fold).not.toHaveAttribute("open", "");
+  await expect
+    .poll(
+      async () =>
+        (await page.context().cookies()).find((c) => c.name === "fc_staples_folded")?.value,
+    )
+    .toBe("1");
+  await page.reload();
+  await expect(
+    page.getByRole("region", { name: "Dine basisvarer" }).locator("details").first(),
+  ).not.toHaveAttribute("open", "");
+
   const group = page.locator("details[id^=gruppe-]").first();
   await expect(group).toHaveAttribute("open", "");
   await group.locator(":scope > summary").click();
@@ -328,7 +358,11 @@ test("no horizontal page scroll on phones", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile", "phone layout only");
   await page.goto("/");
   const productHref = await page.locator('a[href^="/produkt/"]').first().getAttribute("href");
-  await page.locator("summary", { hasText: "Sammenlign" }).first().click();
+  await page.locator("article details > summary").first().click();
+  await page
+    .locator("summary", { hasText: /^Sammenlign \(/ })
+    .first()
+    .click();
   const classLink = page.locator('a[href^="/vare/"]').first();
   const href = await classLink.getAttribute("href");
   for (const path of [

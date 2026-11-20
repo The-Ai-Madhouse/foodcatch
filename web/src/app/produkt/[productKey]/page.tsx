@@ -83,7 +83,7 @@ export default async function ProductHistoryPage({
 
   return (
     <div className="mx-auto max-w-[760px]">
-      <h1 className="text-title font-bold text-ink">{title}</h1>
+      <h1 className="text-display shelf text-ink">{title}</h1>
       <p className="flex flex-wrap items-center gap-x-1.5 text-meta text-ink-2">
         {chainId ? (
           <>

@@ -23,7 +23,7 @@ const MAX_WIDTH_PX = 300;
 let current: { owner: object; close: () => void } | null = null;
 
 /**
- * Where an item can be bought, on demand (docs/ui.md §18): the store (or chain) name is a
+ * Where an item can be bought, on demand (docs/ui.md §20): the store (or chain) name is a
  * button; a tap, a long press, or holding the mouse over it shows the store's address and
  * distance with a link to Google Maps and to the store on our map. For a chain-wide offer it
  * lists the chain's nearest stores.
@@ -245,9 +245,7 @@ export function StoreInfo({
               onClick={showChainOnMap}
               className="inline-flex min-h-11 items-center"
             >
-              {total > stores.length
-                ? `Alle ${total} ${chain}-butikker på kortet`
-                : "Vis på kortet"}
+              {`Alle ${total} ${chain}-butikker på kortet`}
             </Link>
           </span>
         ) : null}

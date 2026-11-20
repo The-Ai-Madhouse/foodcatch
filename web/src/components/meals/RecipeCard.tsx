@@ -286,15 +286,15 @@ export function RecipeCard({
           <h3 id={headingId} className="text-heading font-semibold text-ink">
             {recipe.name}
           </h3>
-          <p className="mt-0.5 line-clamp-2 text-meta text-ink-2">{recipe.description}</p>
           <p className="mt-1 text-micro text-ink-3 tabular">
             ⏱ {recipe.minutes} min{sep}
             {recipe.servings} pers.{sep}
             {recipe.meal === "frokost" ? "Frokost" : "Aftensmad"}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <span className="text-body font-bold text-ink tabular">
-              ca. {formatDkk(Math.round(idea.costPerServing))}
+            <span className="text-ink">
+              <span className="text-meta text-ink-2">ca. </span>
+              <span className="text-price shelf">{formatDkk(Math.round(idea.costPerServing))}</span>
               <span className="text-meta font-normal text-ink-2"> pr. pers.</span>
             </span>
             {idea.totalSaving > 0 ? (
@@ -325,6 +325,7 @@ export function RecipeCard({
         </summary>
 
         <div className="border-t border-line px-4 pb-4 lg:px-5">
+          <p className="mt-3 text-meta text-ink-2">{recipe.description}</p>
           <dl className="mt-3 grid grid-cols-3 gap-3 rounded-lg bg-surface-2 p-3">
             <Stat
               label="Tilbudsvarer"

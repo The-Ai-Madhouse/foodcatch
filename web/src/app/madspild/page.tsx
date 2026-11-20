@@ -89,7 +89,7 @@ export default async function FoodWastePage({ searchParams }: PageProps<"/madspi
     <MapFocusProvider>
       <div className="lg:grid lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:gap-8">
         <div className="min-w-0">
-          <h1 className="text-title font-bold text-ink">Madspild nær dig</h1>
+          <h1 className="text-display shelf text-ink">Madspild nær dig</h1>
           {items.length > 0 ? (
             <p className="text-meta text-ink-2">
               {items.length} {items.length === 1 ? "vare" : "varer"} i {groups.length}{" "}

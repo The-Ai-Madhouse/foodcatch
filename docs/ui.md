@@ -1080,3 +1080,32 @@ than the slot's normal-price estimate (otherwise buying it would raise the total
 shared by dishes is bought in as many packs as their amounts need. Items not on offer are
 priced with the same estimate in every chain, so the differences between stores come from
 offers and food waste only.
+
+## 20. Calmer pages, store popover, every chain (2026-11-20)
+
+The owner found the app too dense. Decisions, made for a student glancing at a phone in a shop:
+
+* **One glance per card.** A deal card shows only the item, the price, size and unit price, the
+  verdict badge and where to buy it. The reason, period, per-customer limit, variants,
+  comparison, source and price-history links sit behind "Detaljer og sammenligning (n)". A
+  clearance row keeps the price, discount, size, stock and end; the Open Food Facts and
+  price-history links moved into its expanded panel.
+* **Fewer controls before content.** The category pill row on `/` is gone (the category headings
+  fold already). "Dine basisvarer" can be folded away, remembered in the `fc_staples_folded`
+  cookie (so the server renders it folded, no flash), and a long list scrolls inside the box
+  (max. 55 vh). With no staples picked it shows one sentence and a "Vælg dine basisvarer" button
+  instead of the whole picker. On `/madideer` the filter form is folded into "Filtre og
+  sortering" with the active count or current sort as its summary; a dish card shows its
+  description only once opened.
+* **The shelf-label voice.** The UI font is Archivo (variable, self-hosted in `app/fonts/`). Page
+  titles and prices use the `shelf` utility: heavy (800) and condensed (72 % width), like the
+  price on a shelf edge. It is the only display treatment; everything else stays quiet.
+* **Store popover (`StoreInfo`).** Wherever an item is tied to a store or chain (deal cards,
+  comparisons, staples, clearances, meal ideas, the meal-plan shopping list), the store name is
+  a button: tap, long-press or hover shows the address and distance with "Åbn i Google Maps" and
+  "Vis på kort"; for a chain-wide offer it lists the three nearest stores and links to all of
+  them on the map. It uses the Popover API (top layer), so a scrolling list never clips it.
+* **No chain is special.** `/kort` compares every chain's offers ("Billigere her end ugens
+  tilbud", "Tilbud i {kæde}: …") and every store shows its own chain's good buys; the loading
+  title, the price-history legend ("Tilbud", "Normalpris") and the badge defaults no longer
+  assume Netto. Chain-specific facts (Netto+, Coop membership, eTilbudsavis slugs) stay as data.

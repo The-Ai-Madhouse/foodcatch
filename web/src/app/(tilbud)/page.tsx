@@ -1,6 +1,6 @@
 import type { Metadata, Route } from "next";
 import Link from "next/link";
-import { CategoryOverview, CollapsibleCategory } from "@/components/CategoryOverview";
+import { CollapsibleCategory } from "@/components/CategoryOverview";
 import { Notice } from "@/components/Notice";
 import { Segmented } from "@/components/Segmented";
 import { ChainChips } from "@/components/deals/ChainChips";
@@ -113,7 +113,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     <MapFocusProvider>
       <div className="lg:grid lg:grid-cols-[minmax(0,640px)_minmax(0,1fr)] lg:gap-8">
         <div className="min-w-0">
-          <h1 className="text-title font-bold text-ink">Ugens tilbud</h1>
+          <h1 className="text-display shelf text-ink">Ugens tilbud</h1>
           <div className="mt-3">
             <StaplesSection
               selected={staples}
@@ -178,21 +178,6 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
               </Notice>
             ) : (
               <>
-                {groups.length > 1 || (groups.length > 0 && upcomingShown.length > 0) ? (
-                  <CategoryOverview
-                    label="Kategorier"
-                    links={[
-                      ...groups.map((g) => ({
-                        label: g.groupName,
-                        count: g.listings.length,
-                        href: `#gruppe-${groupSlug(g.groupName)}`,
-                      })),
-                      ...(upcomingShown.length
-                        ? [{ label: "Kommende", count: upcomingShown.length, href: "#kommende" }]
-                        : []),
-                    ]}
-                  />
-                ) : null}
                 {groups.map((group) => (
                   <CollapsibleCategory
                     key={group.groupName}

@@ -187,7 +187,7 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madidee
 
   return (
     <div className="lg:max-w-[720px]">
-      <h1 className="text-title font-bold text-ink">Madideer</h1>
+      <h1 className="text-display shelf text-ink">Madideer</h1>
       <p className="text-meta text-ink-2">
         Læg en madplan: vælg dage og retter, og se så hvor det hele er billigst at købe.
       </p>

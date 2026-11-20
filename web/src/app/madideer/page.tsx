@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Disclosure } from "@/components/Disclosure";
+import { ChevronIcon } from "@/components/Icons";
 import { Notice } from "@/components/Notice";
 import { OpenLocationButton } from "@/components/location/LocationControl";
 import { AutoSubmitForm } from "@/components/meals/AutoSubmitForm";
@@ -48,106 +50,116 @@ function Filters({
 }) {
   const active = activeFilterCount(filters);
   return (
-    <AutoSubmitForm
-      action="/madideer"
-      className="mt-3 rounded-xl border border-line bg-surface p-3 lg:p-4"
+    // Folded by default: the dishes are the point, filters are for when you want them.
+    <Disclosure
+      initialOpen={false}
+      className="group/filters mt-3 rounded-xl border border-line bg-surface"
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Field label="Måltid">
-          <select name="maaltid" defaultValue={filters.meal ?? ""} className={fieldClass}>
-            <option value="">Alle</option>
-            <option value="frokost">Frokost</option>
-            <option value="aftensmad">Aftensmad</option>
-          </select>
-        </Field>
-        <Field label="Tid">
-          <select name="tid" defaultValue={filters.maxMinutes ?? ""} className={fieldClass}>
-            <option value="">Ligegyldigt</option>
-            {TIME_CHOICES.map((m) => (
-              <option key={m} value={m}>
-                Højst {m} min
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Pris pr. person">
-          <select name="pris" defaultValue={filters.maxPerPerson ?? ""} className={fieldClass}>
-            <option value="">Ligegyldigt</option>
-            {PRICE_CHOICES.map((kr) => (
-              <option key={kr} value={kr}>
-                Højst {formatDkk(kr)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Butik du mest handler i">
-          <select name="butik" defaultValue={filters.store.chainId ?? ""} className={fieldClass}>
-            <option value="">Alle butikker</option>
-            {chains.map((c) => (
-              <option key={c} value={c}>
-                {chainName(c)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Sortér efter">
-          <select name="sorter" defaultValue={filters.sort} className={fieldClass}>
-            {Object.entries(SORT_LABELS).map(([value, label]) => (
-              <option key={value} value={value === "spar" ? "" : value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
-        <label className="flex min-h-11 items-center gap-2 text-meta text-ink">
-          <input
-            type="checkbox"
-            name="kun"
-            value="1"
-            defaultChecked={filters.store.only}
-            className="size-5 accent-[var(--brand)]"
-          />
-          Alt fra én butik
-        </label>
-        <label className="flex min-h-11 items-center gap-2 text-meta text-ink">
-          <input
-            type="checkbox"
-            name="gemte"
-            value="1"
-            defaultChecked={filters.liked}
-            className="size-5 accent-[var(--brand)]"
-          />
-          Kun gemte ♥ ({likedCount})
-        </label>
-        <span className="ml-auto flex items-center gap-3">
-          {active > 0 ? (
-            <Link href="/madideer" className="text-meta">
-              Nulstil filtre
-            </Link>
-          ) : null}
-          <button
-            type="submit"
-            className="h-10 rounded-[10px] bg-brand px-4 text-meta font-medium text-page"
-          >
-            Vis retter
-          </button>
+      <summary className="flex min-h-11 items-center gap-2 px-3 lg:px-4">
+        <span className="font-medium text-ink">Filtre og sortering</span>
+        <span className="text-meta text-ink-2">
+          {active > 0 ? `${active} valgt` : SORT_LABELS[filters.sort]}
         </span>
-      </div>
-      {filters.store.only ? (
-        <p className="text-micro text-ink-3">
-          {filters.store.chainId
-            ? `Kun tilbud og madspild fra ${chainName(filters.store.chainId)}; resten regnes til normalpris.`
-            : "Hver ret får den butik, hvor den samlet sparer mest."}
-        </p>
-      ) : filters.store.chainId ? (
-        <p className="text-micro text-ink-3">
-          Tilbud fra {chainName(filters.store.chainId)} vælges først; andre butikker bruges, hvor{" "}
-          {chainName(filters.store.chainId)} intet har.
-        </p>
-      ) : null}
-    </AutoSubmitForm>
+        <ChevronIcon className="ml-auto details-chevron text-ink-3" />
+      </summary>
+      <AutoSubmitForm action="/madideer" className="border-t border-line p-3 lg:p-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Field label="Måltid">
+            <select name="maaltid" defaultValue={filters.meal ?? ""} className={fieldClass}>
+              <option value="">Alle</option>
+              <option value="frokost">Frokost</option>
+              <option value="aftensmad">Aftensmad</option>
+            </select>
+          </Field>
+          <Field label="Tid">
+            <select name="tid" defaultValue={filters.maxMinutes ?? ""} className={fieldClass}>
+              <option value="">Ligegyldigt</option>
+              {TIME_CHOICES.map((m) => (
+                <option key={m} value={m}>
+                  Højst {m} min
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Pris pr. person">
+            <select name="pris" defaultValue={filters.maxPerPerson ?? ""} className={fieldClass}>
+              <option value="">Ligegyldigt</option>
+              {PRICE_CHOICES.map((kr) => (
+                <option key={kr} value={kr}>
+                  Højst {formatDkk(kr)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Butik du mest handler i">
+            <select name="butik" defaultValue={filters.store.chainId ?? ""} className={fieldClass}>
+              <option value="">Alle butikker</option>
+              {chains.map((c) => (
+                <option key={c} value={c}>
+                  {chainName(c)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Sortér efter">
+            <select name="sorter" defaultValue={filters.sort} className={fieldClass}>
+              {Object.entries(SORT_LABELS).map(([value, label]) => (
+                <option key={value} value={value === "spar" ? "" : value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
+          <label className="flex min-h-11 items-center gap-2 text-meta text-ink">
+            <input
+              type="checkbox"
+              name="kun"
+              value="1"
+              defaultChecked={filters.store.only}
+              className="size-5 accent-[var(--brand)]"
+            />
+            Alt fra én butik
+          </label>
+          <label className="flex min-h-11 items-center gap-2 text-meta text-ink">
+            <input
+              type="checkbox"
+              name="gemte"
+              value="1"
+              defaultChecked={filters.liked}
+              className="size-5 accent-[var(--brand)]"
+            />
+            Kun gemte ♥ ({likedCount})
+          </label>
+          <span className="ml-auto flex items-center gap-3">
+            {active > 0 ? (
+              <Link href="/madideer" className="text-meta">
+                Nulstil filtre
+              </Link>
+            ) : null}
+            <button
+              type="submit"
+              className="h-10 rounded-[10px] bg-brand px-4 text-meta font-medium text-page"
+            >
+              Vis retter
+            </button>
+          </span>
+        </div>
+        {filters.store.only ? (
+          <p className="text-micro text-ink-3">
+            {filters.store.chainId
+              ? `Kun tilbud og madspild fra ${chainName(filters.store.chainId)}; resten regnes til normalpris.`
+              : "Hver ret får den butik, hvor den samlet sparer mest."}
+          </p>
+        ) : filters.store.chainId ? (
+          <p className="text-micro text-ink-3">
+            Tilbud fra {chainName(filters.store.chainId)} vælges først; andre butikker bruges, hvor{" "}
+            {chainName(filters.store.chainId)} intet har.
+          </p>
+        ) : null}
+      </AutoSubmitForm>
+    </Disclosure>
   );
 }
 
@@ -184,7 +196,7 @@ export default async function MealIdeasPage({ searchParams }: PageProps<"/madide
 
   return (
     <div className="lg:max-w-[720px]">
-      <h1 className="text-title font-bold text-ink">Madideer</h1>
+      <h1 className="text-display shelf text-ink">Madideer</h1>
       <p className="text-meta text-ink-2">
         {all.length} retter, prissat med ugens tilbud og madspild inden for {location.radiusKm} km –{" "}
         {onOffer} har noget på tilbud lige nu. Åbn en ret for indkøbslisten.
