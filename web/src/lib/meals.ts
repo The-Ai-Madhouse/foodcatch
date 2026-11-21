@@ -188,8 +188,8 @@ export interface StoreChoice {
   /** Only items of one chain: `chainId`, or without it the chain that saves the most. */
   only: boolean;
   /**
-   * Pick the cheapest pack instead of the biggest saving, and skip packs that cost more than
-   * the slot's normal-price estimate (buying them would raise the shopping total).
+   * Pick the cheapest pack instead of the biggest saving, and skip items dearer per unit than the
+   * slot's normal-price estimate (buying them would raise the shopping total).
    */
   cheapest?: boolean;
 }
@@ -259,6 +259,18 @@ export function slotPayCost(slot: RecipeSlot, item: MealItem): number {
 }
 
 /**
+ * Whether buying the item costs more than buying the slot at the normal price: its unit price
+ * above the slot's estimated normal unit price. (Comparing the pack price with the estimate of
+ * the used amount would wrongly skip a cheap 500 g pack for a dish that uses 350 g: the normal
+ * price is a whole pack too.) Without a unit price, the pack price against the estimate.
+ */
+function dearerThanNormal(slot: RecipeSlot, item: MealItem): boolean {
+  const unitPrice = itemUnitPrice(item, slot.unit);
+  if (unitPrice == null) return slotPayCost(slot, item) > slot.estimateKr;
+  return unitPrice > slot.estimateKr / slot.amount;
+}
+
+/**
  * A recipe filled with the best item per slot. With a preferred chain its items win; with
  * `only`, items of other chains are never chosen (they still show as options). Every recipe
  * gives an idea: slots without a cheap item are priced at their estimate. With `requireCore`,
@@ -294,7 +306,7 @@ export function fillRecipe(
     const best = options.find(
       (i) =>
         !used.has(`${i.kind}:${i.id}`) &&
-        !(store.cheapest && slotPayCost(slot, i) > slot.estimateKr) &&
+        !(store.cheapest && dearerThanNormal(slot, i)) &&
         !(store.only && store.chainId && itemChain(i) !== store.chainId),
     );
     if (best) {

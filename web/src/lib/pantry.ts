@@ -410,6 +410,182 @@ export const PANTRY_SPECS: Readonly<Record<string, ProductSpec>> = {
     pieceKg: 0.028,
   },
   "frosne grøntsager": { words: ["grøntsagsblanding", "wokgrøntsager"] },
+  bacon: {
+    words: ["bacon", "baconskiver", "bacontern", "bacon i tern"],
+    exclude: ["chips", "snack", "dressing", "ost", "pølse", "salat", "pizza", "bites"],
+    pieceKg: 0.0125,
+  },
+  "bacon i tern": {
+    words: ["bacontern", "bacon i tern", "bacon tern"],
+    exclude: ["chips", "snack"],
+  },
+  squash: {
+    words: ["squash", "courgette"],
+    exclude: ["butternut", "græskar", "nudler", "spaghetti", "suppe"],
+    pieceKg: 0.3,
+  },
+  "rød chili": {
+    words: ["chili", "chilipeber", "chilier", "rød chili"],
+    exclude: [
+      "sauce",
+      "flager",
+      "pulver",
+      "stødt",
+      "con carne",
+      "sin carne",
+      "mayo",
+      "olie",
+      "ketchup",
+      "chips",
+      "nødder",
+      "chokolade",
+      "pasta",
+      "sweet",
+      "dip",
+      "pølse",
+      "salami",
+      "creme",
+      "marinade",
+    ],
+    pieceKg: 0.015,
+  },
+  "soltørrede tomater i olie": {
+    words: ["soltørrede tomater"],
+    exclude: ["pesto", "creme", "dip", "brød"],
+    spoon: 0.015,
+  },
+  spidskål: { words: ["spidskål"], exclude: ["salat", "coleslaw", "snittet"], pieceKg: 0.8 },
+  avocado: {
+    words: ["avocado", "avocadoer", "avokado"],
+    exclude: ["dip", "guacamole", "olie", "creme", "snack"],
+    pieceKg: 0.2,
+  },
+  "mørk chokolade": {
+    words: ["mørk chokolade", "chokolade 70", "kakaochokolade", "mørk"],
+    exclude: ["mælk", "kiks", "kage", "drik", "is", "nød", "bar", "chips", "brød", "pålæg"],
+  },
+  nachos: { words: ["nachos", "tortillachips"], exclude: ["dip", "sauce", "ost", "kit"] },
+  lime: {
+    words: ["lime", "limefrugter"],
+    exclude: [
+      "juice",
+      "saft",
+      "sodavand",
+      "vand",
+      "kage",
+      "most",
+      "mynte",
+      "chips",
+      "dressing",
+      "blade",
+    ],
+    pieceKg: 0.07,
+  },
+  "frisk koriander": {
+    words: ["koriander", "frisk koriander"],
+    exclude: ["stødt", "tørret", "frø", "hele", "frys", "pesto"],
+  },
+  "frisk mynte": {
+    words: ["mynte", "frisk mynte"],
+    exclude: [
+      "te",
+      "tørret",
+      "pastil",
+      "tyggegummi",
+      "chokolade",
+      "lime",
+      "vand",
+      "sodavand",
+      "is",
+    ],
+  },
+  "frisk timian": {
+    words: ["timian", "frisk timian"],
+    exclude: ["tørret", "honning", "salt", "olie"],
+  },
+  dild: {
+    words: ["dild", "frisk dild"],
+    exclude: ["tørret", "kartofler", "sild", "dressing", "creme", "dip", "frys", "olie"],
+  },
+  rucola: {
+    words: ["rucola", "rucolasalat"],
+    exclude: ["pesto", "dressing", "pizza", "chips"],
+    pieceKg: 0.02,
+  },
+  forårsløg: {
+    words: ["forårsløg"],
+    exclude: ["dressing", "dip", "chips", "creme", "smør", "ost"],
+  },
+  blomkål: {
+    words: ["blomkål"],
+    exclude: ["ris", "mos", "suppe", "gratin", "pizza", "frosne", "salat", "chips"],
+    pieceKg: 0.8,
+  },
+  aubergine: {
+    words: ["aubergine", "auberginer"],
+    exclude: ["dip", "creme", "grillet", "syltet", "chips", "salat"],
+    pieceKg: 0.3,
+  },
+  babyspinat: {
+    words: ["babyspinat", "baby spinat", "spinat"],
+    exclude: [
+      "frosne",
+      "frossen",
+      "hakket",
+      "pizza",
+      "tærte",
+      "lasagne",
+      "suppe",
+      "pasta",
+      "chips",
+      "dip",
+      "pesto",
+    ],
+  },
+  "grønne asparges": {
+    words: ["asparges", "grønne asparges"],
+    exclude: ["hvide", "dåse", "suppe", "glas", "frosne", "tærte", "chips", "bacon"],
+  },
+  edamamebønner: {
+    words: ["edamame", "edamamebønner"],
+    exclude: ["snack", "chips", "salt", "chili", "nudler"],
+  },
+  chorizo: {
+    words: ["chorizo"],
+    exclude: ["chips", "pizza", "snack", "pålæg i skiver", "pasta", "olie"],
+  },
+  cocktailpølser: {
+    words: ["cocktailpølser", "cocktail pølser"],
+    exclude: ["svøbt", "bacon", "dej", "snack"],
+  },
+  mandler: {
+    words: ["mandler", "mandelflager", "hakkede mandler"],
+    exclude: [
+      "chokolade",
+      "mælk",
+      "drik",
+      "smør",
+      "mel",
+      "kage",
+      "salt",
+      "ristede saltede",
+      "marcipan",
+      "kiks",
+      "is",
+    ],
+  },
+  dadler: {
+    words: ["dadler", "medjool"],
+    exclude: ["chokolade", "kugler", "bar", "kage", "sirup"],
+  },
+  "tørrede abrikoser": {
+    words: ["abrikoser", "tørrede abrikoser"],
+    exclude: ["marmelade", "dåse", "syltetøj", "kompot", "chokolade", "kage", "bar"],
+  },
+  durummel: {
+    words: ["durummel", "durum", "semolina"],
+    exclude: ["pasta", "brød", "spaghetti", "penne"],
+  },
 };
 
 /** A shelf price, an offer or a clearance that can be bought now near the user. */
@@ -512,6 +688,9 @@ const PIECE_WORDS = new Set([
   "pakker",
   "pose",
   "glas",
+  "håndfuld",
+  "håndfulde",
+  "bundter",
 ]);
 
 /**

@@ -286,9 +286,9 @@ test("extra items get real prices; an item at home counts only the amount used",
   await expect(sheets).toContainText("Normalpris i REMA 1000 – 500 g");
   await expect(sheets).toContainText("9,95");
   await expect(sheets).not.toContainText("ca.");
-  // At home: the dish uses 250 g of the 500 g pack.
+  // At home: the dish uses 200 g of the 500 g pack (Valdemarsro: 200 g lasagneplader).
   await card.getByLabel("Har jeg: Lasagneplader").check();
-  await expect(sheets).toContainText("4,98");
+  await expect(sheets).toContainText("3,98");
   await expect(sheets).toContainText("retten bruger");
   await card.getByRole("button", { name: "Nulstil" }).click();
 });

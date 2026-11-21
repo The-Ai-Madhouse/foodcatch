@@ -1197,3 +1197,30 @@ the ingredients, from a shop, a leaflet or food waste, not estimated.
   1 kg bag). A plan bought in one store only uses that chain's prices; otherwise the estimate.
 * "Billigst indkøb" sorts by the real purchase price; the price filter uses the real price per
   person.
+
+## 24. Every dish follows a real recipe (2026-11-21)
+
+The owner: the linked recipe pages did not match the dishes shown. Now every dish in
+`lib/recipes.ts` is taken from the one real recipe it links to:
+
+* Ingredients and amounts, servings and time come from the source page (Valdemarsro, Arla,
+  Mummum), read from the page's recipe markup (schema.org JSON-LD, microdata or Arla's recipe
+  table). Nothing is added that the source does not list; water is left out; salt and pepper
+  are one basic. Ingredients that are a known product type are slots in the type's unit
+  (cans: 0,4 kg; tun: 0,185 kg per can); the rest are extra items, spelled like the price
+  finder's items (`PANTRY_SPECS`) so their prices are found.
+* The method keeps the source's order and content (times, temperatures, groups such as
+  "Mornaysauce"), rewritten in our own words rather than copied.
+* `minutes` is the realistic total: the source's time, or longer when its method says so
+  (lasagne simmers at least 2 hours, pizza dough rises at least 6 hours).
+* Where a link was a different dish, the dish now follows the link and takes its name
+  ("Minestronesuppe", "Krydrede kyllingelår", "Alt i én gryde med kylling og rodfrugter",
+  "Mørbradgryde med pølser, bacon og champignon"). Where it was a poor fit or missing, a real
+  recipe was chosen: tacos → Valdemarsro "Tacoskåle med oksekød", pizza → "Pizza Margherita",
+  and the four dishes without a source → "Røræg", "Kyllingesalat med æbler og bacon",
+  "Hytteostsalat med blomkål" and "Marokkansk kyllingegryde". Ids are unchanged, so plans and
+  likes keep working.
+* Each dish has one core ingredient (the one it is built around).
+* The meal plan's one-store choice now skips an item only when its unit price is above the
+  normal estimate (a 500 g pack for a dish using 350 g is not "dearer": the normal price is a
+  whole pack too).

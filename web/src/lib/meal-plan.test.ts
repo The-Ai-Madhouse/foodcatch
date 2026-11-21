@@ -12,6 +12,7 @@ import {
   todayInDenmark,
   togglePlanDay,
 } from "./meal-plan";
+import { priceFinder } from "./pantry";
 import { RECIPES } from "./recipes";
 
 const TODAY = "2026-11-20";
@@ -95,16 +96,35 @@ describe("planOptions", () => {
   const chili = RECIPES.find((r) => r.id === "chili")!;
   const tacos = RECIPES.find((r) => r.id === "tacos")!;
   const deals = evaluateDeals([row({ listingId: "mince" })], NEARBY);
+  // Lidl's shelf price for the same mince: what a Lidl-only plan pays (lib/pantry.ts).
+  const finder = priceFinder([
+    {
+      key: "lidl-mince",
+      label: "Hakket oksekød 8-12%",
+      chainId: "lidl",
+      classKey: "hakket_oksekød|fedt=8-12%|øko=nej|laktosefri=nej|forarbejdet=nej",
+      kind: "regular",
+      price: 44.95,
+      unit: "kg",
+      sizeMin: 0.5,
+      sizeMax: 0.5,
+      source: "tjek",
+      sourceItemId: "l1",
+      catalogId: null,
+      validTo: null,
+      ean: null,
+    },
+  ]);
 
   it("recommends the cheapest single store and buys packs for all dishes", () => {
-    const options = planOptions([chili, tacos], deals, [], NEARBY, NOW);
+    const options = planOptions([chili, tacos], deals, [], NEARBY, NOW, finder);
     expect(options.recommended).toBe("netto");
     const netto = options.single[0]!;
     const mince = netto.lines.find((l) => l.item);
-    // 0,5 kg + 0,5 kg of mince = two 0,5 kg packs.
+    // 0,35 kg + 0,4 kg of mince = two 0,5 kg packs.
     expect(mince?.packs).toBe(2);
     expect(mince?.payKr).toBe(70);
-    expect(mince?.dishes).toEqual(["Chili con carne", "Tacos med oksekød"]);
+    expect(mince?.dishes).toEqual(["Chili con carne", "Tacoskåle med oksekød"]);
     const lidl = options.single.find((s) => s.store.kind === "one" && s.store.chainId === "lidl")!;
     expect(lidl.offerCount).toBe(0);
     expect(netto.total).toBeLessThan(lidl.total);
@@ -116,7 +136,7 @@ describe("planOptions", () => {
   });
 
   it("across stores is never dearer than the store it would pick for each item", () => {
-    const options = planOptions([chili], deals, [], NEARBY, NOW);
+    const options = planOptions([chili], deals, [], NEARBY, NOW, finder);
     expect(options.many.chains).toEqual(["netto"]);
     expect(options.many.total).toBe(options.single[0]?.total);
   });
