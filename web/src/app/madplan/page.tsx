@@ -37,10 +37,13 @@ import {
   todayInDenmark,
   type PlanShopping,
 } from "@/lib/meal-plan";
-import { RECIPES, mealCatalogue } from "@/lib/meals";
-import { chainPins, nearestByChain, shortStoreName } from "@/lib/stores";
-import { StoreInfo } from "@/components/StoreInfo";
-import { getMealPlan, getUserLocation } from "@/server/location";
+import { RECIPES, itemChain, mealCatalogue } from "@/lib/meals";
+import { nearestByChain, shortStoreName } from "@/lib/stores";
+import { getMealPlan, getPeople, getUserLocation } from "@/server/location";
+import { PeoplePicker } from "@/components/meals/PeoplePicker";
+import { dishCost } from "@/lib/dish-cost";
+import { portions } from "@/lib/people";
+import { packText } from "@/lib/pantry";
 import {
   getBuyableProducts,
   getCurrentDeals,
@@ -121,10 +124,11 @@ function StoreOption({
 /** "Madplan": pick days and dishes, then where to shop, then one shopping list (docs/ui.md §19.2). */
 export default async function MealPlanPage({ searchParams }: PageProps<"/madplan">) {
   const now = new Date();
-  const [params, location, plan] = await Promise.all([
+  const [params, location, plan, people] = await Promise.all([
     searchParams,
     getUserLocation(),
     getMealPlan(now),
+    getPeople(),
   ]);
   const [stores, allRows, foodWaste] = await Promise.all([
     getNearbyStores(location),
@@ -152,6 +156,24 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
   );
   const options =
     recipes.length > 0 ? planOptions(recipes, deals, foodWaste, nearbyChains, now, finder) : null;
+  // What each dish costs from real prices (docs/ui.md §23), and per day for the chosen people.
+  const costs = new Map(
+    [...perPerson.values()].map((i) => [i.recipe.id, dishCost(i, finder, () => "")]),
+  );
+  const dishText = (id: string): string => {
+    const idea = perPerson.get(id);
+    const cost = costs.get(id);
+    if (!idea || !cost) return "";
+    const ca = cost.dishApprox ? "ca. " : "";
+    if (people != null && people !== idea.recipe.servings) {
+      const share = portions(idea.recipe.servings, people, cost.dishKr);
+      if (share.days != null) {
+        return `rækker til ${share.days} ${share.days === 1 ? "dag" : "dage"} for ${people === 1 ? "1 person" : `${people} pers.`} · ${ca}${formatDkk(share.perDayKr)} pr. dag`;
+      }
+      return `lav den ${String(share.times).replace(".", ",")} gange · ${ca}${formatDkk(share.perDayKr)}`;
+    }
+    return `${ca}${formatDkk(cost.perServingKr)}/pers.`;
+  };
 
   const wanted = one(params.butik);
   const bestSingle = options?.single[0];
@@ -175,60 +197,56 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
       : chainName(chainId);
   };
 
-  let groups: ChecklistGroup[] = [];
-  let rows: ChecklistRow[] = [];
-  if (chosen) {
-    groups = [
-      ...chosen.chains.map((c) => {
-        const { pins, total } = chainPins(storesByChain, c);
-        return {
-          group: c,
-          title: (
-            <StoreInfo chainId={c} stores={pins} total={total}>
-              {storeTitle(c)}
-            </StoreInfo>
-          ),
-          hint: "tilbud og madspild",
-        };
-      }),
-      {
-        group: "normal",
-        title: "Ikke på tilbud",
-        hint: chosen.store.kind === "one" ? "skønnet normalpris" : "køb hvor du er – skønnet pris",
-      },
-      { group: "buy", title: "Også til retterne", hint: "skønnet pris" },
-      { group: "basic", title: "Basisvarer", hint: "forventes at være i køkkenet" },
-    ];
-    rows = chosen.lines.map((l) => ({
-      key: l.key,
-      group: l.group,
-      label: l.label,
-      amount: l.amount,
-      payKr: l.payKr,
-      portionKr: l.portionKr,
-      approx: l.approx,
-      source: l.item
-        ? mealItemSource(l.item, ctx.now)
-        : l.found
-          ? foundSource(l.found, ctx.now)
-          : ESTIMATE_SOURCE,
-      note: l.dishes.join(", "),
-      defaultHave: l.basic,
-      detail: l.item ? (
-        <ItemLine item={l.item} ctx={ctx} />
-      ) : l.found ? (
-        <FoundLine found={l.found} ctx={ctx} />
-      ) : undefined,
-    }));
-  }
+  // One flat list (docs/ui.md §26): every item with its price from the chosen store; where it is
+  // bought and for which dishes is in its note. Basics last, ticked as at home.
+  const groups: ChecklistGroup[] = [{ group: "all", title: "Alt til madplanen" }];
+  const where = (l: PlanShopping["lines"][number]): string => {
+    if (l.item) {
+      return `${l.item.kind === "foodwaste" ? "Madspild" : "Tilbud"} i ${chainName(itemChain(l.item))}`;
+    }
+    if (l.found) {
+      const pack = packText(l.found);
+      return `${l.found.product.kind === "regular" ? "Normalpris" : l.found.product.kind === "offer" ? "Tilbud" : "Madspild"} i ${chainName(l.found.product.chainId)}${pack ? ` – ${pack}` : ""}`;
+    }
+    return chosen?.store.kind === "one"
+      ? `Ingen pris i ${chainName(chosen.store.chainId)} – skøn`
+      : "Ingen pris i butikkerne nær dig – skøn";
+  };
+  const rows: ChecklistRow[] = chosen
+    ? [...chosen.lines]
+        .sort((a, b) => Number(a.basic) - Number(b.basic))
+        .map((l) => ({
+          key: l.key,
+          group: "all",
+          label: l.label,
+          amount: l.amount,
+          payKr: l.payKr,
+          portionKr: l.portionKr,
+          approx: l.approx,
+          source: l.item
+            ? mealItemSource(l.item, ctx.now)
+            : l.found
+              ? foundSource(l.found, ctx.now)
+              : ESTIMATE_SOURCE,
+          note: `${where(l)} · til ${l.dishes.join(", ")}`,
+          defaultHave: l.basic,
+          detail: l.item ? (
+            <ItemLine item={l.item} ctx={ctx} />
+          ) : l.found ? (
+            <FoundLine found={l.found} ctx={ctx} />
+          ) : undefined,
+        }))
+    : [];
+  const planServings = recipes.reduce((sum, r) => sum + r.servings, 0);
 
   return (
     <div className="lg:max-w-[720px]">
-      <h1 className="text-display shelf text-ink">Madideer</h1>
+      <h1 className="text-display shelf text-ink">Madplan</h1>
       <p className="text-meta text-ink-2">
         Læg en madplan: vælg dage og retter, og se så hvor det hele er billigst at købe.
       </p>
       <MealTabs active="madplan" planCount={recipes.length} />
+      <PeoplePicker people={people} />
 
       {/* ------------------------------------------------ 1. days */}
       <section aria-labelledby="trin-dage" className="mt-5">
@@ -270,7 +288,11 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
           <ul className="mt-2 space-y-3">
             {plan.map((day) => {
               const dayIdeas = day.recipes.map((id) => perPerson.get(id)).filter((i) => i != null);
-              const dayCost = dayIdeas.reduce((sum, i) => sum + i.dishCost, 0);
+              const dayCost = dayIdeas.reduce(
+                (sum, i) => sum + (costs.get(i.recipe.id)?.dishKr ?? i.dishCost),
+                0,
+              );
+              const dayApprox = dayIdeas.some((i) => costs.get(i.recipe.id)?.dishApprox ?? true);
               return (
                 <li key={day.date}>
                   <Disclosure
@@ -290,7 +312,8 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
                       </span>
                       {dayIdeas.length > 0 ? (
                         <span className="shrink-0 text-meta font-medium text-ink tabular">
-                          ca. {formatDkk(Math.round(dayCost))}
+                          {dayApprox ? "ca. " : ""}
+                          {formatDkk(dayCost)}
                         </span>
                       ) : null}
                       <ChevronIcon className="shrink-0 details-chevron" />
@@ -311,8 +334,8 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
                                           {idea.recipe.name}
                                         </span>
                                         <span className="block text-micro text-ink-3 tabular">
-                                          {idea.recipe.minutes} min · {idea.recipe.servings} pers. ·
-                                          ca. {formatDkk(Math.round(idea.costPerServing))}/pers.
+                                          {idea.recipe.minutes} min · {idea.recipe.servings} pers. ·{" "}
+                                          {dishText(id)}
                                           {idea.totalSaving > 0
                                             ? ` · spar ${formatDkk(idea.totalSaving)}`
                                             : ""}
@@ -368,8 +391,7 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
                                   )
                                   .map((i) => (
                                     <option key={i.recipe.id} value={i.recipe.id}>
-                                      {i.recipe.name} – ca.{" "}
-                                      {formatDkk(Math.round(i.costPerServing))}/pers.
+                                      {i.recipe.name} – {dishText(i.recipe.id)}
                                       {i.totalSaving > 0
                                         ? ` (spar ${formatDkk(i.totalSaving)})`
                                         : ""}
@@ -498,7 +520,14 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
               : `Fordelt på ${chosen.chains.map(chainName).join(", ")}.`}{" "}
             Sæt hak ved det, du allerede har.
           </p>
-          <ShoppingChecklist recipeId="madplan" rows={rows} groups={groups} />
+          <ShoppingChecklist
+            recipeId="madplan"
+            rows={rows}
+            groups={groups}
+            servings={planServings}
+            people={people}
+            whole="madplanen"
+          />
         </section>
       ) : null}
     </div>

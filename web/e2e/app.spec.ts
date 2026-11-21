@@ -332,6 +332,26 @@ test("cooking for one: a dish for four lasts four days, with the price per day",
   await expect(card).not.toContainText("pr. dag");
 });
 
+test("meal plan: one flat shopping list, and days per dish for one person", async ({ page }) => {
+  await page.goto("/madplan");
+  const main = page.locator("main");
+  const clear = main.getByRole("button", { name: "Ryd madplanen" });
+  if (await clear.count()) await clear.click();
+  await main.getByRole("button", { name: "1 person" }).click();
+  await main.getByRole("button", { name: /^I morgen/ }).click();
+  await main.locator('select[name="ret"]').first().selectOption("lasagne");
+  await main.getByRole("button", { name: "Tilføj" }).first().click();
+  await expect(main).toContainText("rækker til 4 dage for 1 person");
+  // No sub-sections: one list with where each item is bought in its note.
+  await expect(main.getByRole("heading", { name: /Alt til madplanen/ })).toBeVisible();
+  await expect(main.getByRole("heading", { name: /Ikke på tilbud|Også til retterne/ })).toHaveCount(
+    0,
+  );
+  await expect(main.getByText(/· til Lasagne/).first()).toBeVisible();
+  await expect(main.locator("[aria-live=polite]").last()).toContainText(/pr\. dag/);
+  await main.getByRole("button", { name: "Ryd madplanen" }).click();
+});
+
 test("old addresses lead to the new pages", async ({ page }) => {
   await page.goto("/madideer");
   await expect(page).toHaveURL(/\/$/);

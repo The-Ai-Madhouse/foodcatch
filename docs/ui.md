@@ -1237,3 +1237,16 @@ The owner: the linked recipe pages did not match the dishes shown. Now every dis
   fewer people than a recipe serves, each dish says how many whole days it lasts and the price
   per day (`lib/people.ts`); over three days it suggests freezing part (leftovers should be eaten
   within 2–3 days). With more people it says how many times to make the recipe.
+
+## 26. The meal plan: one list, real prices, days per dish (2026-11-21)
+
+* `/madplan` has the same "Hvor mange er I?" picker (shared cookie). Each planned dish and each
+  dish in the pickers shows its real dish price (§23) and, for fewer people than it serves, how
+  many days it lasts and the price per day; the day headers sum the real dish prices.
+* The shopping list is one flat list ("Alt til madplanen"), no sub-sections: each row's note says
+  where it is bought ("Tilbud i Netto", "Normalpris i REMA 1000 – 2 kg", "Ingen pris i Lidl –
+  skøn") and for which dishes. Every item is priced from the chosen store (one chain: only its
+  prices; "Billigst i alt": the cheapest near the user). Basics are listed last, ticked as at
+  home. Rows can be removed ("Fjernet fra madplanen") and put back, as on a dish.
+* The list's footer shows the purchase and what the food costs, as days and price per day for
+  the chosen people.

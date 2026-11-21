@@ -3,6 +3,7 @@
 import { SourcedPrice } from "@/components/SourcedPrice";
 import { formatDkk } from "@/lib/format";
 import { checklistTotals } from "@/lib/checklist";
+import { portions } from "@/lib/people";
 import type { PriceSource } from "@/lib/sources";
 import { useChecklistState } from "./checklist-state";
 
@@ -56,18 +57,28 @@ export function ShoppingChecklist({
   rows,
   groups = RECIPE_GROUPS,
   servings,
+  people = null,
+  whole = "retten",
 }: {
   /** What the ticks are remembered under (a recipe id, or `madplan`). */
   recipeId: string;
   rows: readonly ChecklistRow[];
   groups?: readonly ChecklistGroup[];
-  /** Servings of the dish: shows what the dish costs (and per person) under the total. */
+  /** Servings of the dish (or plan): shows what the food costs (and per person) under the total. */
   servings?: number;
+  /** How many people the user cooks for: days the food lasts and the price per day instead. */
+  people?: number | null;
+  /** What a removed row is removed from ("retten", "madplanen"). */
+  whole?: string;
 }) {
   const defaults = rows.filter((r) => r.defaultHave).map((r) => r.key);
   const { have, removed, toggleHave, toggleRemoved, reset } = useChecklistState(recipeId, defaults);
   const totals = checklistTotals(rows, have, removed);
   const withPortions = rows.every((r) => r.portionKr != null);
+  const share =
+    servings && people != null && people < servings
+      ? portions(servings, people, totals.dishKr)
+      : null;
 
   return (
     <div>
@@ -109,7 +120,7 @@ export function ShoppingChecklist({
                           <span className="text-meta text-ink-3 tabular">{r.amount}</span>
                           {gone ? (
                             <span className="block text-micro text-ink-3">
-                              Fjernet fra retten – tæller ikke med
+                              Fjernet fra {whole} – tæller ikke med
                             </span>
                           ) : r.note ? (
                             <span className="block text-micro text-ink-3">{r.note}</span>
@@ -143,7 +154,9 @@ export function ShoppingChecklist({
                         >
                           {gone ? "Fortryd" : "Fjern"}
                           <span className="sr-only">
-                            {gone ? ` – brug ${r.label} i retten igen` : ` ${r.label} fra retten`}
+                            {gone
+                              ? ` – brug ${r.label} i ${whole} igen`
+                              : ` ${r.label} fra ${whole}`}
                           </span>
                         </button>
                       </span>
@@ -177,12 +190,16 @@ export function ShoppingChecklist({
           {servings && withPortions ? (
             <p className="text-micro tabular">
               Retten {totals.dishApprox ? "ca. " : ""}
-              {formatDkk(totals.dishKr)} · {formatDkk(totals.dishKr / Math.max(1, servings))} pr.
-              pers.
+              {formatDkk(totals.dishKr)} ·{" "}
+              {share?.days != null
+                ? `${share.days} ${share.days === 1 ? "dag" : "dage"} for ${people === 1 ? "1 person" : `${people} pers.`} · ${formatDkk(share.perDayKr)} pr. dag`
+                : `${formatDkk(totals.dishKr / Math.max(1, servings))} pr. pers.`}
               {totals.removed > 0 ? ` · ${totals.removed} fjernet` : ""}
             </p>
           ) : totals.removed > 0 ? (
-            <p className="text-micro">{totals.removed} fjernet fra retten</p>
+            <p className="text-micro">
+              {totals.removed} fjernet fra {whole}
+            </p>
           ) : null}
         </div>
         <button
