@@ -62,6 +62,20 @@ def _iso(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S+0000")
 
 
+def _current_offers(offers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The fixture's offers as if their leaflet ran now.
+
+    The recorded offers carry fixed dates (one leaflet week); once that week is over they would
+    never count as current listings, and tests asserting on ``current_listings`` would start to
+    fail on their own.
+    """
+    now = datetime.now(UTC)
+    return [
+        {**o, "run_from": _iso(now - timedelta(days=2)), "run_till": _iso(now + timedelta(days=5))}
+        for o in offers
+    ]
+
+
 def _catalog(cid: str, label: str, start: timedelta, end: timedelta) -> dict[str, Any]:
     now = datetime.now(UTC)
     return {
@@ -139,7 +153,7 @@ def test_a_catalog_without_response_does_not_discard_the_others(
         _catalog("ok", "Netto uge 47", -2 * day, 5 * day),
         _catalog("slow", "Netto uge 48", 3 * day, 10 * day),
     ]
-    offers = load_fixture("tjek/offers_netto.json")
+    offers = _current_offers(load_fixture("tjek/offers_netto.json"))
 
     def catalogs_for(request: httpx.Request) -> httpx.Response:
         if request.url.params["dealer_ids"] == NETTO:
@@ -174,7 +188,7 @@ def test_tjek_offers_job(
         _catalog("expired", "Netto uge 45", -10 * day, -3 * day),
         _catalog("far", "Netto jul", 20 * day, 30 * day),
     ]
-    offers = load_fixture("tjek/offers_netto.json")
+    offers = _current_offers(load_fixture("tjek/offers_netto.json"))
 
     def catalogs_for(request: httpx.Request) -> httpx.Response:
         dealer = request.url.params["dealer_ids"]
@@ -330,7 +344,7 @@ def test_tjek_offers_skips_unchanged_catalogs(
             _catalog("a", "Netto uge 47", -2 * day, 5 * day),
             _catalog("b", "Netto uge 48", 3 * day, 10 * day),
         ],
-        load_fixture("tjek/offers_netto.json")[:5],
+        _current_offers(load_fixture("tjek/offers_netto.json"))[:5],
     )
 
     # 1. first run: every catalog is new
@@ -421,7 +435,8 @@ def test_a_failed_catalog_is_fetched_again_next_run(
 ) -> None:
     day = timedelta(days=1)
     tjek = _Tjek(
-        [_catalog("a", "Netto uge 47", -2 * day, 5 * day)], load_fixture("tjek/offers_netto.json")
+        [_catalog("a", "Netto uge 47", -2 * day, 5 * day)],
+        _current_offers(load_fixture("tjek/offers_netto.json")),
     )
     tjek.offer_route.side_effect = httpx.ReadTimeout("slow")
     assert run("tjek-offers").stats["catalog_errors"] == 1
@@ -440,7 +455,8 @@ def test_tjek_offers_degrades_when_listed_catalogs_disappear(
     """The quality metric still catches a lost dealer although listings stay in the database."""
     day = timedelta(days=1)
     tjek = _Tjek(
-        [_catalog("a", "Netto uge 47", -2 * day, 5 * day)], load_fixture("tjek/offers_netto.json")
+        [_catalog("a", "Netto uge 47", -2 * day, 5 * day)],
+        _current_offers(load_fixture("tjek/offers_netto.json")),
     )
     assert run("tjek-offers").status == "succeeded"
     tjek.netto_status = 503
