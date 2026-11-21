@@ -34,6 +34,7 @@ import {
   togglePlanDay,
   type MealPlan,
 } from "@/lib/meal-plan";
+import { PEOPLE_COOKIE, parsePeople } from "@/lib/people";
 import { GeocodingError, geocodeAddress } from "@/server/geocode";
 
 /** The result of a location action, shown in the location sheet. */
@@ -173,6 +174,22 @@ async function persistStaples(value: string): Promise<void> {
     store.delete(STAPLES_COOKIE);
   }
   revalidatePath("/", "layout");
+}
+
+/** Save how many people the user cooks for ("Aftensmad"); an invalid value changes nothing. */
+export async function savePeople(formData: FormData): Promise<void> {
+  const value = formData.get("personer");
+  const people = typeof value === "string" ? parsePeople(value) : null;
+  if (people == null) return;
+  const store = await cookies();
+  store.set(PEOPLE_COOKIE, String(people), {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: COOKIE_MAX_AGE_S,
+  });
+  revalidatePath("/");
+  revalidatePath("/madplan");
 }
 
 /** Save the staples picked on "Mine varer"; an empty pick clears them. */

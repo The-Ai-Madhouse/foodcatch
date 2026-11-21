@@ -293,6 +293,45 @@ test("extra items get real prices; an item at home counts only the amount used",
   await card.getByRole("button", { name: "Nulstil" }).click();
 });
 
+test("an ingredient can be removed from a dish and put back; the prices follow", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const card = page.locator("main article").filter({ hasText: "Lasagne" }).first();
+  const headline = card.locator("summary").first();
+  const before = await headline.innerText();
+  await headline.click();
+  await card.getByRole("button", { name: /Fjern\s+Lasagneplader/ }).click();
+  const sheets = card.locator("li").filter({ hasText: "Lasagneplader" }).first();
+  // Still listed, marked as removed, and out of both totals.
+  await expect(sheets).toContainText("Fjernet fra retten");
+  await expect(headline).toContainText("1 ingrediens fjernet");
+  expect(await headline.innerText()).not.toBe(before);
+  // Put back: the prices are as before.
+  await card.getByRole("button", { name: /Fortryd/ }).click();
+  await expect(sheets).not.toContainText("Fjernet fra retten");
+  await expect(headline).not.toContainText("fjernet");
+});
+
+test("cooking for one: a dish for four lasts four days, with the price per day", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "1 person" }).click();
+  await expect(page.getByRole("button", { name: "1 person" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const card = page.locator("main article").filter({ hasText: "Lasagne" }).first();
+  await expect(card).toContainText("rækker til 4 dage for 1 person");
+  await expect(card).toContainText(/\d+,\d\d\u00a0kr\. pr\. dag/);
+  await expect(card).toContainText("Frys en del");
+  // Back to the recipe's own number: price per person again.
+  await page.getByRole("button", { name: "4 personer" }).click();
+  await expect(card).toContainText(/pr\. pers\./);
+  await expect(card).not.toContainText("pr. dag");
+});
+
 test("old addresses lead to the new pages", async ({ page }) => {
   await page.goto("/madideer");
   await expect(page).toHaveURL(/\/$/);

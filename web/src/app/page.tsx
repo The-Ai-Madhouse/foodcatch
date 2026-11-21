@@ -27,7 +27,9 @@ import {
 import { dayLabel, plannableDays, plannedRecipes, todayInDenmark } from "@/lib/meal-plan";
 import { mealCatalogue, type Meal } from "@/lib/meals";
 import { nearestByChain } from "@/lib/stores";
-import { getLikedRecipes, getMealPlan, getUserLocation } from "@/server/location";
+import { getLikedRecipes, getMealPlan, getPeople, getUserLocation } from "@/server/location";
+import { savePeople } from "@/app/actions";
+import { PEOPLE_CHOICES } from "@/lib/people";
 import {
   getBuyableProducts,
   getCurrentDeals,
@@ -181,16 +183,52 @@ function Filters({
 }
 
 /**
+ * "Hvor mange er I?" at the very top (docs/ui.md §25): one button per number, saved in a cookie
+ * by a server action (works without JS). Every dish then says how many days it lasts and the
+ * price per day.
+ */
+function PeoplePicker({ people }: { people: number | null }) {
+  return (
+    <form action={savePeople} className="mt-3 rounded-xl border border-line bg-surface p-3">
+      <fieldset>
+        <legend className="text-meta font-medium text-ink">Hvor mange er I?</legend>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {PEOPLE_CHOICES.map((n) => (
+            <button
+              key={n}
+              type="submit"
+              name="personer"
+              value={n}
+              aria-pressed={people === n}
+              className="h-11 min-w-11 rounded-[10px] border border-line-strong bg-surface px-3 font-semibold text-ink tabular hover:bg-surface-2 aria-pressed:border-brand aria-pressed:bg-brand aria-pressed:text-page"
+            >
+              {n}
+              <span className="sr-only">{n === 1 ? " person" : " personer"}</span>
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <p className="mt-2 text-micro text-ink-3">
+        {people == null
+          ? "Vælg, så viser hver ret, hvor mange dage den rækker, og prisen pr. dag."
+          : `Hver ret viser, hvor mange dage den rækker for ${people === 1 ? "1 person" : `${people} personer`}, og prisen pr. dag.`}
+      </p>
+    </form>
+  );
+}
+
+/**
  * The front page, "Aftensmad" (docs/ui.md §21): dishes priced with this week's offers and food
  * waste near the user, the biggest real saving first, so a dinner idea is one glance away.
  */
 export default async function DinnerPage({ searchParams }: PageProps<"/">) {
   const now = new Date();
-  const [params, location, liked, plan] = await Promise.all([
+  const [params, location, liked, plan, people] = await Promise.all([
     searchParams,
     getUserLocation(),
     getLikedRecipes(),
     getMealPlan(now),
+    getPeople(),
   ]);
   const [stores, allRows, foodWaste] = await Promise.all([
     getNearbyStores(location),
@@ -216,7 +254,7 @@ export default async function DinnerPage({ searchParams }: PageProps<"/">) {
   // Real prices for the extra items and the ingredients not on offer (docs/ui.md §23).
   const buyable = await getBuyableProducts([...nearbyChains], pantrySearchStems(), SLOT_TYPES);
   const finder = priceFinder([...buyable, ...foodWaste.map(clearanceProduct)]);
-  const ctx: MealContext = { storesByChain, now, planDays, finder };
+  const ctx: MealContext = { storesByChain, now, planDays, finder, people };
   const prices = new Map(
     all.map((idea) => {
       const cost = dishCost(idea, finder, () => "");
@@ -244,6 +282,7 @@ export default async function DinnerPage({ searchParams }: PageProps<"/">) {
           Retter med varer, der er billige inden for {location.radiusKm} km lige nu. Mest sparet
           først – åbn en ret for indkøbslisten.
         </p>
+        <PeoplePicker people={people} />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Segmented
             label="Måltid"

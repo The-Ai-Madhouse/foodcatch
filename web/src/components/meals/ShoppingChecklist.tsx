@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { SourcedPrice } from "@/components/SourcedPrice";
 import { formatDkk } from "@/lib/format";
+import { checklistTotals } from "@/lib/checklist";
 import type { PriceSource } from "@/lib/sources";
+import { useChecklistState } from "./checklist-state";
 
 export interface ChecklistRow {
   key: string;
@@ -45,30 +46,10 @@ const RECIPE_GROUPS: readonly ChecklistGroup[] = [
   { group: "basic", title: "Basisvarer", hint: "forventes at være i køkkenet" },
 ];
 
-const storageKey = (id: string) => `fc_have:${id}`;
-
-function readHave(recipeId: string): string[] | null {
-  try {
-    const raw = window.localStorage.getItem(storageKey(recipeId));
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeHave(recipeId: string, keys: readonly string[] | null): void {
-  try {
-    if (keys == null) window.localStorage.removeItem(storageKey(recipeId));
-    else window.localStorage.setItem(storageKey(recipeId), JSON.stringify(keys));
-  } catch {
-    // Storage unavailable: the ticks last until the page is left.
-  }
-}
-
 /**
- * The shopping list of one dish: tick what you already have, and the total of what is left to
- * buy follows. Ticks are remembered per dish in this browser.
+ * The shopping list of one dish: tick what you already have, or remove an ingredient you do not
+ * want in the dish (it stays listed and can be put back); the totals follow. Remembered per dish
+ * in this browser.
  */
 export function ShoppingChecklist({
   recipeId,
@@ -84,33 +65,9 @@ export function ShoppingChecklist({
   servings?: number;
 }) {
   const defaults = rows.filter((r) => r.defaultHave).map((r) => r.key);
-  const [have, setHave] = useState<ReadonlySet<string>>(() => new Set(defaults));
-
-  useEffect(() => {
-    const stored = readHave(recipeId);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is client-only
-    if (stored) setHave(new Set(stored));
-  }, [recipeId]);
-
-  const toggle = (key: string) => {
-    const next = new Set(have);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    setHave(next);
-    writeHave(recipeId, [...next]);
-  };
-  const reset = () => {
-    setHave(new Set(defaults));
-    writeHave(recipeId, null);
-  };
-
-  const toBuy = rows.filter((r) => !have.has(r.key));
-  const total = toBuy.reduce((sum, r) => sum + r.payKr, 0);
-  const approx = toBuy.some((r) => r.approx);
-  // What the dish itself costs: the used amount of every item, bought or at home.
+  const { have, removed, toggleHave, toggleRemoved, reset } = useChecklistState(recipeId, defaults);
+  const totals = checklistTotals(rows, have, removed);
   const withPortions = rows.every((r) => r.portionKr != null);
-  const dishKr = rows.reduce((sum, r) => sum + (r.portionKr ?? r.payKr), 0);
-  const dishApprox = rows.some((r) => r.approx);
 
   return (
     <div>
@@ -125,48 +82,73 @@ export function ShoppingChecklist({
             </h4>
             <ul className="mt-1 divide-y divide-line">
               {list.map((r) => {
-                const checked = have.has(r.key);
+                const gone = removed.has(r.key);
+                const checked = !gone && have.has(r.key);
                 // At home: what the dish uses of it, instead of the pack price.
                 const portion = checked && r.portionKr != null;
                 return (
-                  <li key={r.key} className="py-2">
-                    <label className="flex min-h-11 cursor-pointer items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggle(r.key)}
-                        className="mt-1 size-5 shrink-0 accent-[var(--brand)]"
-                        aria-label={`Har jeg: ${r.label}`}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={`font-medium ${checked ? "text-ink-3 line-through" : "text-ink"}`}
+                  <li key={r.key} className={`py-2 ${gone ? "opacity-70" : ""}`}>
+                    <div className="flex items-start gap-3">
+                      <label
+                        className={`flex min-h-11 min-w-0 flex-1 items-start gap-3 ${gone ? "" : "cursor-pointer"}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={gone}
+                          onChange={() => toggleHave(r.key)}
+                          className="mt-1 size-5 shrink-0 accent-[var(--brand)] disabled:opacity-40"
+                          aria-label={`Har jeg: ${r.label}`}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={`font-medium ${gone || checked ? "text-ink-3 line-through" : "text-ink"}`}
+                          >
+                            {r.label}
+                          </span>{" "}
+                          <span className="text-meta text-ink-3 tabular">{r.amount}</span>
+                          {gone ? (
+                            <span className="block text-micro text-ink-3">
+                              Fjernet fra retten – tæller ikke med
+                            </span>
+                          ) : r.note ? (
+                            <span className="block text-micro text-ink-3">{r.note}</span>
+                          ) : null}
+                        </span>
+                      </label>
+                      <span className="flex shrink-0 flex-col items-end gap-0.5">
+                        {gone ? (
+                          <span className="text-meta text-ink-3 tabular line-through">
+                            {formatDkk(r.payKr)}
+                          </span>
+                        ) : portion ? (
+                          <span className="text-right text-meta text-ink-2 tabular">
+                            {r.approx ? "ca. " : ""}
+                            <SourcedPrice source={r.source}>
+                              {formatDkk(r.portionKr ?? 0)}
+                            </SourcedPrice>
+                            <span className="block text-micro text-ink-3">retten bruger</span>
+                          </span>
+                        ) : (
+                          <span className="text-meta font-medium text-ink tabular">
+                            {r.approx ? "ca. " : ""}
+                            <SourcedPrice source={r.source}>{formatDkk(r.payKr)}</SourcedPrice>
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => toggleRemoved(r.key)}
+                          aria-pressed={gone}
+                          className="min-h-8 text-micro font-medium text-link underline-offset-2 hover:underline"
                         >
-                          {r.label}
-                        </span>{" "}
-                        <span className="text-meta text-ink-3 tabular">{r.amount}</span>
-                        {r.note ? (
-                          <span className="block text-micro text-ink-3">{r.note}</span>
-                        ) : null}
+                          {gone ? "Fortryd" : "Fjern"}
+                          <span className="sr-only">
+                            {gone ? ` – brug ${r.label} i retten igen` : ` ${r.label} fra retten`}
+                          </span>
+                        </button>
                       </span>
-                      {portion ? (
-                        <span className="shrink-0 text-right text-meta text-ink-2 tabular">
-                          {r.approx ? "ca. " : ""}
-                          <SourcedPrice source={r.source}>
-                            {formatDkk(r.portionKr ?? 0)}
-                          </SourcedPrice>
-                          <span className="block text-micro text-ink-3">retten bruger</span>
-                        </span>
-                      ) : (
-                        <span
-                          className={`shrink-0 text-meta tabular ${checked ? "text-ink-3 line-through" : "font-medium text-ink"}`}
-                        >
-                          {r.approx ? "ca. " : ""}
-                          <SourcedPrice source={r.source}>{formatDkk(r.payKr)}</SourcedPrice>
-                        </span>
-                      )}
-                    </label>
-                    {r.detail && !checked ? <div className="pl-8">{r.detail}</div> : null}
+                    </div>
+                    {r.detail && !checked && !gone ? <div className="pl-8">{r.detail}</div> : null}
                   </li>
                 );
               })}
@@ -180,23 +162,27 @@ export function ShoppingChecklist({
       >
         <div className="text-meta text-ink-2">
           <p>
-            {toBuy.length === 0 ? (
+            {totals.toBuy === 0 ? (
               <span className="font-medium text-good-fg">Du har det hele ✓</span>
             ) : (
               <>
-                Indkøb, {toBuy.length} {toBuy.length === 1 ? "vare" : "varer"}:{" "}
+                Indkøb, {totals.toBuy} {totals.toBuy === 1 ? "vare" : "varer"}:{" "}
                 <strong className="text-ink tabular">
-                  {approx ? "ca. " : ""}
-                  {formatDkk(total)}
+                  {totals.purchaseApprox ? "ca. " : ""}
+                  {formatDkk(totals.purchaseKr)}
                 </strong>
               </>
             )}
           </p>
           {servings && withPortions ? (
             <p className="text-micro tabular">
-              Retten {dishApprox ? "ca. " : ""}
-              {formatDkk(dishKr)} · {formatDkk(dishKr / Math.max(1, servings))} pr. pers.
+              Retten {totals.dishApprox ? "ca. " : ""}
+              {formatDkk(totals.dishKr)} · {formatDkk(totals.dishKr / Math.max(1, servings))} pr.
+              pers.
+              {totals.removed > 0 ? ` · ${totals.removed} fjernet` : ""}
             </p>
+          ) : totals.removed > 0 ? (
+            <p className="text-micro">{totals.removed} fjernet fra retten</p>
           ) : null}
         </div>
         <button

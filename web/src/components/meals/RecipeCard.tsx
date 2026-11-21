@@ -26,6 +26,7 @@ import { itemStore } from "@/components/foodwaste/FoodWasteItemRow";
 import { AddToPlanForm } from "./AddToPlanForm";
 import { LikeButton } from "./LikeButton";
 import { RecipeDetails } from "./RecipeDetails";
+import { DishPrice } from "./DishPrice";
 import { ShoppingChecklist, type ChecklistRow } from "./ShoppingChecklist";
 import { dishCost, type DishCost, type DishLine } from "@/lib/dish-cost";
 import { packText, type FoundPrice, type PriceFinder } from "@/lib/pantry";
@@ -38,35 +39,11 @@ export interface MealContext {
   planDays?: readonly { date: string; label: string }[];
   /** Real prices for the extra items and the ingredients not on offer (`lib/pantry.ts`). */
   finder?: PriceFinder;
+  /** How many people the user cooks for (days a dish lasts, price per day); null: not chosen. */
+  people?: number | null;
 }
 
 const sep = <span aria-hidden="true"> · </span>;
-
-/** One of the three numbers in an opened card. */
-function Stat({
-  label,
-  value,
-  note,
-  tone,
-}: {
-  label: string;
-  value: string;
-  note?: string | null;
-  tone?: "good";
-}) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-micro text-ink-3">{label}</dt>
-      <dd
-        title="Beregnet ud fra priserne i indkøbslisten nedenfor – hver pris dér linker til sin kilde"
-        className={`font-bold tabular ${tone === "good" ? "text-good-fg" : "text-ink"} text-body`}
-      >
-        {value}
-      </dd>
-      {note ? <dd className="text-micro text-ink-3 tabular">{note}</dd> : null}
-    </div>
-  );
-}
 
 /** The store an item is bought in; a tap or hover shows its address and Google Maps. */
 function Where({ item, ctx }: { item: MealItem; ctx: MealContext }) {
@@ -408,13 +385,8 @@ export function RecipeCard({
     ctx.finder,
     (slot) => formatQuantity(slot.amount, slot.amount, slot.unit) ?? "",
   );
+  const rows = checklistRows(idea, cost, ctx);
   const chains = [...new Set(idea.filled.map((f) => itemChain(f.item)))];
-  const savingValue =
-    idea.totalSaving > 0
-      ? `${formatDkk(idea.totalSaving)}${idea.unknownSavings > 0 ? " +" : ""}`
-      : idea.unknownSavings > 0
-        ? "ukendt"
-        : "–";
 
   return (
     <article
@@ -433,21 +405,20 @@ export function RecipeCard({
             ⏱ {recipe.minutes} min{sep}
             {recipe.servings} pers.
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <span className="text-ink">
-              <span className="text-meta text-ink-2">Indkøb </span>
-              <span className="text-price shelf">
-                {cost.purchaseApprox ? <span className="text-title">ca. </span> : null}
-                {formatDkk(cost.purchaseKr)}
-              </span>
-            </span>
+          <DishPrice
+            recipeId={recipe.id}
+            rows={rows.map((r) => ({
+              key: r.key,
+              payKr: r.payKr,
+              approx: r.approx,
+              defaultHave: r.defaultHave,
+              ...(r.portionKr != null ? { portionKr: r.portionKr } : {}),
+            }))}
+            servings={recipe.servings}
+            people={ctx.people ?? null}
+          >
             <DishSaving idea={idea} />
-          </div>
-          <p className="mt-0.5 text-meta text-ink-2 tabular">
-            Retten {cost.dishApprox ? "ca. " : ""}
-            {formatDkk(cost.dishKr)} · {formatDkk(cost.perServingKr)} pr. pers.
-            <span className="text-ink-3"> – det, retten bruger af varerne</span>
-          </p>
+          </DishPrice>
           {idea.filled.length > 0 ? (
             <p className="mt-2 flex items-start gap-1.5 text-meta text-ink-2">
               <span className="mt-0.5 flex shrink-0 -space-x-1">
@@ -473,24 +444,6 @@ export function RecipeCard({
 
         <div className="border-t border-line px-4 pb-4 lg:px-5">
           <p className="mt-3 text-meta text-ink-2">{recipe.description}</p>
-          <dl className="mt-3 grid grid-cols-3 gap-3 rounded-lg bg-surface-2 p-3">
-            <Stat
-              label="Indkøb"
-              value={`${cost.purchaseApprox ? "ca. " : ""}${formatDkk(cost.purchaseKr)}`}
-              note="hele pakker, uden basisvarer"
-            />
-            <Stat
-              label="Du sparer"
-              value={savingValue}
-              note={idea.savingPct != null ? formatPercent(idea.savingPct) : null}
-              tone={idea.totalSaving > 0 ? "good" : undefined}
-            />
-            <Stat
-              label={cost.dishApprox ? "Retten koster ca." : "Retten koster"}
-              value={formatDkk(cost.dishKr)}
-              note={`${formatDkk(cost.perServingKr)} pr. pers.`}
-            />
-          </dl>
 
           {ctx.planDays && ctx.planDays.length > 0 ? (
             <AddToPlanForm recipeId={recipe.id} name={recipe.name} days={ctx.planDays} />
@@ -500,11 +453,7 @@ export function RecipeCard({
           <p className="text-micro text-ink-3">
             Sæt hak ved det, du allerede har – så tæller kun den mængde, retten bruger.
           </p>
-          <ShoppingChecklist
-            recipeId={recipe.id}
-            rows={checklistRows(idea, cost, ctx)}
-            servings={recipe.servings}
-          />
+          <ShoppingChecklist recipeId={recipe.id} rows={rows} servings={recipe.servings} />
 
           <div className="mt-5">
             <RecipeDetails recipe={recipe} showIngredients={false} />

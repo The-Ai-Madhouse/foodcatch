@@ -1224,3 +1224,16 @@ The owner: the linked recipe pages did not match the dishes shown. Now every dis
 * The meal plan's one-store choice now skips an item only when its unit price is above the
   normal estimate (a 500 g pack for a dish using 350 g is not "dearer": the normal price is a
   whole pack too).
+
+## 25. Remove an ingredient; how many people (2026-11-21)
+
+* **Fjern / Fortryd**: every row of a dish's shopping list can be removed from the dish. It stays
+  listed (struck through, "Fjernet fra retten – tæller ikke med") and "Fortryd" puts it back.
+  A removed row counts in neither the purchase nor the dish price. Removals and "har jeg" ticks
+  live in one per-recipe store (`components/meals/checklist-state.ts`, localStorage
+  `fc_removed:{id}` / `fc_have:{id}`) shared by the list and the card's headline (`DishPrice`),
+  so both change together; totals come from `lib/checklist.ts`.
+* **"Hvor mange er I?"** at the top of Aftensmad (1–6, cookie `fc_people`, server action). With
+  fewer people than a recipe serves, each dish says how many whole days it lasts and the price
+  per day (`lib/people.ts`); over three days it suggests freezing part (leftovers should be eaten
+  within 2–3 days). With more people it says how many times to make the recipe.
