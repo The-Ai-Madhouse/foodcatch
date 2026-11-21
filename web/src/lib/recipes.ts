@@ -132,6 +132,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "tunsalat",
     name: "Tunsalat på rugbrød",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/tunsalat/" },
     meal: "frokost",
     servings: 2,
     minutes: 10,
@@ -150,6 +151,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "tun-pastasalat",
     name: "Pastasalat med tun",
+    source: { site: "Mummum", url: "https://mummum.dk/pastasalat-med-tun/" },
     meal: "frokost",
     servings: 2,
     minutes: 20,
@@ -168,6 +170,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "kyllingewraps",
     name: "Wraps med kylling",
+    source: { site: "Arla", url: "https://www.arla.dk/opskrifter/lun-kyllingewrap/" },
     meal: "frokost",
     servings: 2,
     minutes: 25,
@@ -204,6 +207,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "graesk-salat",
     name: "Græsk salat med brød",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/graesk-salat/" },
     meal: "frokost",
     servings: 2,
     minutes: 10,
@@ -219,6 +223,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "shakshuka",
     name: "Shakshuka",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/shakshuka/" },
     meal: "frokost",
     servings: 2,
     minutes: 30,
@@ -244,6 +249,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "aeggekage",
     name: "Æggekage",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/aeggekage-opskrift/" },
     meal: "frokost",
     servings: 2,
     minutes: 20,
@@ -263,6 +269,10 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "quesadillas",
     name: "Quesadillas med bønner og ost",
+    source: {
+      site: "Valdemarsro",
+      url: "https://www.valdemarsro.dk/vegetar-quesadillas-med-stegte-boenner/",
+    },
     meal: "frokost",
     servings: 2,
     minutes: 20,
@@ -283,6 +293,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "hummus",
     name: "Pitabrød med hjemmelavet hummus",
+    source: { site: "Mummum", url: "https://mummum.dk/hjemmelavet-hummus/" },
     meal: "frokost",
     servings: 2,
     minutes: 15,
@@ -298,6 +309,10 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "linsesalat",
     name: "Linsesalat med feta",
+    source: {
+      site: "Arla",
+      url: "https://www.arla.dk/opskrifter/linsesalat-med-salatost-og-hvidlogsbrod/",
+    },
     meal: "frokost",
     servings: 2,
     minutes: 30,
@@ -318,6 +333,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "tomatsuppe",
     name: "Tomatsuppe med brød",
+    source: { site: "Arla", url: "https://www.arla.dk/opskrifter/tomatsuppe-med-fraiche/" },
     meal: "frokost",
     servings: 2,
     minutes: 30,
@@ -333,6 +349,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "boennesuppe",
     name: "Suppe med hvide bønner",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/minestronesuppe/" },
     meal: "frokost",
     servings: 2,
     minutes: 30,
@@ -365,6 +382,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "kyllingefrikadeller",
     name: "Kyllingefrikadeller i pita",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/kyllingefrikadeller/" },
     meal: "frokost",
     servings: 2,
     minutes: 35,
@@ -386,6 +404,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "bolognese",
     name: "Spaghetti bolognese",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/spaghetti-bolognese/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 50,
@@ -406,6 +425,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "chili",
     name: "Chili con carne",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/chili-con-carne/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 45,
@@ -426,6 +446,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "chili-sin-carne",
     name: "Chili sin carne",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/chili-sin-carne/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 35,
@@ -445,6 +466,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "lasagne",
     name: "Lasagne",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/lasagne/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 90,
@@ -467,6 +489,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "frikadeller",
     name: "Frikadeller med kartofler",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/frikadeller/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 50,
@@ -487,6 +510,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "kyllingekarry",
     name: "Kylling i karry",
+    source: { site: "Arla", url: "https://www.arla.dk/opskrifter/kylling-i-karry/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 35,
@@ -503,6 +527,10 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "ovnkylling",
     name: "Ovnstegt kylling med rodfrugter",
+    source: {
+      site: "Valdemarsro",
+      url: "https://www.valdemarsro.dk/alt-i-en-gryde-med-hanekylling-og-rodfrugter/",
+    },
     meal: "aftensmad",
     servings: 4,
     minutes: 60,
@@ -537,6 +565,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "kylling-tzatziki",
     name: "Kyllingespyd med tzatziki",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/krydrede-kyllingelaar/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 35,
@@ -556,6 +585,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "moerbradgryde",
     name: "Mørbradgryde",
+    source: { site: "Arla", url: "https://www.arla.dk/opskrifter/morbradgryde/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 35,
@@ -576,6 +606,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "koteletter",
     name: "Koteletter i fad",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/koteletter-i-fad/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 45,
@@ -595,6 +626,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "tunpasta",
     name: "Pasta med tun og tomat",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/pasta-med-tunsauce/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 25,
@@ -610,6 +642,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "pizza",
     name: "Hjemmelavet pizza",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/hjemmelavet-pizza/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 90,
@@ -634,6 +667,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "feta-pasta",
     name: "Pasta med bagt feta",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/feta-pasta-med-tomat/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 40,
@@ -649,6 +683,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "dal",
     name: "Linse-dal",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/dhal/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 35,
@@ -667,6 +702,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "kikaertecurry",
     name: "Kikærtecurry",
+    source: { site: "Valdemarsro", url: "https://www.valdemarsro.dk/chana-masala/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 30,
@@ -686,6 +722,7 @@ export const RECIPES: readonly Recipe[] = [
   {
     id: "tacos",
     name: "Tacos med oksekød",
+    source: { site: "Arla", url: "https://www.arla.dk/opskrifter/tacos-med-oksekod/" },
     meal: "aftensmad",
     servings: 4,
     minutes: 25,

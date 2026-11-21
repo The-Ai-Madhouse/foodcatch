@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { addToPlanFromCatalogue, type AddToPlanState } from "@/app/actions";
 
 const INITIAL: AddToPlanState = { status: "idle", seq: 0 };
@@ -18,8 +18,17 @@ export function AddToPlanForm({
 }) {
   const [state, action, pending] = useActionState(addToPlanFromCatalogue, INITIAL);
   const label = days.find((d) => d.date === state.date)?.label ?? state.date;
+  const box = useRef<HTMLDivElement>(null);
+  // A click before the page has hydrated submits natively and reloads it with the card closed;
+  // reopen the card and bring the answer into view so the add never looks like it did nothing.
+  useEffect(() => {
+    if (state.status === "idle" || !box.current) return;
+    const card = box.current.closest("details");
+    if (card && !card.open) card.open = true;
+    box.current.scrollIntoView({ block: "nearest" });
+  }, [state.status, state.seq]);
   return (
-    <div className="mt-3 rounded-lg border border-line bg-surface-2 p-3">
+    <div ref={box} className="mt-3 rounded-lg border border-line bg-surface-2 p-3">
       <form action={action} className="flex flex-wrap items-center gap-2 text-meta">
         <input type="hidden" name="ret" value={recipeId} />
         <label className="flex items-center gap-2 text-ink-2">

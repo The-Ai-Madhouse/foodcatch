@@ -223,7 +223,7 @@ test("meal ideas: catalogue, filters, shopping list and meal plan", async ({ pag
   await expect(page.getByRole("heading", { level: 1, name: "Madideer" })).toBeVisible();
   const main = page.locator("main");
   // A catalogue of every dish, with filters.
-  await expect(main.getByLabel("Tid")).toBeVisible();
+  await expect(main.locator('select[name="tid"]')).toBeVisible();
   await expect(main.getByLabel("Butik du mest handler i")).toBeVisible();
   const cards = main.locator("article");
   expect(await cards.count()).toBeGreaterThanOrEqual(20);
@@ -238,17 +238,65 @@ test("meal ideas: catalogue, filters, shopping list and meal plan", async ({ pag
   await expect(box).toBeChecked();
   await expect(card.getByRole("heading", { name: "Sådan gør du" })).toBeVisible();
   // Filters narrow the list.
-  await main.getByLabel("Tid").selectOption("15");
+  await main.locator('select[name="tid"]').selectOption("15");
   await expect(page).toHaveURL(/tid=15/);
   // Meal plan: pick a day and a dish, then a store.
   await main.getByRole("link", { name: /^Madplan/ }).click();
   await main.getByRole("button", { name: /^I morgen/ }).click();
-  await main.getByLabel("Vælg ret").first().selectOption({ index: 1 });
+  await main.locator('select[name="ret"]').first().selectOption({ index: 1 });
   await main.getByRole("button", { name: "Tilføj" }).first().click();
   await expect(main.getByRole("heading", { name: "3. Hvor vil du handle?" })).toBeVisible();
   await expect(main.getByText("Anbefalet")).toBeVisible();
   await expect(main.getByRole("heading", { name: "4. Indkøbsliste" })).toBeVisible();
   await main.getByRole("button", { name: "Ryd madplanen" }).click();
+});
+
+test("meal plan: add from the catalogue, then read the recipe in the plan", async ({ page }) => {
+  await page.goto("/madideer/madplan");
+  const clear = page.locator("main").getByRole("button", { name: "Ryd madplanen" });
+  if (await clear.count()) await clear.click();
+
+  await page.goto("/madideer");
+  const main = page.locator("main");
+  const card = main.locator("article").filter({ hasText: "Koteletter i fad" }).first();
+  await card.locator("summary").first().click();
+  // Adding gives visible feedback, and the day choice stays open for the next dish.
+  const days = card.locator('select[name="dato"]');
+  const dayCount = await days.locator("option").count();
+  expect(dayCount).toBeGreaterThanOrEqual(7);
+  await days.selectOption({ index: 1 });
+  await card.getByRole("button", { name: "Tilføj" }).click();
+  await expect(card.getByText(/✓ Koteletter i fad er lagt på/)).toBeVisible();
+  await expect(card.locator('select[name="dato"] option')).toHaveCount(dayCount);
+  // The dish links to a real recipe and to searching the web.
+  await expect(card.getByRole("link", { name: /Koteletter i fad på Valdemarsro/ })).toHaveAttribute(
+    "href",
+    "https://www.valdemarsro.dk/koteletter-i-fad/",
+  );
+  await expect(card.getByRole("link", { name: /på nettet/ })).toBeVisible();
+
+  // In the plan: the day lists the dish, which opens to the full recipe.
+  await card.getByRole("link", { name: /Se madplanen/ }).click();
+  await expect(page).toHaveURL(/\/madideer\/madplan/);
+  const plan = page.locator("main");
+  // The day's summary names its dishes; open the day, then the dish.
+  await plan
+    .locator("summary")
+    .filter({ hasText: /Koteletter i fad/ })
+    .first()
+    .click();
+  const dish = plan.locator("details details").filter({ hasText: "Koteletter i fad" }).first();
+  await dish.locator("summary").click();
+  await expect(dish.getByRole("heading", { name: /Ingredienser/ })).toBeVisible();
+  await expect(dish.getByRole("heading", { name: "Sådan gør du" })).toBeVisible();
+  await expect(dish.getByRole("link", { name: /på Valdemarsro/ })).toBeVisible();
+  await expect(dish.getByRole("link", { name: "Arla" })).toHaveAttribute(
+    "href",
+    /google\.com\/search\?q=.*site%3Aarla\.dk/,
+  );
+  // Each day has its own dish dropdown.
+  expect(await plan.locator('select[name="ret"]').count()).toBeGreaterThanOrEqual(1);
+  await plan.getByRole("button", { name: "Ryd madplanen" }).click();
 });
 
 /** Open the staples picker unless it is open already (it starts open while nothing is picked). */

@@ -176,9 +176,10 @@ export default async function MealIdeasPage({ searchParams }: PageProps<"/madide
   const likedSet = new Set(liked);
   const ideas = filterIdeas(all, filters, likedSet);
   const today = todayInDenmark(now);
-  const planDays = (
-    plan.length > 0 ? plan.map((d) => d.date) : plannableDays(today).slice(0, 7)
-  ).map((date) => ({ date, label: dayLabel(date, today) }));
+  // The next week plus any later day already planned, so adding one dish never narrows the choice.
+  const planDays = [...new Set([...plannableDays(today).slice(0, 7), ...plan.map((d) => d.date)])]
+    .sort()
+    .map((date) => ({ date, label: dayLabel(date, today) }));
   const ctx: MealContext = { storesByChain, now, planDays };
   const onOffer = all.filter((i) => i.filled.length > 0).length;
 
