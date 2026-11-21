@@ -3,8 +3,9 @@
  * staples the pipeline recognizes (taxonomy type ids, pipeline `matching/taxonomy.py`).
  *
  * Amounts are for the stated number of servings. Price estimates (`estimateKr`) are rough Danish
- * discount-store normal prices (late 2026) for the amount used. They are only used for the
- * "Retten koster ca." estimate, always shown as "ca.", and never for a saving.
+ * discount-store normal prices (late 2026) for the amount used. They are only a fallback when no
+ * real product is found near the user (`lib/pantry.ts`, docs/ui.md §23), always shown as "ca.",
+ * and never used for a saving.
  */
 
 export type Meal = "frokost" | "aftensmad";

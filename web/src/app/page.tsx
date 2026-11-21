@@ -28,9 +28,20 @@ import { dayLabel, plannableDays, plannedRecipes, todayInDenmark } from "@/lib/m
 import { mealCatalogue, type Meal } from "@/lib/meals";
 import { nearestByChain } from "@/lib/stores";
 import { getLikedRecipes, getMealPlan, getUserLocation } from "@/server/location";
-import { getCurrentDeals, getFoodWasteNear, getNearbyStores } from "@/server/queries";
+import {
+  getBuyableProducts,
+  getCurrentDeals,
+  getFoodWasteNear,
+  getNearbyStores,
+} from "@/server/queries";
+import { clearanceProduct, pantrySearchStems, priceFinder } from "@/lib/pantry";
+import { dishCost } from "@/lib/dish-cost";
+import { RECIPES } from "@/lib/recipes";
 
 export const metadata: Metadata = { title: "Aftensmad" };
+
+/** Every taxonomy type a recipe slot can use (for their shelf prices). */
+const SLOT_TYPES = [...new Set(RECIPES.flatMap((r) => r.slots.flatMap((s) => s.types)))];
 
 /** Offers in the desktop "Største besparelser" column. */
 const TOP_SAVINGS = 6;
@@ -197,13 +208,22 @@ export default async function DinnerPage({ searchParams }: PageProps<"/">) {
   const deals = evaluateDeals(nearbyDeals(allRows, nearbyChains), nearbyChains);
   const all = mealCatalogue(deals, foodWaste, nearbyChains, now, filters.store);
   const likedSet = new Set(liked);
-  const ideas = filterIdeas(all, filters, likedSet);
   const today = todayInDenmark(now);
   // The next week plus any later day already planned, so adding one dish never narrows the choice.
   const planDays = [...new Set([...plannableDays(today).slice(0, 7), ...plan.map((d) => d.date)])]
     .sort()
     .map((date) => ({ date, label: dayLabel(date, today) }));
-  const ctx: MealContext = { storesByChain, now, planDays };
+  // Real prices for the extra items and the ingredients not on offer (docs/ui.md §23).
+  const buyable = await getBuyableProducts([...nearbyChains], pantrySearchStems(), SLOT_TYPES);
+  const finder = priceFinder([...buyable, ...foodWaste.map(clearanceProduct)]);
+  const ctx: MealContext = { storesByChain, now, planDays, finder };
+  const prices = new Map(
+    all.map((idea) => {
+      const cost = dishCost(idea, finder, () => "");
+      return [idea.recipe.id, { purchaseKr: cost.purchaseKr, perServingKr: cost.perServingKr }];
+    }),
+  );
+  const ideas = filterIdeas(all, filters, likedSet, prices);
   const onOffer = all.filter((i) => i.filled.length > 0).length;
   // Desktop side column: the biggest real savings this week, to cook from.
   const topSavings = groupByListing(deals)
@@ -276,9 +296,19 @@ export default async function DinnerPage({ searchParams }: PageProps<"/">) {
           </summary>
           <ul className="list-disc space-y-1.5 pb-4 pl-5 text-meta text-ink-2">
             <li>
-              <strong className="text-ink">Pr. person</strong> er et skøn: kun den del af de billige
-              varer, retten bruger (fx 4 af 10 æg), plus skønnede normalpriser for resten, delt med
-              antal personer.
+              <strong className="text-ink">Indkøb</strong> er det, du betaler ved kassen for de
+              varer, du mangler, i hele pakker: tilbuddet eller madspildet, ellers den billigste
+              hyldepris eller det billigste tilbud på varen i en butik nær dig. Basisvarer (olie,
+              krydderier, løg …) regnes ikke med.
+            </li>
+            <li>
+              <strong className="text-ink">Retten</strong> er det, retten bruger af varerne: 1 kg af
+              en pose på 2 kg kartofler tæller det halve. Sætter du hak ved en vare, du har, viser
+              rækken netop den pris.
+            </li>
+            <li>
+              Findes en vare ikke i butikkerne nær dig, bruger vi et skøn, og prisen står med
+              &quot;ca.&quot;. Hver pris linker til sin kilde.
             </li>
             <li>
               <strong className="text-ink">Spar</strong> for madspild: prisen før nedsættelsen (fra
@@ -286,11 +316,7 @@ export default async function DinnerPage({ searchParams }: PageProps<"/">) {
               vare i en butik i nærheden, for tilbuddets mindste pakning, minus tilbudsprisen. Et
               godt køb uden kendt normalpris tæller ikke med (vist som &quot;+&quot;).
             </li>
-            <li>
-              <strong className="text-ink">Indkøbslisten</strong> viser hele pakker af
-              tilbudsvarerne og skønnede normalpriser for resten. Basisvarer (olie, krydderier, løg
-              …) er sat hak ved på forhånd. Dine hak huskes i denne browser.
-            </li>
+            <li>Dine hak i indkøbslisten huskes i denne browser.</li>
             <li>Tilbud, der er billigere andre steder, foreslår vi aldrig.</li>
             <li>Madspild er et øjebliksbillede og kan være udsolgt.</li>
           </ul>

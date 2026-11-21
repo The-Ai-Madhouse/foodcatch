@@ -8,6 +8,7 @@ import type { FoodWasteItem } from "@/lib/foodwaste";
 import type { PriceHistoryRow } from "@/lib/history";
 import type { ProductHistoryRow, ProductInfo } from "@/lib/product";
 import { MAX_RESULTS, likePattern, type SearchHit } from "@/lib/search";
+import type { BuyableProduct } from "@/lib/pantry";
 import type { TextOffer } from "@/lib/staples";
 import type { PipelineRun } from "@/lib/status";
 import type { ReferenceDetail } from "@/lib/deals";
@@ -431,6 +432,84 @@ export async function searchProducts(terms: readonly string[]): Promise<SearchHi
     latestSourceItemId: ids.get(r.productKey)?.sourceItemId ?? null,
     latestCatalogId: ids.get(r.productKey)?.catalogId ?? null,
   }));
+}
+
+interface BuyableSqlRow extends Omit<BuyableProduct, "validTo"> {
+  validTo: Date | null;
+  memberOnly: boolean | null;
+}
+
+/**
+ * Shelf prices and offers that apply now at the given chains (docs/ui.md §23): items whose name
+ * contains one of the stems (the extra items of the recipes, matched precisely in
+ * `lib/pantry.ts`) and items of the given taxonomy types (ingredients not on offer). One row per
+ * item (its latest price); member-only prices are left out, they are not what everyone pays.
+ */
+export async function getBuyableProducts(
+  chains: readonly string[],
+  stems: readonly string[],
+  types: readonly string[],
+): Promise<BuyableProduct[]> {
+  if (chains.length === 0 || (stems.length === 0 && types.length === 0)) return [];
+  await connection();
+  const sql = await readOnlyDb();
+  const patterns = stems.map((s) => likePattern(s));
+  const current = sql`kind IN ('offer', 'regular') AND price > 0
+    AND valid_from <= now() AND (valid_to IS NULL OR valid_to > now())
+    AND chain_id = ANY(${[...chains]}::text[]) AND product_key IS NOT NULL`;
+  const [named, typed] = await Promise.all([
+    patterns.length
+      ? sql<BuyableSqlRow[]>`
+          SELECT DISTINCT ON (product_key)
+                 product_key AS key, product_key AS "productKey",
+                 coalesce(title, product_label) AS label, chain_id AS "chainId",
+                 NULL::text AS "classKey", kind, price::float8 AS price, unit,
+                 size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax", source,
+                 source_item_id AS "sourceItemId", catalog_id AS "catalogId",
+                 valid_to AS "validTo", NULL::text AS ean, member_only AS "memberOnly"
+          FROM api.product_price_history
+          WHERE ${current}
+            AND (title ILIKE ANY(${patterns}::text[]) OR product_label ILIKE ANY(${patterns}::text[]))
+          ORDER BY product_key, valid_from DESC
+          LIMIT 3000`
+      : Promise.resolve([] as BuyableSqlRow[]),
+    types.length
+      ? sql<BuyableSqlRow[]>`
+          SELECT DISTINCT ON (product_key)
+                 product_key AS key, product_key AS "productKey", title AS label,
+                 chain_id AS "chainId", class_key AS "classKey", kind, price::float8 AS price,
+                 unit, size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax", source,
+                 source_item_id AS "sourceItemId", catalog_id AS "catalogId",
+                 valid_to AS "validTo", NULL::text AS ean, member_only AS "memberOnly"
+          FROM api.class_price_history
+          WHERE ${current} AND (price_applies IS NULL OR price_applies)
+            AND split_part(class_key, '|', 1) = ANY(${[...types]}::text[])
+          ORDER BY product_key, valid_from DESC
+          LIMIT 3000`
+      : Promise.resolve([] as BuyableSqlRow[]),
+  ]);
+  const byKey = new Map<string, BuyableProduct>();
+  for (const r of [...typed, ...named]) {
+    if (r.memberOnly || byKey.has(r.key)) continue;
+    byKey.set(r.key, {
+      key: r.key,
+      productKey: r.productKey,
+      label: r.label,
+      chainId: r.chainId,
+      classKey: r.classKey,
+      kind: r.kind,
+      price: r.price,
+      unit: r.unit,
+      sizeMin: r.sizeMin,
+      sizeMax: r.sizeMax,
+      source: r.source,
+      sourceItemId: r.sourceItemId,
+      catalogId: r.catalogId,
+      validTo: toIso(r.validTo),
+      ean: r.ean,
+    });
+  }
+  return [...byKey.values()];
 }
 
 interface TextOfferSqlRow extends Omit<TextOffer, "validFrom" | "validTo"> {

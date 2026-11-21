@@ -14,7 +14,8 @@ import {
 } from "./meals";
 import type { EvaluatedDeal } from "./deals";
 import type { FoodWasteItem } from "./foodwaste";
-import { RECIPES, type Recipe } from "./recipes";
+import type { FoundPrice, PriceFinder } from "./pantry";
+import { RECIPES, type Recipe, type RecipeSlot } from "./recipes";
 import { toOre } from "./verdict";
 
 export const PLAN_COOKIE = "fc_meal_plan";
@@ -132,8 +133,12 @@ export interface PlanLine {
   /** "2 pk. · 1 kg" / "500 g" / "2 × 1 stk." */
   amount: string;
   payKr: number;
+  /** What the dishes use of it (kr.): shown instead of `payKr` when ticked as "har jeg". */
+  portionKr: number;
   approx: boolean;
   item?: MealItem;
+  /** The real product for an item not on offer (`lib/pantry.ts`). */
+  found?: FoundPrice;
   packs: number;
   /** The dishes that use it. */
   dishes: string[];
@@ -169,16 +174,30 @@ export function planShopping(
   recipes: readonly Recipe[],
   byType: ReadonlyMap<string, readonly MealItem[]>,
   store: PlanStore,
+  finder?: PriceFinder,
 ): PlanShopping {
+  // Bought in one store: only that chain's shelf prices count for what is not on offer.
+  const chainId = store.kind === "one" ? store.chainId : null;
   const choice = storeChoice(store);
   const items = new Map<
     string,
     { item: MealItem; label: string; amount: number; unit: string; uses: number; dishes: string[] }
   >();
-  const normal = new Map<string, { label: string; kr: number; uses: number; dishes: string[] }>();
+  const normal = new Map<
+    string,
+    {
+      label: string;
+      kr: number;
+      uses: number;
+      dishes: string[];
+      types: readonly string[];
+      amount: number;
+      unit: RecipeSlot["unit"];
+    }
+  >();
   const pantry = new Map<
     string,
-    { label: string; kr: number; amounts: string[]; basic: boolean; dishes: string[] }
+    { name: string; label: string; kr: number; amounts: string[]; basic: boolean; dishes: string[] }
   >();
 
   for (const recipe of recipes) {
@@ -206,8 +225,12 @@ export function planShopping(
           kr: 0,
           uses: 0,
           dishes: [],
+          types: row.slot.types,
+          amount: 0,
+          unit: row.slot.unit,
         };
         entry.kr += row.slot.estimateKr;
+        entry.amount += row.slot.amount;
         entry.uses += 1;
         entry.dishes.push(recipe.name);
         normal.set(row.slot.label, entry);
@@ -215,6 +238,7 @@ export function planShopping(
     }
     for (const p of recipe.pantry) {
       const entry = pantry.get(p.name) ?? {
+        name: p.name,
         label: p.name.charAt(0).toLocaleUpperCase("da-DK") + p.name.slice(1),
         kr: 0,
         amounts: [],
@@ -235,12 +259,14 @@ export function planShopping(
     const packSize = unitPrice ? e.item.price / unitPrice : null;
     const packs = packSize ? Math.max(1, Math.ceil(e.amount / packSize - 1e-9)) : e.uses;
     if (e.item.saving != null) saving += e.item.saving * packs;
+    const payKr = roundKr(e.item.price * packs);
     lines.push({
       key: `item:${key}`,
       group: itemChain(e.item),
       label: e.label,
       amount: `${packs} pk.`,
-      payKr: roundKr(e.item.price * packs),
+      payKr,
+      portionKr: unitPrice ? Math.min(payKr, roundKr(unitPrice * e.amount)) : payKr,
       approx: false,
       item: e.item,
       packs,
@@ -249,26 +275,32 @@ export function planShopping(
     });
   }
   for (const e of normal.values()) {
+    const found = finder?.slotAmount(e.types, e.amount, e.unit, chainId) ?? null;
     lines.push({
       key: `normal:${e.label}`,
       group: "normal",
       label: e.label,
       amount: e.uses > 1 ? `til ${e.uses} retter` : "",
-      payKr: roundKr(e.kr),
-      approx: true,
+      payKr: found ? found.purchaseKr : roundKr(e.kr),
+      portionKr: found ? found.portionKr : roundKr(e.kr),
+      approx: !found,
+      ...(found ? { found } : {}),
       packs: e.uses,
       dishes: [...new Set(e.dishes)],
       basic: false,
     });
   }
   for (const [name, e] of pantry) {
+    const found = finder?.pantryAmounts(e.name, e.amounts, chainId) ?? null;
     lines.push({
       key: `pantry:${name}`,
       group: e.basic ? "basic" : "buy",
       label: e.label,
       amount: e.amounts.length > 1 ? e.amounts.join(" + ") : (e.amounts[0] ?? ""),
-      payKr: roundKr(e.kr),
-      approx: true,
+      payKr: found ? found.purchaseKr : roundKr(e.kr),
+      portionKr: found ? found.portionKr : roundKr(e.kr),
+      approx: !found,
+      ...(found ? { found } : {}),
       packs: e.amounts.length,
       dishes: [...new Set(e.dishes)],
       basic: e.basic,
@@ -302,12 +334,13 @@ export function planOptions(
   foodWaste: readonly FoodWasteItem[],
   nearbyChains: ReadonlySet<string>,
   now: Date,
+  finder?: PriceFinder,
 ): PlanOptions {
   const byType = mealItemsByType(deals, foodWaste, nearbyChains, now);
   const single = [...nearbyChains]
-    .map((chainId) => planShopping(recipes, byType, { kind: "one", chainId }))
+    .map((chainId) => planShopping(recipes, byType, { kind: "one", chainId }, finder))
     .sort((a, b) => a.total - b.total || b.saving - a.saving);
-  const many = planShopping(recipes, byType, { kind: "many" });
+  const many = planShopping(recipes, byType, { kind: "many" }, finder);
   const first = single[0];
   return {
     single,

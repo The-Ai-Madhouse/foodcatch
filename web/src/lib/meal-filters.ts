@@ -25,7 +25,7 @@ export const PRICE_CHOICES = [10, 15, 20, 30] as const;
 
 export const SORT_LABELS: Record<MealSort, string> = {
   spar: "Mest sparet",
-  pris: "Billigst pr. person",
+  pris: "Billigst indkøb",
   tid: "Hurtigst",
 };
 
@@ -70,11 +70,21 @@ export function activeFilterCount(f: MealFilters): number {
 }
 
 /** The ideas that pass the filters, sorted. */
+/** The real prices of a dish (`lib/dish-cost.ts`), by recipe id. */
+export interface IdeaPrices {
+  purchaseKr: number;
+  perServingKr: number;
+}
+
 export function filterIdeas(
   ideas: readonly MealIdea[],
   f: MealFilters,
   liked: ReadonlySet<string>,
+  prices?: ReadonlyMap<string, IdeaPrices>,
 ): MealIdea[] {
+  // Real prices when known; the catalogue's estimate otherwise.
+  const purchase = (i: MealIdea) => prices?.get(i.recipe.id)?.purchaseKr ?? i.costPerServing;
+  const perServing = (i: MealIdea) => prices?.get(i.recipe.id)?.perServingKr ?? i.costPerServing;
   const byName = (a: MealIdea, b: MealIdea) => a.recipe.name.localeCompare(b.recipe.name, "da-DK");
   const compare: Record<MealSort, (a: MealIdea, b: MealIdea) => number> = {
     spar: (a, b) =>
@@ -82,17 +92,15 @@ export function filterIdeas(
       b.filled.length - a.filled.length ||
       a.costPerServing - b.costPerServing ||
       byName(a, b),
-    pris: (a, b) =>
-      a.costPerServing - b.costPerServing || b.totalSaving - a.totalSaving || byName(a, b),
-    tid: (a, b) =>
-      a.recipe.minutes - b.recipe.minutes || a.costPerServing - b.costPerServing || byName(a, b),
+    pris: (a, b) => purchase(a) - purchase(b) || b.totalSaving - a.totalSaving || byName(a, b),
+    tid: (a, b) => a.recipe.minutes - b.recipe.minutes || purchase(a) - purchase(b) || byName(a, b),
   };
   return ideas
     .filter(
       (i) =>
         (f.meal == null || i.recipe.meal === f.meal) &&
         (f.maxMinutes == null || i.recipe.minutes <= f.maxMinutes) &&
-        (f.maxPerPerson == null || i.costPerServing <= f.maxPerPerson) &&
+        (f.maxPerPerson == null || perServing(i) <= f.maxPerPerson) &&
         (!f.liked || liked.has(i.recipe.id)),
     )
     .sort(compare[f.sort]);

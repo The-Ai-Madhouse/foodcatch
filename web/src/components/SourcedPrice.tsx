@@ -20,7 +20,7 @@ export function SourcedPrice({
   const bubble = (
     <span
       aria-hidden="true"
-      className="pointer-events-none invisible absolute bottom-full left-0 z-40 mb-1 w-max max-w-64 rounded-md bg-ink px-2 py-1 text-left text-micro font-normal tracking-normal whitespace-normal text-page normal-case opacity-0 shadow-md transition-opacity group-hover/src:visible group-hover/src:opacity-100 group-focus-visible/src:visible group-focus-visible/src:opacity-100"
+      className="pointer-events-none absolute bottom-full left-0 z-40 mb-1 hidden w-max max-w-64 rounded-md bg-ink px-2 py-1 text-left text-micro font-normal tracking-normal whitespace-normal text-page normal-case shadow-md group-hover/src:block group-focus-visible/src:block"
       style={{ fontStretch: "100%" }}
     >
       {source.label}

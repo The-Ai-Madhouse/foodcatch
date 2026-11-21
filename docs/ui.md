@@ -1170,3 +1170,30 @@ på tilbud"), expired prices are folded away.
 
 On desktop the front page uses its side column for "Største besparelser lige nu": the offers
 with the biggest known saving, to build a dish around.
+
+## 23. Purchase price first, and real prices for every item (2026-11-21)
+
+The owner: the purchase price matters most, then what the dish costs, especially for items the
+dish does not use up. Extra items (potatoes, lasagne sheets, rice, basil …) must be priced like
+the ingredients, from a shop, a leaflet or food waste, not estimated.
+
+* **Two prices per item, from one real product** (`lib/pantry.ts`, `lib/dish-cost.ts`): the
+  purchase price (the pack or packs that cover the amount; the smallest pack of a size range
+  counts) and the portion price (the used amount at that product's unit price). A dish card shows
+  "Indkøb …" first (what the items not expected at home cost at the till) and "Retten … · … pr.
+  pers." below it. In the shopping list an item ticked as "har jeg" shows its portion price
+  ("retten bruger") instead of the struck-through pack price; the sticky bar shows the purchase
+  of what is left and the dish price.
+* **Where prices come from**: an ingredient on offer or cleared keeps its item. Anything else is
+  the cheapest current shelf price or offer of a chain with a store near the user
+  (`api.product_price_history` / `api.class_price_history`, member prices excluded), or a
+  clearance nearby. Ingredients are matched by taxonomy type; extra items by name with explicit
+  words and exclusions per item (`PANTRY_SPECS`), so "ris" never finds "rismel" or "Paris" and
+  "kartofler" never finds "kartoffelmos". Each found price links to its source (§22) and names
+  the product, chain and pack.
+* **Only when nothing is found** the recipe's estimate is used; the row says "Ingen pris i
+  butikkerne nær dig – skøn" and every total that includes it says "ca.".
+* **The meal plan** adds the amounts of all dishes before buying packs (2 × 300 g rice is one
+  1 kg bag). A plan bought in one store only uses that chain's prices; otherwise the estimate.
+* "Billigst indkøb" sorts by the real purchase price; the price filter uses the real price per
+  person.

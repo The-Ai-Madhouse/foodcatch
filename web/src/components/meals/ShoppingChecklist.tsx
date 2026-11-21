@@ -15,6 +15,11 @@ export interface ChecklistRow {
   amount: string;
   /** What the user pays for it if they buy it (kr.). */
   payKr: number;
+  /**
+   * What the amount the dish uses costs (kr.), shown instead of `payKr` when the item is ticked
+   * as "har jeg". Without it a ticked row is simply struck through.
+   */
+  portionKr?: number;
   /** True when `payKr` is an estimate. */
   approx: boolean;
   /** Where `payKr` can be checked (the offer/clearance, or "skøn"). */
@@ -69,11 +74,14 @@ export function ShoppingChecklist({
   recipeId,
   rows,
   groups = RECIPE_GROUPS,
+  servings,
 }: {
   /** What the ticks are remembered under (a recipe id, or `madplan`). */
   recipeId: string;
   rows: readonly ChecklistRow[];
   groups?: readonly ChecklistGroup[];
+  /** Servings of the dish: shows what the dish costs (and per person) under the total. */
+  servings?: number;
 }) {
   const defaults = rows.filter((r) => r.defaultHave).map((r) => r.key);
   const [have, setHave] = useState<ReadonlySet<string>>(() => new Set(defaults));
@@ -99,6 +107,10 @@ export function ShoppingChecklist({
   const toBuy = rows.filter((r) => !have.has(r.key));
   const total = toBuy.reduce((sum, r) => sum + r.payKr, 0);
   const approx = toBuy.some((r) => r.approx);
+  // What the dish itself costs: the used amount of every item, bought or at home.
+  const withPortions = rows.every((r) => r.portionKr != null);
+  const dishKr = rows.reduce((sum, r) => sum + (r.portionKr ?? r.payKr), 0);
+  const dishApprox = rows.some((r) => r.approx);
 
   return (
     <div>
@@ -114,6 +126,8 @@ export function ShoppingChecklist({
             <ul className="mt-1 divide-y divide-line">
               {list.map((r) => {
                 const checked = have.has(r.key);
+                // At home: what the dish uses of it, instead of the pack price.
+                const portion = checked && r.portionKr != null;
                 return (
                   <li key={r.key} className="py-2">
                     <label className="flex min-h-11 cursor-pointer items-start gap-3">
@@ -135,12 +149,22 @@ export function ShoppingChecklist({
                           <span className="block text-micro text-ink-3">{r.note}</span>
                         ) : null}
                       </span>
-                      <span
-                        className={`shrink-0 text-meta tabular ${checked ? "text-ink-3 line-through" : "font-medium text-ink"}`}
-                      >
-                        {r.approx ? "ca. " : ""}
-                        <SourcedPrice source={r.source}>{formatDkk(r.payKr)}</SourcedPrice>
-                      </span>
+                      {portion ? (
+                        <span className="shrink-0 text-right text-meta text-ink-2 tabular">
+                          {r.approx ? "ca. " : ""}
+                          <SourcedPrice source={r.source}>
+                            {formatDkk(r.portionKr ?? 0)}
+                          </SourcedPrice>
+                          <span className="block text-micro text-ink-3">retten bruger</span>
+                        </span>
+                      ) : (
+                        <span
+                          className={`shrink-0 text-meta tabular ${checked ? "text-ink-3 line-through" : "font-medium text-ink"}`}
+                        >
+                          {r.approx ? "ca. " : ""}
+                          <SourcedPrice source={r.source}>{formatDkk(r.payKr)}</SourcedPrice>
+                        </span>
+                      )}
                     </label>
                     {r.detail && !checked ? <div className="pl-8">{r.detail}</div> : null}
                   </li>
@@ -154,19 +178,27 @@ export function ShoppingChecklist({
         className="sticky bottom-16 mt-3 flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-2 px-3 py-2 md:bottom-2"
         aria-live="polite"
       >
-        <p className="text-meta text-ink-2">
-          {toBuy.length === 0 ? (
-            <span className="font-medium text-good-fg">Du har det hele ✓</span>
-          ) : (
-            <>
-              Mangler {toBuy.length} {toBuy.length === 1 ? "vare" : "varer"}:{" "}
-              <strong className="text-ink tabular">
-                {approx ? "ca. " : ""}
-                {formatDkk(Math.round(total))}
-              </strong>
-            </>
-          )}
-        </p>
+        <div className="text-meta text-ink-2">
+          <p>
+            {toBuy.length === 0 ? (
+              <span className="font-medium text-good-fg">Du har det hele ✓</span>
+            ) : (
+              <>
+                Indkøb, {toBuy.length} {toBuy.length === 1 ? "vare" : "varer"}:{" "}
+                <strong className="text-ink tabular">
+                  {approx ? "ca. " : ""}
+                  {formatDkk(total)}
+                </strong>
+              </>
+            )}
+          </p>
+          {servings && withPortions ? (
+            <p className="text-micro tabular">
+              Retten {dishApprox ? "ca. " : ""}
+              {formatDkk(dishKr)} · {formatDkk(dishKr / Math.max(1, servings))} pr. pers.
+            </p>
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={reset}

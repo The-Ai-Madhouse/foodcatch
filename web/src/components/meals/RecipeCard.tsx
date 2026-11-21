@@ -27,6 +27,8 @@ import { AddToPlanForm } from "./AddToPlanForm";
 import { LikeButton } from "./LikeButton";
 import { RecipeDetails } from "./RecipeDetails";
 import { ShoppingChecklist, type ChecklistRow } from "./ShoppingChecklist";
+import { dishCost, type DishCost, type DishLine } from "@/lib/dish-cost";
+import { packText, type FoundPrice, type PriceFinder } from "@/lib/pantry";
 
 export interface MealContext {
   /** Stores of each chain within the radius, nearest first (offers are chain-wide). */
@@ -34,6 +36,8 @@ export interface MealContext {
   now: Date;
   /** Days a dish can be added to ("Føj til madplan"); none hides the form. */
   planDays?: readonly { date: string; label: string }[];
+  /** Real prices for the extra items and the ingredients not on offer (`lib/pantry.ts`). */
+  finder?: PriceFinder;
 }
 
 const sep = <span aria-hidden="true"> · </span>;
@@ -218,12 +222,21 @@ export function ItemLine({
 }
 
 /** The prices of one slot: the chosen item and, folded, every other cheap one. */
-function SlotPrices({ row, ctx }: { row: SlotRow; ctx: MealContext }) {
+function SlotPrices({
+  row,
+  ctx,
+  found,
+}: {
+  row: SlotRow;
+  ctx: MealContext;
+  found: FoundPrice | null;
+}) {
   const chosen = row.chosen?.item;
   const others = row.options.filter((o) => o !== chosen);
   return (
     <div className="pb-1">
       {chosen ? <ItemLine item={chosen} ctx={ctx} /> : null}
+      {!chosen && found ? <FoundLine found={found} ctx={ctx} /> : null}
       {others.length > 0 ? (
         <details className="mt-1">
           <summary className="flex min-h-9 items-center gap-1 text-micro font-medium text-link">
@@ -241,44 +254,109 @@ function SlotPrices({ row, ctx }: { row: SlotRow; ctx: MealContext }) {
           </ul>
         </details>
       ) : null}
-      <p className="text-micro text-ink-3 tabular">
-        Normalpris for mængden: ca.{" "}
-        <SourcedPrice source={ESTIMATE_SOURCE}>{formatDkk(row.slot.estimateKr)}</SourcedPrice>
-      </p>
+      {chosen || found ? null : (
+        <p className="text-micro text-ink-3 tabular">
+          Ingen pris i butikkerne nær dig. Skøn for mængden: ca.{" "}
+          <SourcedPrice source={ESTIMATE_SOURCE}>{formatDkk(row.slot.estimateKr)}</SourcedPrice>
+        </p>
+      )}
     </div>
   );
 }
 
-function checklistRows(idea: MealIdea, ctx: MealContext): ChecklistRow[] {
-  const slotRows: ChecklistRow[] = idea.rows.map((row) => {
-    const amount = formatQuantity(row.slot.amount, row.slot.amount, row.slot.unit) ?? "";
-    const item = row.chosen?.item;
+const KIND_WORD: Readonly<Record<FoundPrice["product"]["kind"], string>> = {
+  regular: "Normalpris",
+  offer: "Tilbud",
+  clearance: "Madspild",
+};
+
+/** Where a found product's price can be checked. */
+export function foundSource(found: FoundPrice, now: Date): PriceSource {
+  const p = found.product;
+  return priceSource(
+    {
+      source: p.source,
+      chainId: p.chainId,
+      sourceItemId: p.sourceItemId,
+      catalogId: p.catalogId,
+      validTo: p.validTo,
+      ean: p.ean,
+    },
+    now,
+  );
+}
+
+/** A real product found for an item: its name, where, kind, pack and price (with the source). */
+export function FoundLine({ found, ctx }: { found: FoundPrice; ctx: MealContext }) {
+  const p = found.product;
+  const { pins, total } = chainPins(ctx.storesByChain, p.chainId);
+  const pack = packText(found);
+  return (
+    <div className="flex items-start justify-between gap-3 py-1.5 text-meta">
+      <span className="min-w-0">
+        <SourcedPrice source={foundSource(found, ctx.now)} className="text-ink">
+          {displayTitle(p.label)}
+        </SourcedPrice>
+        <span className="flex flex-wrap items-center gap-x-1 text-micro text-ink-2">
+          {p.kind === "clearance" && p.storeName ? (
+            <span>{storeDisplayName(p.storeName, p.chainId)}</span>
+          ) : (
+            <StoreInfo chainId={p.chainId} stores={pins} total={total}>
+              <ChainDot chainId={p.chainId} size="xs" />
+              {chainName(p.chainId)}
+            </StoreInfo>
+          )}
+          <span>· {KIND_WORD[p.kind]}</span>
+          {pack ? <span>· {pack}</span> : null}
+        </span>
+      </span>
+      <SourcedPrice
+        source={foundSource(found, ctx.now)}
+        className="shrink-0 font-semibold text-ink tabular"
+      >
+        {formatDkk(found.purchaseKr)}
+      </SourcedPrice>
+    </div>
+  );
+}
+
+function lineNote(line: DishLine): string {
+  if (line.item) {
+    return `${line.item.kind === "foodwaste" ? "Madspild" : "Tilbud"} i ${chainName(itemChain(line.item))} – hel pakke`;
+  }
+  if (line.found) {
+    const pack = packText(line.found);
+    return `${KIND_WORD[line.found.product.kind]} i ${chainName(line.found.product.chainId)}${pack ? ` – ${pack}` : ""}`;
+  }
+  return "Ingen pris i butikkerne nær dig – skøn";
+}
+
+function checklistRows(idea: MealIdea, cost: DishCost, ctx: MealContext): ChecklistRow[] {
+  return cost.lines.map((line) => {
+    const row =
+      line.kind === "slot" ? idea.rows.find((r) => `slot:${r.slot.label}` === line.key) : null;
     return {
-      key: `slot:${row.slot.label}`,
-      group: "ingredient",
-      label: row.slot.label,
-      amount,
-      payKr: item ? item.price : row.slot.estimateKr,
-      approx: !item,
-      source: item ? mealItemSource(item, ctx.now) : ESTIMATE_SOURCE,
-      note: item
-        ? `${item.kind === "foodwaste" ? "Madspild" : "Tilbud"} i ${chainName(itemChain(item))} – hel pakke`
-        : "Ikke på tilbud – skønnet normalpris",
-      defaultHave: false,
-      detail: <SlotPrices row={row} ctx={ctx} />,
+      key: line.key,
+      group: line.group,
+      label: line.label,
+      amount: line.amount,
+      payKr: line.purchaseKr,
+      portionKr: line.portionKr,
+      approx: line.estimate,
+      source: line.item
+        ? mealItemSource(line.item, ctx.now)
+        : line.found
+          ? foundSource(line.found, ctx.now)
+          : ESTIMATE_SOURCE,
+      note: lineNote(line),
+      defaultHave: line.basic,
+      detail: row ? (
+        <SlotPrices row={row} ctx={ctx} found={line.found} />
+      ) : line.found ? (
+        <FoundLine found={line.found} ctx={ctx} />
+      ) : undefined,
     };
   });
-  const pantryRows: ChecklistRow[] = idea.recipe.pantry.map((p) => ({
-    key: `pantry:${p.name}`,
-    group: p.basic ? "basic" : "buy",
-    label: p.name.charAt(0).toLocaleUpperCase("da-DK") + p.name.slice(1),
-    amount: p.amount,
-    payKr: p.estimateKr,
-    approx: true,
-    source: ESTIMATE_SOURCE,
-    defaultHave: Boolean(p.basic),
-  }));
-  return [...slotRows, ...pantryRows];
 }
 
 /**
@@ -325,6 +403,11 @@ export function RecipeCard({
 }) {
   const { recipe } = idea;
   const headingId = `ret-${recipe.id}`;
+  const cost = dishCost(
+    idea,
+    ctx.finder,
+    (slot) => formatQuantity(slot.amount, slot.amount, slot.unit) ?? "",
+  );
   const chains = [...new Set(idea.filled.map((f) => itemChain(f.item)))];
   const savingValue =
     idea.totalSaving > 0
@@ -351,12 +434,20 @@ export function RecipeCard({
             {recipe.servings} pers.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <DishSaving idea={idea} />
-            <span className="text-meta text-ink-2">
-              ca. {formatDkk(Math.round(idea.costPerServing))} pr. pers.
-              <span className="text-ink-3"> (skøn)</span>
+            <span className="text-ink">
+              <span className="text-meta text-ink-2">Indkøb </span>
+              <span className="text-price shelf">
+                {cost.purchaseApprox ? <span className="text-title">ca. </span> : null}
+                {formatDkk(cost.purchaseKr)}
+              </span>
             </span>
+            <DishSaving idea={idea} />
           </div>
+          <p className="mt-0.5 text-meta text-ink-2 tabular">
+            Retten {cost.dishApprox ? "ca. " : ""}
+            {formatDkk(cost.dishKr)} · {formatDkk(cost.perServingKr)} pr. pers.
+            <span className="text-ink-3"> – det, retten bruger af varerne</span>
+          </p>
           {idea.filled.length > 0 ? (
             <p className="mt-2 flex items-start gap-1.5 text-meta text-ink-2">
               <span className="mt-0.5 flex shrink-0 -space-x-1">
@@ -384,9 +475,9 @@ export function RecipeCard({
           <p className="mt-3 text-meta text-ink-2">{recipe.description}</p>
           <dl className="mt-3 grid grid-cols-3 gap-3 rounded-lg bg-surface-2 p-3">
             <Stat
-              label="Tilbudsvarer"
-              value={formatDkk(idea.purchasePrice)}
-              note={`${idea.filled.length} ${idea.filled.length === 1 ? "vare" : "varer"}, hele pakker`}
+              label="Indkøb"
+              value={`${cost.purchaseApprox ? "ca. " : ""}${formatDkk(cost.purchaseKr)}`}
+              note="hele pakker, uden basisvarer"
             />
             <Stat
               label="Du sparer"
@@ -395,9 +486,9 @@ export function RecipeCard({
               tone={idea.totalSaving > 0 ? "good" : undefined}
             />
             <Stat
-              label="Retten koster ca."
-              value={formatDkk(Math.round(idea.dishCost))}
-              note={`${formatDkk(Math.round(idea.costPerServing))} pr. pers.`}
+              label={cost.dishApprox ? "Retten koster ca." : "Retten koster"}
+              value={formatDkk(cost.dishKr)}
+              note={`${formatDkk(cost.perServingKr)} pr. pers.`}
             />
           </dl>
 
@@ -406,8 +497,14 @@ export function RecipeCard({
           ) : null}
 
           <h3 className="mt-4 font-semibold text-ink">Indkøbsliste</h3>
-          <p className="text-micro text-ink-3">Sæt hak ved det, du allerede har.</p>
-          <ShoppingChecklist recipeId={recipe.id} rows={checklistRows(idea, ctx)} />
+          <p className="text-micro text-ink-3">
+            Sæt hak ved det, du allerede har – så tæller kun den mængde, retten bruger.
+          </p>
+          <ShoppingChecklist
+            recipeId={recipe.id}
+            rows={checklistRows(idea, cost, ctx)}
+            servings={recipe.servings}
+          />
 
           <div className="mt-5">
             <RecipeDetails recipe={recipe} showIngredients={false} />

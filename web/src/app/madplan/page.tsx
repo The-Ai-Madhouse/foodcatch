@@ -14,7 +14,9 @@ import { MealTabs } from "@/components/meals/MealTabs";
 import { RecipeDetails } from "@/components/meals/RecipeDetails";
 import {
   ESTIMATE_SOURCE,
+  FoundLine,
   ItemLine,
+  foundSource,
   mealItemSource,
   type MealContext,
 } from "@/components/meals/RecipeCard";
@@ -39,9 +41,18 @@ import { RECIPES, mealCatalogue } from "@/lib/meals";
 import { chainPins, nearestByChain, shortStoreName } from "@/lib/stores";
 import { StoreInfo } from "@/components/StoreInfo";
 import { getMealPlan, getUserLocation } from "@/server/location";
-import { getCurrentDeals, getFoodWasteNear, getNearbyStores } from "@/server/queries";
+import {
+  getBuyableProducts,
+  getCurrentDeals,
+  getFoodWasteNear,
+  getNearbyStores,
+} from "@/server/queries";
+import { clearanceProduct, pantrySearchStems, priceFinder } from "@/lib/pantry";
 
 export const metadata: Metadata = { title: "Madplan" };
+
+/** Every taxonomy type a recipe slot can use (for their shelf prices). */
+const SLOT_TYPES = [...new Set(RECIPES.flatMap((r) => r.slots.flatMap((s) => s.types)))];
 
 const STEP = "text-heading font-bold text-ink";
 const fieldClass =
@@ -99,7 +110,8 @@ function StoreOption({
           title="Summen af indkøbslisten nedenfor – hver pris dér linker til sin kilde"
           className="shrink-0 text-right font-bold text-ink tabular"
         >
-          ca. {formatDkk(Math.round(shopping.total))}
+          {shopping.lines.some((l) => !l.basic && l.approx) ? "ca. " : ""}
+          {formatDkk(shopping.total)}
         </span>
       </Link>
     </li>
@@ -123,8 +135,15 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
   const storesByChain = nearestByChain(stores);
   const nearbyChains = new Set(storesByChain.keys());
   const deals = evaluateDeals(nearbyDeals(allRows, nearbyChains), nearbyChains);
-  const ctx: MealContext = { storesByChain, now };
   const recipes = plannedRecipes(plan);
+  // Real prices for what is not on offer (docs/ui.md §23).
+  const finder = recipes.length
+    ? priceFinder([
+        ...(await getBuyableProducts([...nearbyChains], pantrySearchStems(), SLOT_TYPES)),
+        ...foodWaste.map(clearanceProduct),
+      ])
+    : undefined;
+  const ctx: MealContext = { storesByChain, now, ...(finder ? { finder } : {}) };
   const planned = new Set(plan.map((d) => d.date));
 
   // Price per person of every dish, for the pickers.
@@ -132,7 +151,7 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
     mealCatalogue(deals, foodWaste, nearbyChains, now).map((i) => [i.recipe.id, i]),
   );
   const options =
-    recipes.length > 0 ? planOptions(recipes, deals, foodWaste, nearbyChains, now) : null;
+    recipes.length > 0 ? planOptions(recipes, deals, foodWaste, nearbyChains, now, finder) : null;
 
   const wanted = one(params.butik);
   const bestSingle = options?.single[0];
@@ -186,11 +205,20 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
       label: l.label,
       amount: l.amount,
       payKr: l.payKr,
+      portionKr: l.portionKr,
       approx: l.approx,
-      source: l.item ? mealItemSource(l.item, ctx.now) : ESTIMATE_SOURCE,
+      source: l.item
+        ? mealItemSource(l.item, ctx.now)
+        : l.found
+          ? foundSource(l.found, ctx.now)
+          : ESTIMATE_SOURCE,
       note: l.dishes.join(", "),
       defaultHave: l.basic,
-      detail: l.item ? <ItemLine item={l.item} ctx={ctx} /> : undefined,
+      detail: l.item ? (
+        <ItemLine item={l.item} ctx={ctx} />
+      ) : l.found ? (
+        <FoundLine found={l.found} ctx={ctx} />
+      ) : undefined,
     }));
   }
 

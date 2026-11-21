@@ -92,7 +92,8 @@ test("home shows where to buy each offer, its size and its source", async ({ pag
   await expect(card).toBeVisible();
   await expect(card).toContainText(/Nærmeste butik: Netto .+ · \d+(?:,\d)?\u00a0(?:m|km)/);
   await expect(card).toContainText(SIZE);
-  const source = card.getByRole("link", { name: /Se tilbuddet i avisen/ });
+  // The title and the prices link to the leaflet offer too (§22); check the first.
+  const source = card.getByRole("link", { name: /Se tilbuddet i avisen/ }).first();
   if ((await source.count()) > 0) {
     await expect(source).toHaveAttribute(
       "href",
@@ -242,11 +243,15 @@ test("the front page gives dinner ideas with what they save, filters and a meal 
   const card = cards.first();
   // Every dish says what it saves (or that nothing is on offer / the saving is unknown).
   await expect(card).toContainText(/Spar \d|Intet på tilbud|Besparelse ukendt/);
-  await expect(card.getByText(/pr\. pers\. \(skøn\)/)).toBeVisible();
+  // The purchase price comes first, then what the dish itself costs.
+  await expect(card).toContainText(/Indkøb\s*(ca\.\s*)?\d+,\d\d\u00a0kr\./);
+  await expect(card).toContainText(
+    /Retten (ca\. )?\d+,\d\d\u00a0kr\. · \d+,\d\d\u00a0kr\. pr\. pers\./,
+  );
   // Open a dish: shopping list with ticks and the method.
   await card.locator("summary").first().click();
   await expect(card.getByRole("heading", { name: "Indkøbsliste" })).toBeVisible();
-  await expect(card.getByText(/^Mangler \d+/)).toBeVisible();
+  await expect(card.getByText(/^Indkøb, \d+ varer?:/)).toBeVisible();
   const box = card.locator('input[type="checkbox"]').first();
   await box.check();
   await expect(box).toBeChecked();
@@ -268,6 +273,24 @@ test("the front page gives dinner ideas with what they save, filters and a meal 
   await expect(main.getByText("Anbefalet")).toBeVisible();
   await expect(main.getByRole("heading", { name: "4. Indkøbsliste" })).toBeVisible();
   await main.getByRole("button", { name: "Ryd madplanen" }).click();
+});
+
+test("extra items get real prices; an item at home counts only the amount used", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const card = page.locator("main article").filter({ hasText: "Lasagne" }).first();
+  await card.locator("summary").first().click();
+  const sheets = card.locator("li").filter({ hasText: "Lasagneplader" }).first();
+  // Found on the shelf near the user (seed: REMA 1000, 500 g for 9,95 kr.), not an estimate.
+  await expect(sheets).toContainText("Normalpris i REMA 1000 – 500 g");
+  await expect(sheets).toContainText("9,95");
+  await expect(sheets).not.toContainText("ca.");
+  // At home: the dish uses 250 g of the 500 g pack.
+  await card.getByLabel("Har jeg: Lasagneplader").check();
+  await expect(sheets).toContainText("4,98");
+  await expect(sheets).toContainText("retten bruger");
+  await card.getByRole("button", { name: "Nulstil" }).click();
 });
 
 test("old addresses lead to the new pages", async ({ page }) => {
