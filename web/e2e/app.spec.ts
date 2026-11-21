@@ -262,7 +262,7 @@ test("the front page gives dinner ideas with what they save, filters and a meal 
   await main.getByRole("link", { name: /Planlæg ugen|Min madplan/ }).click();
   await expect(page).toHaveURL(/\/madplan$/);
   await main.getByRole("button", { name: /^I morgen/ }).click();
-  await main.getByLabel("Vælg ret", { exact: true }).first().selectOption({ index: 1 });
+  await main.locator('select[name="ret"]').first().selectOption({ index: 1 });
   await main.getByRole("button", { name: "Tilføj" }).first().click();
   await expect(main.getByRole("heading", { name: "3. Hvor vil du handle?" })).toBeVisible();
   await expect(main.getByText("Anbefalet")).toBeVisible();
@@ -288,6 +288,54 @@ test("every offer says what it saves against the normal price", async ({ page })
   const saving = cards.filter({ hasText: /Spar \d/ }).first();
   await saving.locator("details > summary").first().click();
   await expect(saving).toContainText(/Normalpris \d+,\d\d\u00a0kr\./);
+});
+
+test("meal plan: add from the catalogue, then read the recipe in the plan", async ({ page }) => {
+  await page.goto("/madplan");
+  const clear = page.locator("main").getByRole("button", { name: "Ryd madplanen" });
+  if (await clear.count()) await clear.click();
+
+  await page.goto("/");
+  const main = page.locator("main");
+  const card = main.locator("article").filter({ hasText: "Koteletter i fad" }).first();
+  await card.locator("summary").first().click();
+  // Adding gives visible feedback, and the day choice stays open for the next dish.
+  const days = card.locator('select[name="dato"]');
+  const dayCount = await days.locator("option").count();
+  expect(dayCount).toBeGreaterThanOrEqual(7);
+  await days.selectOption({ index: 1 });
+  await card.getByRole("button", { name: "Tilføj" }).click();
+  await expect(card.getByText(/✓ Koteletter i fad er lagt på/)).toBeVisible();
+  await expect(card.locator('select[name="dato"] option')).toHaveCount(dayCount);
+  // The dish links to a real recipe and to searching the web.
+  await expect(card.getByRole("link", { name: /Koteletter i fad på Valdemarsro/ })).toHaveAttribute(
+    "href",
+    "https://www.valdemarsro.dk/koteletter-i-fad/",
+  );
+  await expect(card.getByRole("link", { name: /på nettet/ })).toBeVisible();
+
+  // In the plan: the day lists the dish, which opens to the full recipe.
+  await card.getByRole("link", { name: /Se madplanen/ }).click();
+  await expect(page).toHaveURL(/\/madplan/);
+  const plan = page.locator("main");
+  // The day's summary names its dishes; open the day, then the dish.
+  await plan
+    .locator("summary")
+    .filter({ hasText: /Koteletter i fad/ })
+    .first()
+    .click();
+  const dish = plan.locator("details details").filter({ hasText: "Koteletter i fad" }).first();
+  await dish.locator("summary").click();
+  await expect(dish.getByRole("heading", { name: /Ingredienser/ })).toBeVisible();
+  await expect(dish.getByRole("heading", { name: "Sådan gør du" })).toBeVisible();
+  await expect(dish.getByRole("link", { name: /på Valdemarsro/ })).toBeVisible();
+  await expect(dish.getByRole("link", { name: "Arla" })).toHaveAttribute(
+    "href",
+    /google\.com\/search\?q=.*site%3Aarla\.dk/,
+  );
+  // Each day has its own dish dropdown.
+  expect(await plan.locator('select[name="ret"]').count()).toBeGreaterThanOrEqual(1);
+  await plan.getByRole("button", { name: "Ryd madplanen" }).click();
 });
 
 /** Open the staples picker on "Mine varer" unless it is open already. */
