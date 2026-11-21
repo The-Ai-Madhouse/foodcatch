@@ -5,6 +5,7 @@ import { MemberPriceTag } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
 import { PriceChart } from "@/components/PriceChart";
 import { SourceLink } from "@/components/SourceLink";
+import { SourcedPrice } from "@/components/SourcedPrice";
 import { cleanClassLabel } from "@/lib/deals";
 import {
   formatDkk,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/format";
 import { KIND_LABELS, buildPriceChart, type PriceHistoryRow } from "@/lib/history";
 import { classKeyFromSegment, productPath } from "@/lib/routes";
-import { sourceLink } from "@/lib/sources";
+import { priceSource, sourceLink } from "@/lib/sources";
 import { storeDisplayName } from "@/lib/stores";
 import { getClassPriceHistory, getStoresByIds } from "@/server/queries";
 
@@ -81,12 +82,10 @@ export default async function ClassHistoryPage({ params }: PageProps<"/vare/[cla
                   description: row.description,
                 });
                 const store = row.storeId ? stores.get(row.storeId) : undefined;
-                const facts = [
-                  size.text,
-                  row.price != null ? formatDkk(row.price) : null,
+                const rowSource = priceSource(row, now);
+                const unitPrice =
                   formatUnitPriceRange(row.unitPriceMin, row.unitPriceMax, row.unit) ??
-                    `ukendt pr. ${unitLabel(row.unit)}`,
-                ].filter(Boolean);
+                  `ukendt pr. ${unitLabel(row.unit)}`;
                 return (
                   <li
                     key={`${row.listingId}-${i}`}
@@ -98,13 +97,25 @@ export default async function ClassHistoryPage({ params }: PageProps<"/vare/[cla
                       {KIND_LABELS[row.kind] ?? row.kind}
                       {row.memberOnly ? <MemberPriceTag /> : null}
                     </p>
-                    <p className="text-ink">{row.title}</p>
+                    <p className="text-ink">
+                      <SourcedPrice source={rowSource}>{row.title}</SourcedPrice>
+                    </p>
                     {store ? (
                       <p className="text-meta text-ink-2">
                         {storeDisplayName(store.name, store.chainId)}
                       </p>
                     ) : null}
-                    <p className="text-meta text-ink-2 tabular">{facts.join(" · ")}</p>
+                    <p className="text-meta text-ink-2 tabular">
+                      {size.text}
+                      {row.price != null ? (
+                        <>
+                          {" · "}
+                          <SourcedPrice source={rowSource}>{formatDkk(row.price)}</SourcedPrice>
+                        </>
+                      ) : null}
+                      {" · "}
+                      <SourcedPrice source={rowSource}>{unitPrice}</SourcedPrice>
+                    </p>
                     <p className="text-meta text-ink-3">
                       {formatShortPeriod(row.validFrom, row.validTo)}
                     </p>

@@ -206,6 +206,8 @@ describe("free-text staples", () => {
     validTo: "2026-11-21T22:59:59Z",
     memberOnly: false,
     source: "tjek",
+    sourceItemId: "o1",
+    catalogId: "c1",
     ...overrides,
   });
 

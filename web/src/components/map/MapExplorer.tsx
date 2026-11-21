@@ -6,13 +6,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChainDot } from "@/components/ChainDot";
 import { ChevronIcon, CloseIcon } from "@/components/Icons";
 import { ExternalLink, SourceLink } from "@/components/SourceLink";
+import { SourcedPrice } from "@/components/SourcedPrice";
 import { FoodWasteItemRow } from "@/components/foodwaste/FoodWasteItemRow";
 import { OpenLocationButton } from "@/components/location/LocationControl";
 import { chainName } from "@/lib/chains";
 import type { FoodWasteItem } from "@/lib/foodwaste";
 import { formatDistance } from "@/lib/format";
 import type { Coordinates } from "@/lib/geo";
-import { routeLink, storePageLink, type SourceLink as SourceLinkData } from "@/lib/sources";
+import {
+  routeLink,
+  storePageLink,
+  type PriceSource,
+  type SourceLink as SourceLinkData,
+} from "@/lib/sources";
 import { storeAddress, type MapStore } from "@/lib/stores";
 import { LazyStoreMap } from "./LazyStoreMap";
 import { useIsDesktop } from "./MapFocus";
@@ -34,6 +40,10 @@ export interface CheaperRow {
   /** The offer's unit price (range). */
   offerPrice: string;
   link: SourceLinkData | null;
+  /** Where the cheaper price can be checked. */
+  source: PriceSource | null;
+  /** Where the offer's own price can be checked. */
+  offerSource: PriceSource | null;
 }
 
 type Snap = "peek" | "half" | "full";
@@ -431,10 +441,15 @@ function StoreDetail({
                 <p className="text-meta text-ink">
                   <span className="font-semibold">{row.chain}:</span>{" "}
                   {row.name ? <span className="text-ink-2">{row.name} · </span> : null}
-                  <span className="tabular">{row.facts}</span>
+                  <SourcedPrice source={row.source} className="tabular">
+                    {row.facts}
+                  </SourcedPrice>
                 </p>
                 <p className="text-meta text-ink-2">
-                  Tilbud i {row.offerChain}: <span className="tabular">{row.offerPrice}</span>
+                  Tilbud i {row.offerChain}:{" "}
+                  <SourcedPrice source={row.offerSource} className="tabular">
+                    {row.offerPrice}
+                  </SourcedPrice>
                   {row.verdict === "maybe" ? " · afhænger af pakningen" : ""}
                 </p>
                 <SourceLink link={row.link} />

@@ -5,12 +5,14 @@ import { ChainDot } from "@/components/ChainDot";
 import { ChevronIcon } from "@/components/Icons";
 import { SavingTag } from "@/components/SavingTag";
 import { SourceLink } from "@/components/SourceLink";
+import { SourcedPrice } from "@/components/SourcedPrice";
 import { clearanceSaving } from "@/lib/savings";
 import { chainName } from "@/lib/chains";
 import { cleanClassLabel, referenceKindLabel } from "@/lib/deals";
 import {
   competitorBadge,
   foodWastePackSize,
+  foodWasteSource,
   foodWasteUnitPrice,
   shownDiscount,
   sortedReferences,
@@ -102,6 +104,7 @@ export function FoodWasteItemRow({
   const off = openFoodFactsProductLink(item.ean);
   const badge = competitorBadge(item);
   const references = sortedReferences(item);
+  const source = foodWasteSource(item, nowDate);
   const facts = [stock, item.validTo ? formatEnd(item.validTo, nowDate) : null].filter(Boolean);
 
   return (
@@ -117,10 +120,15 @@ export function FoodWasteItemRow({
               <ChevronIcon className="mt-0.5 details-chevron text-ink-3" />
             </span>
             <span className="flex flex-wrap items-center gap-x-2 text-meta text-ink-2">
-              <span className="text-title shelf text-ink">{formatDkk(item.price)}</span>
+              <SourcedPrice source={source} className="text-title shelf text-ink">
+                {formatDkk(item.price)}
+              </SourcedPrice>
               {item.referencePrice != null && item.referencePrice > item.price ? (
                 <span className="tabular">
-                  før <s>{formatDkk(item.referencePrice)}</s>
+                  før{" "}
+                  <SourcedPrice source={source}>
+                    <s>{formatDkk(item.referencePrice)}</s>
+                  </SourcedPrice>
                 </span>
               ) : null}
               {saving.kind === "saving" ? (
@@ -172,11 +180,15 @@ export function FoodWasteItemRow({
             <h4 className="font-semibold text-ink">Kilde</h4>
             <dl className="mt-1 space-y-0.5">
               <Fact term="Pris nu">
-                <span className="tabular">{formatDkk(item.price)}</span>
+                <SourcedPrice source={source} className="tabular">
+                  {formatDkk(item.price)}
+                </SourcedPrice>
               </Fact>
               {item.referencePrice != null ? (
                 <Fact term="Normalpris">
-                  <span className="tabular">{formatDkk(item.referencePrice)}</span>
+                  <SourcedPrice source={source} className="tabular">
+                    {formatDkk(item.referencePrice)}
+                  </SourcedPrice>
                 </Fact>
               ) : null}
               {item.sallingPercentDiscount != null ? (
@@ -224,7 +236,10 @@ export function FoodWasteItemRow({
                   : "Samme vare i andre kæder"}
               </h4>
               <p className="text-ink-3">
-                Her: <span className="tabular">{formatUnitPrice(unitPrice, item.unit)}</span>
+                Her:{" "}
+                <SourcedPrice source={source} className="tabular">
+                  {formatUnitPrice(unitPrice, item.unit)}
+                </SourcedPrice>
               </p>
               <ul className="mt-1 space-y-0.5">
                 {references.map((ref, i) => (
@@ -240,9 +255,12 @@ export function FoodWasteItemRow({
                       </span>
                       {ref.member_only ? <MemberPriceTag /> : null}
                     </span>
-                    <span className="whitespace-nowrap tabular">
+                    <SourcedPrice
+                      source={ref.listing_id ? item.referenceSources?.[ref.listing_id] : null}
+                      className="whitespace-nowrap tabular"
+                    >
                       {formatUnitPrice(ref.unit_price, ref.unit ?? item.unit)}
-                    </span>
+                    </SourcedPrice>
                   </li>
                 ))}
               </ul>

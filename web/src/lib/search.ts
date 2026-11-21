@@ -44,6 +44,9 @@ export interface SearchHit extends ProductInfo {
   latestUnitPriceMin: number | null;
   latestUnitPriceMax: number | null;
   priceCount: number;
+  /** Source ids of the latest price, for the link to where it comes from (search only). */
+  latestSourceItemId?: string | null;
+  latestCatalogId?: string | null;
 }
 
 /** Whether the item's latest price applies now or later (not only in the past). */

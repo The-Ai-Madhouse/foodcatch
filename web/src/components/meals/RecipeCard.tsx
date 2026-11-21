@@ -5,8 +5,9 @@ import { ChainDot } from "@/components/ChainDot";
 import { Disclosure } from "@/components/Disclosure";
 import { ChevronIcon } from "@/components/Icons";
 import { SourceLink } from "@/components/SourceLink";
+import { SourcedPrice } from "@/components/SourcedPrice";
 import { chainName } from "@/lib/chains";
-import { foodWastePackSize } from "@/lib/foodwaste";
+import { foodWastePackSize, foodWasteSource } from "@/lib/foodwaste";
 import {
   displayTitle,
   formatDistance,
@@ -18,7 +19,7 @@ import {
 } from "@/lib/format";
 import { itemChain, type MealIdea, type MealItem, type SlotRow } from "@/lib/meals";
 import { productPath } from "@/lib/routes";
-import { sourceLink } from "@/lib/sources";
+import { priceSource, sourceLink, type PriceSource } from "@/lib/sources";
 import { chainPins, shortStoreName, storeDisplayName, type NearbyStore } from "@/lib/stores";
 import { StoreInfo } from "@/components/StoreInfo";
 import { itemStore } from "@/components/foodwaste/FoodWasteItemRow";
@@ -53,6 +54,7 @@ function Stat({
     <div className="min-w-0">
       <dt className="text-micro text-ink-3">{label}</dt>
       <dd
+        title="Beregnet ud fra priserne i indkøbslisten nedenfor – hver pris dér linker til sin kilde"
         className={`font-bold tabular ${tone === "good" ? "text-good-fg" : "text-ink"} text-body`}
       >
         {value}
@@ -94,6 +96,17 @@ function Where({ item, ctx }: { item: MealItem; ctx: MealContext }) {
   );
 }
 
+/** Where the price of a cheap item (offer or clearance) can be checked. */
+export function mealItemSource(item: MealItem, now: Date): PriceSource {
+  return item.kind === "foodwaste" ? foodWasteSource(item.item, now) : priceSource(item.deal, now);
+}
+
+/** An estimate has no shop behind it; the bubble says so. */
+export const ESTIMATE_SOURCE: PriceSource = {
+  href: null,
+  label: "Skøn: FoodCatchs vejledende normalpris for mængden – ikke en pris fra en butik",
+};
+
 /** One cheap item: title, price against the normal price, saving, where, and the sources. */
 export function ItemLine({
   item,
@@ -128,6 +141,7 @@ export function ItemLine({
         },
         ctx.now,
       );
+  const source = mealItemSource(item, ctx.now);
   const pct =
     item.saving != null && item.saving > 0 && item.normalPrice
       ? (item.saving / item.normalPrice) * 100
@@ -136,18 +150,32 @@ export function ItemLine({
   return (
     <div className={`text-meta text-ink-2 ${muted ? "py-1.5" : "pt-0.5"}`}>
       <p className="flex items-start justify-between gap-2">
-        <span className={`min-w-0 ${muted ? "text-ink-2" : "text-ink"}`}>{title}</span>
+        <SourcedPrice source={source} className={`min-w-0 ${muted ? "text-ink-2" : "text-ink"}`}>
+          {title}
+        </SourcedPrice>
         <Badge tone={isWaste ? "warn" : "neutral"} icon={null} className="shrink-0">
           {isWaste ? "Madspild" : "Tilbud"}
         </Badge>
       </p>
       <p>
-        <span className="font-bold text-ink tabular">{formatDkk(item.price)}</span>
+        <SourcedPrice source={source} className="font-bold text-ink tabular">
+          {formatDkk(item.price)}
+        </SourcedPrice>
         {item.normalPrice != null ? (
           <>
             {" "}
             <span className="tabular">
-              ({isWaste ? "før" : "normalt"} <s>{formatDkk(item.normalPrice)}</s>)
+              ({isWaste ? "før" : "normalt"}{" "}
+              {isWaste ? (
+                <SourcedPrice source={source}>
+                  <s>{formatDkk(item.normalPrice)}</s>
+                </SourcedPrice>
+              ) : (
+                <s title="Laveste normalpris på samme vare i en butik nær dig – se den under Prishistorik">
+                  {formatDkk(item.normalPrice)}
+                </s>
+              )}
+              )
             </span>
           </>
         ) : null}
@@ -214,7 +242,8 @@ function SlotPrices({ row, ctx }: { row: SlotRow; ctx: MealContext }) {
         </details>
       ) : null}
       <p className="text-micro text-ink-3 tabular">
-        Normalpris for mængden: ca. {formatDkk(row.slot.estimateKr)}
+        Normalpris for mængden: ca.{" "}
+        <SourcedPrice source={ESTIMATE_SOURCE}>{formatDkk(row.slot.estimateKr)}</SourcedPrice>
       </p>
     </div>
   );
@@ -231,6 +260,7 @@ function checklistRows(idea: MealIdea, ctx: MealContext): ChecklistRow[] {
       amount,
       payKr: item ? item.price : row.slot.estimateKr,
       approx: !item,
+      source: item ? mealItemSource(item, ctx.now) : ESTIMATE_SOURCE,
       note: item
         ? `${item.kind === "foodwaste" ? "Madspild" : "Tilbud"} i ${chainName(itemChain(item))} – hel pakke`
         : "Ikke på tilbud – skønnet normalpris",
@@ -245,6 +275,7 @@ function checklistRows(idea: MealIdea, ctx: MealContext): ChecklistRow[] {
     amount: p.amount,
     payKr: p.estimateKr,
     approx: true,
+    source: ESTIMATE_SOURCE,
     defaultHave: Boolean(p.basic),
   }));
   return [...slotRows, ...pantryRows];

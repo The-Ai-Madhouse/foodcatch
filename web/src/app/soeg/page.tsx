@@ -1,5 +1,7 @@
 import type { Metadata, Route } from "next";
 import Link from "next/link";
+import { SourcedPrice } from "@/components/SourcedPrice";
+import { priceSource } from "@/lib/sources";
 import { ChainDot } from "@/components/ChainDot";
 import { Notice } from "@/components/Notice";
 import { chainName } from "@/lib/chains";
@@ -68,6 +70,17 @@ function HitRow({ hit, ctx, cheapest }: { hit: SearchHit; ctx: HitContext; cheap
       : formatShortPeriod(hit.latestValidFrom, hit.latestValidTo);
   const { pins, total } = chainPins(ctx.storesByChain, hit.chainId);
   const saving = hit.latestKind === "offer" ? ctx.savings.get(hit.productKey) : undefined;
+  const source = priceSource(
+    {
+      source: hit.latestKind === "reference" ? "salling" : hit.latestSource,
+      chainId: hit.chainId,
+      sourceItemId: hit.latestSourceItemId ?? null,
+      catalogId: hit.latestCatalogId ?? null,
+      validTo: hit.latestValidTo,
+      ean: hit.ean,
+    },
+    ctx.now,
+  );
   return (
     <div className="flex items-start justify-between gap-3 px-4 py-3">
       <div className="min-w-0">
@@ -87,7 +100,9 @@ function HitRow({ hit, ctx, cheapest }: { hit: SearchHit; ctx: HitContext; cheap
           {hit.latestPrice != null ? (
             <>
               {sep}
-              <span className="whitespace-nowrap tabular">{formatDkk(hit.latestPrice)}</span>
+              <SourcedPrice source={source} className="whitespace-nowrap tabular">
+                {formatDkk(hit.latestPrice)}
+              </SourcedPrice>
             </>
           ) : null}
         </p>
@@ -102,9 +117,13 @@ function HitRow({ hit, ctx, cheapest }: { hit: SearchHit; ctx: HitContext; cheap
       <div className="flex shrink-0 flex-col items-end gap-1">
         {/* The unit price is what "cheapest" compares; the pack price is next to the size. */}
         {unitPrice ? (
-          <span className="text-title shelf whitespace-nowrap text-ink">{unitPrice}</span>
+          <SourcedPrice source={source} className="text-title shelf whitespace-nowrap text-ink">
+            {unitPrice}
+          </SourcedPrice>
         ) : hit.latestPrice != null ? (
-          <span className="text-title shelf text-ink">{formatDkk(hit.latestPrice)}</span>
+          <SourcedPrice source={source} className="text-title shelf text-ink">
+            {formatDkk(hit.latestPrice)}
+          </SourcedPrice>
         ) : null}
         {cheapest ? (
           <span className="text-micro font-semibold text-good-fg">Billigst nær dig</span>

@@ -124,3 +124,66 @@ export function storeMapsLink(store: {
   const params = new URLSearchParams({ api: "1", query });
   return `https://www.google.com/maps/search/?${params.toString()}`;
 }
+
+/**
+ * Where a shown price can be checked (the owner's rule: every price and item links to its
+ * source). `href` is the page to open (new tab), `label` what the hover/tap bubble says. Built
+ * from {@link sourceLink}; food-waste and Salling normal prices have no public product page, so
+ * they say where the number comes from and link the item (EAN) on Open Food Facts instead.
+ */
+export interface PriceSource {
+  href: string | null;
+  label: string;
+}
+
+export interface PriceSourceRow extends SourceRow {
+  /** The item's EAN, for the Open Food Facts fallback. */
+  ean?: string | null;
+  /** When the price was fetched (food waste), shown in the bubble. */
+  fetchedAt?: string | null;
+}
+
+const fetchedText = (iso: string | null | undefined): string => {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const when = new Intl.DateTimeFormat("da-DK", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Copenhagen",
+  }).format(new Date(t));
+  return `, hentet ${when}`;
+};
+
+/** The source of one price; never null, so every price can say where it is from. */
+export function priceSource(row: PriceSourceRow, now: Date): PriceSource {
+  const link = sourceLink(row, now);
+  const off = openFoodFactsLink(row.ean);
+  if (link?.href) return { href: link.href, label: link.label };
+  if (row.source === "salling_food_waste" || row.source === "salling") {
+    const what =
+      row.source === "salling_food_waste"
+        ? `Pris fra Salling Groups madspildsdata${fetchedText(row.fetchedAt)}`
+        : "Normalpris fra Salling Group (samme stregkode)";
+    return off
+      ? {
+          href: off.href,
+          label: `${what}. Salling har ingen offentlig vareside – linket viser varen (EAN) på Open Food Facts`,
+        }
+      : { href: null, label: `${what}. Salling har ingen offentlig vareside` };
+  }
+  if (link) {
+    // An expired leaflet offer: the leaflet is gone; the item page still identifies the item.
+    return off
+      ? { href: off.href, label: `${link.label}. Linket viser varen (EAN) på Open Food Facts` }
+      : { href: null, label: link.label };
+  }
+  if (off)
+    return {
+      href: off.href,
+      label: "Ingen kildeside for prisen – linket viser varen på Open Food Facts",
+    };
+  return { href: null, label: "Ingen offentlig kildeside for denne pris" };
+}

@@ -13,6 +13,8 @@ import { listingSaving, savedAmount } from "@/lib/savings";
 import { ChainDot } from "@/components/ChainDot";
 import { SavingTag } from "@/components/SavingTag";
 import { formatDkk } from "@/lib/format";
+import { SourcedPrice } from "@/components/SourcedPrice";
+import { priceSource } from "@/lib/sources";
 import {
   PRICE_CHOICES,
   SORT_LABELS,
@@ -312,7 +314,10 @@ export default async function DinnerPage({ searchParams }: PageProps<"/">) {
                     </span>
                     <span className="flex items-center gap-1 text-micro text-ink-2">
                       <ChainDot chainId={listing.offer.chainId} size="xs" />
-                      {chainName(listing.offer.chainId)} · {formatDkk(listing.offer.price)}
+                      {chainName(listing.offer.chainId)} ·{" "}
+                      <SourcedPrice source={priceSource(listing.offer, now)}>
+                        {formatDkk(listing.offer.price)}
+                      </SourcedPrice>
                     </span>
                   </span>
                   <SavingTag saving={saving} size="sm" />

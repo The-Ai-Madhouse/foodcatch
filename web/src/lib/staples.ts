@@ -36,6 +36,9 @@ export interface TextOffer {
   validTo: string | null;
   memberOnly: boolean;
   source: string | null;
+  /** Source ids, for the link to where the price comes from. */
+  sourceItemId: string | null;
+  catalogId: string | null;
 }
 
 /** The texts of the free-text staples in a selection (for the offer query). */

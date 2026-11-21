@@ -3,6 +3,7 @@ import {
   FOOD_WASTE_SOURCE_TEXT,
   openFoodFactsLink,
   openFoodFactsProductLink,
+  priceSource,
   routeLink,
   storeMapsLink,
   sourceLink,
@@ -146,5 +147,68 @@ describe("openFoodFactsProductLink", () => {
     });
     expect(openFoodFactsProductLink(null)).toBeNull();
     expect(openFoodFactsProductLink("123")).toBeNull();
+  });
+});
+
+describe("priceSource", () => {
+  const now = new Date("2026-11-21T12:00:00Z");
+  const base = { chainId: "netto", sourceItemId: null, catalogId: null, validTo: null };
+
+  it("links a leaflet offer to the leaflet", () => {
+    const s = priceSource(
+      {
+        ...base,
+        source: "tjek",
+        sourceItemId: "o1",
+        catalogId: "c1",
+        validTo: "2026-11-25T00:00:00Z",
+      },
+      now,
+    );
+    expect(s.href).toBe("https://etilbudsavis.dk/Netto?publication=c1&offer=o1");
+    expect(s.label).toBe("Se tilbuddet i avisen");
+  });
+
+  it("links a clearance to the item on Open Food Facts and names Salling as the price source", () => {
+    const s = priceSource(
+      {
+        ...base,
+        source: "salling_food_waste",
+        ean: "5701205009847",
+        fetchedAt: "2026-11-21T08:05:00Z",
+      },
+      now,
+    );
+    expect(s.href).toBe("https://world.openfoodfacts.org/product/5701205009847");
+    expect(s.label).toContain("Salling Groups madspildsdata, hentet 21. nov.");
+    expect(s.label).toContain("Open Food Facts");
+  });
+
+  it("explains a clearance without an EAN in the bubble only", () => {
+    const s = priceSource({ ...base, source: "salling_food_waste", ean: "250913" }, now);
+    expect(s.href).toBeNull();
+    expect(s.label).toContain("ingen offentlig vareside");
+  });
+
+  it("falls back to the item page for an expired leaflet offer", () => {
+    const s = priceSource(
+      {
+        ...base,
+        source: "tjek",
+        sourceItemId: "o1",
+        catalogId: "c1",
+        validTo: "2026-11-01T00:00:00Z",
+        ean: "5701205009847",
+      },
+      now,
+    );
+    expect(s.href).toContain("openfoodfacts.org");
+    expect(s.label).toContain("Tilbuddet er udløbet");
+  });
+
+  it("always says something, even without any source", () => {
+    const s = priceSource({ ...base, source: null }, now);
+    expect(s.href).toBeNull();
+    expect(s.label).toBe("Ingen offentlig kildeside for denne pris");
   });
 });

@@ -7,8 +7,9 @@ import { MemberPriceTag } from "@/components/Badge";
 import { ChainDot } from "@/components/ChainDot";
 import { ChevronIcon } from "@/components/Icons";
 import { SourceLink } from "@/components/SourceLink";
+import { SourcedPrice } from "@/components/SourcedPrice";
 import { StoreInfo } from "@/components/StoreInfo";
-import type { SourceLink as SourceLinkData } from "@/lib/sources";
+import type { PriceSource, SourceLink as SourceLinkData } from "@/lib/sources";
 import type { StorePin } from "@/lib/stores";
 
 /** One comparison row, prepared on the server (plain JSON). */
@@ -23,6 +24,10 @@ export interface ComparisonRow {
   title: string | null;
   /** "Tilbud · 400 g · 15,60 kr. · tor. 20.–lør. 22. nov." */
   facts: string;
+  /** The reference's pack price ("15,60 kr."), linked to its source. */
+  price: string | null;
+  /** Where the reference price can be checked; null without a reference listing. */
+  source: PriceSource | null;
   memberOnly: boolean;
   link: SourceLinkData | null;
   /** The reference item's price history page. */
@@ -134,13 +139,21 @@ function Row({ row }: { row: ComparisonRow }) {
         <span
           className={`text-meta whitespace-nowrap tabular ${row.isCheapest ? "font-bold text-ink" : "text-ink-2"}`}
         >
-          {row.unitPrice}
+          <SourcedPrice source={row.source}>{row.unitPrice}</SourcedPrice>
           {row.isCheapest ? <span className="font-semibold"> billigst</span> : null}
         </span>
       </div>
       {row.title ? <p className="truncate text-meta text-ink-2">{row.title}</p> : null}
       <p className="text-meta text-ink-3">
         {row.facts}
+        {row.price ? (
+          <>
+            {" · "}
+            <SourcedPrice source={row.source} className="tabular">
+              {row.price}
+            </SourcedPrice>
+          </>
+        ) : null}
         {row.memberOnly ? (
           <span className="ml-1.5 align-middle">
             <MemberPriceTag />

@@ -5,6 +5,7 @@ import { ChainDot } from "@/components/ChainDot";
 import { ChevronIcon } from "@/components/Icons";
 import { SavingTag, savingBasisText } from "@/components/SavingTag";
 import { SourceLink } from "@/components/SourceLink";
+import { SourcedPrice } from "@/components/SourcedPrice";
 import { StoreInfo } from "@/components/StoreInfo";
 import { chainName } from "@/lib/chains";
 import {
@@ -28,7 +29,7 @@ import {
 } from "@/lib/format";
 import { classPath, productPath } from "@/lib/routes";
 import { listingSaving } from "@/lib/savings";
-import { sourceLink } from "@/lib/sources";
+import { priceSource, sourceLink } from "@/lib/sources";
 import { chainPins, shortStoreName, storePin, type NearbyStore } from "@/lib/stores";
 import { LOCATION_INDEPENDENT_KINDS } from "@/lib/verdict";
 import { Comparison, type ComparisonRow, type ComparisonSection } from "./Comparison";
@@ -85,7 +86,7 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
       <div className="px-4 pt-3 lg:px-5">
         <div className="flex items-start gap-3">
           <h3 id={headingId} className="min-w-0 flex-1 text-heading font-semibold text-ink">
-            {offer.title}
+            <SourcedPrice source={priceSource(offer, ctx.now)}>{offer.title}</SourcedPrice>
           </h3>
           <div className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
             <VerdictBadge
@@ -99,7 +100,9 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
         </div>
 
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-price shelf text-ink">{formatDkk(offer.price)}</span>
+          <SourcedPrice source={priceSource(offer, ctx.now)} className="text-price shelf text-ink">
+            {formatDkk(offer.price)}
+          </SourcedPrice>
           <SavingTag saving={saving} />
         </p>
         <p className="text-meta text-ink-2">
@@ -110,7 +113,12 @@ export function DealCard({ listing, ctx }: { listing: ListingDeal; ctx: DealCont
             {unitPrice ? (
               <>
                 {sep}
-                <span className="whitespace-nowrap tabular">{unitPrice}</span>
+                <SourcedPrice
+                  source={priceSource(offer, ctx.now)}
+                  className="whitespace-nowrap tabular"
+                >
+                  {unitPrice}
+                </SourcedPrice>
               </>
             ) : null}
           </span>
@@ -293,7 +301,6 @@ function comparisonRow(
   const facts = [
     referenceKindLabel(ref.kind, deal.chainId),
     size && size.origin !== "unknown" ? size.text : null,
-    detail?.price != null ? formatDkk(detail.price) : null,
     ref.valid_from || ref.valid_to ? formatShortPeriod(ref.valid_from, ref.valid_to) : null,
   ].filter(Boolean);
   const link = detail
@@ -317,6 +324,8 @@ function comparisonRow(
     isCheapest: ref.isCheapest,
     title: ref.title ?? null,
     facts: facts.join(" · "),
+    price: detail?.price != null ? formatDkk(detail.price) : null,
+    source: detail ? priceSource(detail, ctx.now) : null,
     memberOnly: ref.member_only === true,
     link,
     historyHref: detail?.productKey ? productPath(detail.productKey) : null,

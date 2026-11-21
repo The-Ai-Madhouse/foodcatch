@@ -12,7 +12,12 @@ import { Disclosure } from "@/components/Disclosure";
 import { ChevronIcon } from "@/components/Icons";
 import { MealTabs } from "@/components/meals/MealTabs";
 import { RecipeDetails } from "@/components/meals/RecipeDetails";
-import { ItemLine, type MealContext } from "@/components/meals/RecipeCard";
+import {
+  ESTIMATE_SOURCE,
+  ItemLine,
+  mealItemSource,
+  type MealContext,
+} from "@/components/meals/RecipeCard";
 import {
   ShoppingChecklist,
   type ChecklistGroup,
@@ -90,7 +95,10 @@ function StoreOption({
             {note ? ` · ${note}` : ""}
           </span>
         </span>
-        <span className="shrink-0 text-right font-bold text-ink tabular">
+        <span
+          title="Summen af indkøbslisten nedenfor – hver pris dér linker til sin kilde"
+          className="shrink-0 text-right font-bold text-ink tabular"
+        >
           ca. {formatDkk(Math.round(shopping.total))}
         </span>
       </Link>
@@ -179,6 +187,7 @@ export default async function MealPlanPage({ searchParams }: PageProps<"/madplan
       amount: l.amount,
       payKr: l.payKr,
       approx: l.approx,
+      source: l.item ? mealItemSource(l.item, ctx.now) : ESTIMATE_SOURCE,
       note: l.dishes.join(", "),
       defaultHave: l.basic,
       detail: l.item ? <ItemLine item={l.item} ctx={ctx} /> : undefined,

@@ -11,6 +11,7 @@ import { MAX_RESULTS, likePattern, type SearchHit } from "@/lib/search";
 import type { TextOffer } from "@/lib/staples";
 import type { PipelineRun } from "@/lib/status";
 import type { ReferenceDetail } from "@/lib/deals";
+import { priceSource, type PriceSource } from "@/lib/sources";
 import { dedupeStores, type NearbyStore } from "@/lib/stores";
 import { db, readOnlyDb } from "./db";
 
@@ -259,13 +260,26 @@ export async function getFoodWasteNear(area: SearchArea, limit = 300): Promise<F
     ORDER BY "discountPct" DESC NULLS LAST, "distanceKm", title
     LIMIT ${limit}::int
   `;
-  return rows.map((r) => ({
+  const items = rows.map((r) => ({
     ...r,
     validTo: toIso(r.validTo),
     lastSeenAt: toIso(r.lastSeenAt),
     sourceFetchedAt: toIso(r.sourceFetchedAt),
     references: parseReferences(r.references),
   }));
+  // Every compared price links to its source too: one detail query for all references.
+  const details = await getReferenceDetails(
+    items.flatMap((i) => i.references.flatMap((ref) => (ref.listing_id ? [ref.listing_id] : []))),
+  );
+  const now = new Date();
+  return items.map((item) => {
+    const referenceSources: Record<string, PriceSource> = {};
+    for (const ref of item.references) {
+      const detail = ref.listing_id ? details.get(ref.listing_id) : undefined;
+      if (ref.listing_id && detail) referenceSources[ref.listing_id] = priceSource(detail, now);
+    }
+    return { ...item, referenceSources };
+  });
 }
 
 interface HistorySqlRow extends Omit<PriceHistoryRow, "validFrom" | "validTo"> {
@@ -397,11 +411,25 @@ export async function searchProducts(terms: readonly string[]): Promise<SearchHi
     FROM api.products
     WHERE product_key = ANY(${[...counts.keys()]}::text[])
   `;
+  // The source ids of each item's latest price (api.products does not carry them).
+  const latest = await sql<
+    { productKey: string; sourceItemId: string | null; catalogId: string | null }[]
+  >`
+    SELECT DISTINCT ON (product_key)
+           product_key AS "productKey", source_item_id AS "sourceItemId",
+           catalog_id AS "catalogId"
+    FROM api.product_price_history
+    WHERE product_key = ANY(${[...counts.keys()]}::text[])
+    ORDER BY product_key, valid_from DESC
+  `;
+  const ids = new Map(latest.map((l) => [l.productKey, l]));
   return rows.map((r) => ({
     ...r,
     latestValidFrom: toIso(r.latestValidFrom),
     latestValidTo: toIso(r.latestValidTo),
     priceCount: counts.get(r.productKey) ?? 0,
+    latestSourceItemId: ids.get(r.productKey)?.sourceItemId ?? null,
+    latestCatalogId: ids.get(r.productKey)?.catalogId ?? null,
   }));
 }
 
@@ -425,7 +453,8 @@ export async function getOffersMatching(texts: readonly string[]): Promise<TextO
            unit_price_min::float8 AS "unitPriceMin", unit_price_max::float8 AS "unitPriceMax",
            size_min::float8 AS "sizeMin", size_max::float8 AS "sizeMax",
            valid_from AS "validFrom", valid_to AS "validTo",
-           coalesce(member_only, false) AS "memberOnly", source
+           coalesce(member_only, false) AS "memberOnly", source,
+           source_item_id AS "sourceItemId", catalog_id AS "catalogId"
     FROM api.product_price_history
     WHERE kind = 'offer'
       AND listing_id IS NOT NULL

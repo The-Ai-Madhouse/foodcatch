@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SourcedPrice } from "@/components/SourcedPrice";
 import { formatDkk } from "@/lib/format";
+import type { PriceSource } from "@/lib/sources";
 
 export interface ChecklistRow {
   key: string;
@@ -15,6 +17,8 @@ export interface ChecklistRow {
   payKr: number;
   /** True when `payKr` is an estimate. */
   approx: boolean;
+  /** Where `payKr` can be checked (the offer/clearance, or "skøn"). */
+  source?: PriceSource | null;
   /** Short line under the name ("Tilbud i Netto", "normalpris"). */
   note?: string;
   /** Pre-ticked as "har jeg" (basics expected at home). */
@@ -135,7 +139,7 @@ export function ShoppingChecklist({
                         className={`shrink-0 text-meta tabular ${checked ? "text-ink-3 line-through" : "font-medium text-ink"}`}
                       >
                         {r.approx ? "ca. " : ""}
-                        {formatDkk(r.payKr)}
+                        <SourcedPrice source={r.source}>{formatDkk(r.payKr)}</SourcedPrice>
                       </span>
                     </label>
                     {r.detail && !checked ? <div className="pl-8">{r.detail}</div> : null}

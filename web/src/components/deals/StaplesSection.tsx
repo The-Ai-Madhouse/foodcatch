@@ -3,12 +3,14 @@ import Link from "next/link";
 import { saveStaples } from "@/app/actions";
 import { Badge, MemberBadge, VerdictBadge } from "@/components/Badge";
 import { SavingTag } from "@/components/SavingTag";
+import { SourcedPrice } from "@/components/SourcedPrice";
 import { ChainDot } from "@/components/ChainDot";
 import { Disclosure } from "@/components/Disclosure";
 import { ChevronIcon } from "@/components/Icons";
 import { chainName } from "@/lib/chains";
 import type { ListingDeal } from "@/lib/deals";
-import { foodWastePackSize, type FoodWasteItem } from "@/lib/foodwaste";
+import { foodWastePackSize, foodWasteSource, type FoodWasteItem } from "@/lib/foodwaste";
+import { priceSource } from "@/lib/sources";
 import { clearanceSaving, listingSaving } from "@/lib/savings";
 import {
   displayTitle,
@@ -85,7 +87,9 @@ function OfferRow({
         <p className="flex flex-wrap items-center gap-x-1 text-meta text-ink-2">
           <ChainStores chainId={offer.chainId} stores={stores} />
           {sep}
-          <span className="font-bold text-ink tabular">{formatDkk(offer.price)}</span>
+          <SourcedPrice source={priceSource(offer, now)} className="font-bold text-ink tabular">
+            {formatDkk(offer.price)}
+          </SourcedPrice>
           {sep}
           <span>{size.text}</span>
           {unitPrice ? (
@@ -144,7 +148,9 @@ function TextOfferRow({
           {offer.price != null ? (
             <>
               {sep}
-              <span className="font-bold text-ink tabular">{formatDkk(offer.price)}</span>
+              <SourcedPrice source={priceSource(offer, now)} className="font-bold text-ink tabular">
+                {formatDkk(offer.price)}
+              </SourcedPrice>
             </>
           ) : null}
           {sep}
@@ -167,7 +173,8 @@ function TextOfferRow({
 }
 
 /** One clearance of a staple: title, store, price and discount. */
-function ClearanceRow({ item }: { item: FoodWasteItem }) {
+function ClearanceRow({ item, now }: { item: FoodWasteItem; now: Date }) {
+  const source = foodWasteSource(item, now);
   return (
     <li className="flex items-start justify-between gap-3 py-2">
       <div className="min-w-0">
@@ -179,11 +186,17 @@ function ClearanceRow({ item }: { item: FoodWasteItem }) {
           </StoreInfo>
           <span className="whitespace-nowrap tabular">· {formatDistance(item.distanceKm)}</span>
           {sep}
-          <span className="font-bold text-ink tabular">{formatDkk(item.price)}</span>
+          <SourcedPrice source={source} className="font-bold text-ink tabular">
+            {formatDkk(item.price)}
+          </SourcedPrice>
           {item.referencePrice != null ? (
             <span className="tabular">
               {" "}
-              (før <s>{formatDkk(item.referencePrice)}</s>)
+              (før{" "}
+              <SourcedPrice source={source}>
+                <s>{formatDkk(item.referencePrice)}</s>
+              </SourcedPrice>
+              )
             </span>
           ) : null}
           {sep}
@@ -350,7 +363,7 @@ export function StaplesSection({
                     <TextOfferRow key={o.listingId} offer={o} now={now} stores={storesByChain} />
                   ))}
                   {m.clearances.map((w) => (
-                    <ClearanceRow key={w.listingId} item={w} />
+                    <ClearanceRow key={w.listingId} item={w} now={now} />
                   ))}
                 </ul>
                 {more > 0 ? <p className="pb-1 text-micro text-ink-3">+{more} flere</p> : null}

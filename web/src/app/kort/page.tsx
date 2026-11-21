@@ -11,7 +11,7 @@ import {
 } from "@/lib/deals";
 import type { FoodWasteItem } from "@/lib/foodwaste";
 import { formatDkk, formatUnitPrice, formatUnitPriceRange, packSize } from "@/lib/format";
-import { sourceLink } from "@/lib/sources";
+import { priceSource, sourceLink } from "@/lib/sources";
 import { nearestByChain, shortStoreName, toMapStore } from "@/lib/stores";
 import { getUserLocation } from "@/server/location";
 import {
@@ -88,6 +88,8 @@ export default async function MapPage({ searchParams }: PageProps<"/kort">) {
         offerPrice:
           formatUnitPriceRange(deal.targetUnitPriceBest, deal.targetUnitPriceWorst, deal.unit) ??
           "ukendt",
+        source: detail ? priceSource(detail, now) : null,
+        offerSource: priceSource(deal, now),
         link: detail
           ? sourceLink(
               {

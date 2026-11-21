@@ -6,6 +6,7 @@
 import { chainName } from "./chains";
 import { genitive } from "./deals";
 import { packSize, type PackSize } from "./format";
+import { priceSource, type PriceSource } from "./sources";
 import type { Reference } from "./verdict";
 
 /** One row of `api.food_waste_near` with its distance from the user. */
@@ -59,6 +60,8 @@ export interface FoodWasteItem {
   classKey: string | null;
   /** Same-class prices of other chains (offers and shelf prices), in the deal shape. */
   references: Reference[];
+  /** Where each reference price can be checked, by reference listing id (filled on the server). */
+  referenceSources?: Record<string, PriceSource>;
   /** Cheaper than every reference; null when it cannot be judged. */
   beatsCompetitors: boolean | null;
 }
@@ -125,4 +128,20 @@ export function competitorBadge(
     return `Billigere end ${genitive(chain)} normalpris`;
   if (kinds.size === 1 && kinds.has("offer")) return `Billigere end ${genitive(chain)} tilbud`;
   return `Billigere end ${chain}`;
+}
+
+/** Where a clearance's price can be checked (Salling's data; the item on Open Food Facts). */
+export function foodWasteSource(item: FoodWasteItem, now: Date): PriceSource {
+  return priceSource(
+    {
+      source: "salling_food_waste",
+      chainId: item.chainId,
+      sourceItemId: item.sourceItemId,
+      catalogId: null,
+      validTo: item.validTo,
+      ean: item.ean,
+      fetchedAt: item.sourceFetchedAt,
+    },
+    now,
+  );
 }

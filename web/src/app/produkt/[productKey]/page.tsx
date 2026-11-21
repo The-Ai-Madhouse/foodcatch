@@ -7,6 +7,7 @@ import { Notice } from "@/components/Notice";
 import { ProductPriceChart } from "@/components/ProductPriceChart";
 import { Segmented } from "@/components/Segmented";
 import { SourceLink } from "@/components/SourceLink";
+import { SourcedPrice } from "@/components/SourcedPrice";
 import { chainName } from "@/lib/chains";
 import { cleanClassLabel, unitPriceWord } from "@/lib/deals";
 import {
@@ -25,7 +26,7 @@ import {
   shortHistoryNote,
 } from "@/lib/product";
 import { classPath, productKeyFromSegment, productPath } from "@/lib/routes";
-import { openFoodFactsProductLink, sourceLink } from "@/lib/sources";
+import { openFoodFactsProductLink, priceSource, sourceLink } from "@/lib/sources";
 import { storeDisplayName } from "@/lib/stores";
 import { getProduct, getProductHistory, getStoresByIds } from "@/server/queries";
 
@@ -207,6 +208,17 @@ export default async function ProductHistoryPage({
                       },
                       now,
                     );
+              const rowSource = priceSource(
+                {
+                  source: row.kind === "reference" ? "salling" : row.source,
+                  chainId: row.chainId,
+                  sourceItemId: row.sourceItemId,
+                  catalogId: row.catalogId,
+                  validTo: row.validTo,
+                  ean,
+                },
+                now,
+              );
               return (
                 <tr key={`${row.listingId ?? row.kind}-${i}`} className="align-top">
                   <td className="px-2 py-2.5 text-ink-2 lg:px-4">
@@ -240,12 +252,18 @@ export default async function ProductHistoryPage({
                   </td>
                   <td className="px-2 py-2.5 text-right tabular lg:px-4">
                     {row.price != null ? (
-                      <span className="block font-semibold text-ink">{formatDkk(row.price)}</span>
+                      <SourcedPrice source={rowSource} className="block font-semibold text-ink">
+                        {formatDkk(row.price)}
+                      </SourcedPrice>
                     ) : null}
                     {size.origin !== "unknown" ? (
                       <span className="block text-ink-2">{size.text}</span>
                     ) : null}
-                    {unitPrice ? <span className="block text-ink-2">{unitPrice}</span> : null}
+                    {unitPrice ? (
+                      <SourcedPrice source={rowSource} className="block text-ink-2">
+                        {unitPrice}
+                      </SourcedPrice>
+                    ) : null}
                   </td>
                 </tr>
               );
