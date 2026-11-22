@@ -352,6 +352,28 @@ test("meal plan: one flat shopping list, and days per dish for one person", asyn
   await main.getByRole("button", { name: "Ryd madplanen" }).click();
 });
 
+test("recipe from a link: blocked links are refused; ingredients can be added and priced", async ({
+  page,
+}) => {
+  await page.goto("/opskrift");
+  await expect(page.getByRole("heading", { level: 1, name: "Fra link" })).toBeVisible();
+  const main = page.locator("main");
+  // An address on this machine is never fetched.
+  await main.getByLabel("1. Indsæt link til en opskrift").fill("https://localhost/lasagne");
+  await main.getByRole("button", { name: "Hent" }).click();
+  await expect(main.getByRole("alert")).toContainText("Det link kan vi ikke åbne");
+  // Type the ingredients instead, then price them in the stores nearby.
+  await main.getByLabel("Tilføj ingrediens").fill("500 g hakket grisekød");
+  await main.getByRole("button", { name: "Tilføj", exact: true }).click();
+  await expect(main.getByText("Søges som: Hakket grisekød")).toBeVisible();
+  await main.getByRole("button", { name: /Videre: find priser på 1 vare/ }).click();
+  await expect(main.getByRole("heading", { name: "3. Hvad det koster" })).toBeVisible();
+  await expect(main.getByText("Billigst kombineret")).toBeVisible();
+  await expect(main.locator("summary").filter({ hasText: "Billigst kombineret" })).toContainText(
+    "1 vare",
+  );
+});
+
 test("old addresses lead to the new pages", async ({ page }) => {
   await page.goto("/madideer");
   await expect(page).toHaveURL(/\/$/);

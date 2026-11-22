@@ -5,14 +5,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MapIcon, PotIcon, SearchIcon, StarIcon, TagIcon } from "@/components/Icons";
 
-const ITEMS: readonly { href: Route; label: string; Icon: typeof TagIcon }[] = [
-  // In the order of what the user comes for (docs/ui.md §21).
-  { href: "/", label: "Aftensmad", Icon: PotIcon },
-  { href: "/tilbud", label: "Tilbud", Icon: TagIcon },
-  { href: "/mine-varer", label: "Mine varer", Icon: StarIcon },
-  { href: "/soeg", label: "Søg", Icon: SearchIcon },
-  { href: "/kort", label: "Kort", Icon: MapIcon },
-];
+const ITEMS: readonly { href: Route; label: string; Icon: typeof TagIcon; headerOnly?: boolean }[] =
+  [
+    // In the order of what the user comes for (docs/ui.md §21).
+    { href: "/", label: "Aftensmad", Icon: PotIcon },
+    { href: "/tilbud", label: "Tilbud", Icon: TagIcon },
+    { href: "/mine-varer", label: "Mine varer", Icon: StarIcon },
+    { href: "/soeg", label: "Søg", Icon: SearchIcon },
+    { href: "/kort", label: "Kort", Icon: MapIcon },
+    // The phone's tab bar keeps five tabs; "Fra link" is reached from Aftensmad there.
+    { href: "/opskrift", label: "Fra link", Icon: PotIcon, headerOnly: true },
+  ];
 
 function isActive(pathname: string, href: string): boolean {
   // The meal plan belongs to "Aftensmad"; food waste is a part of "Tilbud".
@@ -51,7 +54,7 @@ export function MainNav({ variant }: { variant: "header" | "tabs" }) {
       className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       <ul className="grid h-14 grid-cols-5">
-        {ITEMS.map(({ href, label, Icon }) => (
+        {ITEMS.filter((item) => !item.headerOnly).map(({ href, label, Icon }) => (
           <li key={href}>
             <Link
               href={href}

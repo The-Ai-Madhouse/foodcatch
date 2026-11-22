@@ -247,6 +247,16 @@ export default async function DinnerPage({ searchParams }: PageProps<"/">) {
           først – åbn en ret for indkøbslisten.
         </p>
         <PeoplePicker people={people} />
+        <Link
+          href="/opskrift"
+          className="mt-3 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-2 text-ink no-underline hover:bg-surface-2"
+        >
+          <span className="text-meta">
+            <strong className="font-semibold">Har du fundet en opskrift? </strong>
+            Indsæt linket og se, hvad den koster i butikkerne nær dig.
+          </span>
+          <ChevronIcon className="shrink-0 -rotate-90 text-ink-3" />
+        </Link>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Segmented
             label="Måltid"

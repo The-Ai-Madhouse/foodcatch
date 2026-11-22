@@ -1250,3 +1250,27 @@ The owner: the linked recipe pages did not match the dishes shown. Now every dis
   home. Rows can be removed ("Fjernet fra madplanen") and put back, as on a dish.
 * The list's footer shows the purchase and what the food costs, as days and price per day for
   the chosen people.
+
+## 27. "Fra link": any recipe from the web, priced nearby (2026-11-22)
+
+`/opskrift` (desktop menu "Fra link"; on phones a card at the top of Aftensmad):
+
+1. **Paste a link.** The server fetches the page defensively (`server/fetch-recipe.ts`: http(s)
+   only on the standard ports, never an address on this machine or a private network – checked
+   again after each of at most 4 redirects – 10 s, 3 MB, HTML only) and reads the ingredient lines
+   (`lib/recipe-import.ts`), trying in turn: schema.org `Recipe` JSON-LD (HelloFresh, Mummum, most
+   WordPress recipe plugins), microdata (Valdemarsro, dk-kogebogen), WP Recipe Maker / Tasty
+   markup (small blogs), Arla's ingredient table, and finally the list items under an
+   "Ingredienser"/"Ingredients" heading (DR and other pages without recipe markup). A page that
+   blocks programs (a bot check) or has no list says so, and the user types the ingredients.
+2. **Check the ingredients.** Each line shows what we will look for ("Søges som: Hakket
+   oksekød"). Lines can be removed, ticked as at home (salt, oil, spices … are pre-ticked) and
+   added by typing ("500 g kartofler").
+3. **See what it costs.** The server re-reads every line (`lib/ingredient-match.ts`: amount,
+   unit, name) and matches it to a product type, a tuned extra item (`PANTRY_SPECS`) or its own
+   name, then prices it from the current offers, shelf prices and clearances near the user
+   (`lib/recipe-pricing.ts`): one quote per chain with a store nearby and "Billigst kombineret"
+   (each item where it is cheapest). Stores are ordered by how many items they have, then by
+   price. Whole packs are bought; when the amount cannot be compared with a pack (no amount, or
+   units that do not convert) the price is one pack and the line says so. An item we cannot find
+   is "Ikke fundet i butikken" – never estimated. Every price links to its source.
